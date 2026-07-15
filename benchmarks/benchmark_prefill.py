@@ -215,9 +215,10 @@ def main() -> None:
     parser.add_argument("--base-url", default="http://spark-head.local:8888")
     parser.add_argument("--model", default="deepseek-v4-flash-dspark-abliterated")
     parser.add_argument("--sizes", default=DEFAULT_SIZES)
-    parser.add_argument("--trials", type=int, default=2)
+    parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--seed", type=int, default=4104)
     parser.add_argument("--warmup-tokens", type=int, default=1024)
+    parser.add_argument("--shape-warmup-trials", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=1800)
     parser.add_argument("--label", default="unlabelled")
     parser.add_argument("--report-target", default="spark-head")
@@ -232,8 +233,11 @@ def main() -> None:
         any(size <= 0 for size in sizes)
         or args.trials <= 0
         or args.warmup_tokens < 0
+        or args.shape_warmup_trials < 0
     ):
-        parser.error("sizes/trials must be positive and warmup-tokens non-negative")
+        parser.error(
+            "sizes/trials must be positive and warm-up values non-negative"
+        )
 
     print(
         f"target {base_url} model {args.model} version {version} label {args.label}",
@@ -248,6 +252,18 @@ def main() -> None:
             f"warmup {args.warmup_tokens:,} tokens: TTFT {warmup_ttft:.3f}s",
             flush=True,
         )
+    for size in sizes:
+        for warmup_trial in range(1, args.shape_warmup_trials + 1):
+            # Negative trial IDs keep shape warm-ups distinct from measured prompts.
+            prompt = make_prompt(pool, size, -warmup_trial, args.seed)
+            warmup_ttft, _, _, _ = run_completion(
+                base_url, args.model, prompt, args.timeout
+            )
+            print(
+                f"shape warmup {size:,} tokens ({warmup_trial}/"
+                f"{args.shape_warmup_trials}): TTFT {warmup_ttft:.3f}s",
+                flush=True,
+            )
     results: list[PrefillResult] = []
     for size in sizes:
         print(f"=== {size:,} input tokens ===", flush=True)
@@ -311,6 +327,7 @@ def main() -> None:
         "sizes": sizes,
         "trials_per_size": args.trials,
         "warmup_tokens": args.warmup_tokens,
+        "shape_warmup_trials": args.shape_warmup_trials,
         "seed": args.seed,
         "token_pool_sha256": hashlib.sha256(
             ",".join(str(token) for token in pool).encode()

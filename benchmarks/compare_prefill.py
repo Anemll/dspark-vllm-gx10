@@ -75,6 +75,16 @@ def main() -> None:
             f"{gain_text} | {number(old['median_ttft_s'], 3)}s | "
             f"{number(new['median_ttft_s'], 3)}s |"
         )
+    lines.extend(
+        [
+            "",
+            "Warmed steady-state comparison on two GX10 nodes (TP=2): "
+            f"{before.get('trials_per_size', 'unknown')} trials per size, "
+            f"seed {before.get('seed', 'unknown')}, one output token, zero "
+            "prefix-cache hits, no overlapping requests, and matching prompt "
+            "hashes across versions.",
+        ]
+    )
     rendered = "\n".join(lines) + "\n"
     print(rendered, end="")
     if args.output:

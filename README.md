@@ -119,11 +119,26 @@ Best aggregate output throughput from the controlled 512-token workload:
 
 Raw results and the dependency-free client are in `benchmarks/`.
 
-Prefill can be measured at exact 1K, 2K, 4K, 8K, 16K, and 32K input lengths.
+Warmed, server-side prefill results on the same two-node TP=2 deployment:
+
+| Input tokens | vLLM 0.21.1 | vLLM 0.25 candidate | Gain |
+|---:|---:|---:|---:|
+| 1,024 | 1,778.7 tok/s | 2,033.0 tok/s | 14.3% |
+| 2,048 | 1,990.5 tok/s | 2,252.0 tok/s | 13.1% |
+| 4,096 | 2,083.1 tok/s | 2,320.7 tok/s | 11.4% |
+| 8,192 | 2,049.8 tok/s | 2,184.2 tok/s | 6.6% |
+| 16,384 | 2,052.6 tok/s | 2,203.8 tok/s | 7.4% |
+| 32,768 | 1,901.1 tok/s | 2,176.1 tok/s | 14.5% |
+
+The [comparison](benchmarks/results/prefill-v0211-vs-v0251.md) and
+[raw reports](benchmarks/results/) contain TTFT and per-trial details.
+
+Prefill is measured at exact 1K, 2K, 4K, 8K, 16K, and 32K input lengths.
 The harness records client TTFT plus vLLM's server-side prefill duration and
 computed-token count. It uses reproducible, unique token-ID prompts so the
-before and after runs receive identical input without prefix-cache reuse. A
-separate 1K warm-up request is excluded from the measurements:
+before and after runs receive identical input without prefix-cache reuse.
+An initial warm-up plus one excluded pass at every tested input length prevents
+first-shape compilation from contaminating the three-trial medians:
 
 ```bash
 # Run against the previous runtime, then switch the two-node server version.
