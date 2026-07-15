@@ -119,6 +119,28 @@ Best aggregate output throughput from the controlled 512-token workload:
 
 Raw results and the dependency-free client are in `benchmarks/`.
 
+Prefill can be measured at exact 1K, 2K, 4K, 8K, 16K, and 32K input lengths.
+The harness records client TTFT plus vLLM's server-side prefill duration and
+computed-token count. It uses reproducible, unique token-ID prompts so the
+before and after runs receive identical input without prefix-cache reuse:
+
+```bash
+# Run against the previous runtime, then switch the two-node server version.
+python3 benchmarks/benchmark_prefill.py --label before \
+  --output benchmarks/results/prefill-before.json
+
+# Run the identical matrix against the candidate runtime.
+python3 benchmarks/benchmark_prefill.py --label after \
+  --output benchmarks/results/prefill-after.json
+
+python3 benchmarks/compare_prefill.py \
+  benchmarks/results/prefill-before.json \
+  benchmarks/results/prefill-after.json
+```
+
+Run these tests on an otherwise idle server. The harness detects overlapping
+requests and excludes contaminated server-side trials from its median.
+
 ## Important operational note
 
 Start the worker before the head. Starting both simultaneously can leave the
