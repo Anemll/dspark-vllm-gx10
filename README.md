@@ -102,6 +102,11 @@ ARM64 image, and installs pinned FlashInfer and b12x Git revisions. The b12x
 pin is intentionally a Git commit: the tested `0.15.3` source was not released
 on PyPI.
 
+`docker/Dockerfile.promote-tested` is a maintainer-only release step that adds
+OCI source/revision labels and bundled license notices to an image that has
+already passed the two-node validation. It does not replace the reproducible
+source build above and does not change runtime code.
+
 ## Performance
 
 Best aggregate output throughput from the controlled 512-token workload:

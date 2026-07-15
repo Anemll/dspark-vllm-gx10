@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+# Maintainer-only: add public release metadata to an already validated image.
+ARG TESTED_IMAGE
+FROM ${TESTED_IMAGE}
+
+ARG SOURCE_REVISION=unknown
+ARG RELEASE_VERSION=0.1.0
+
+LABEL org.opencontainers.image.source="https://github.com/Anemll/dspark-vllm-gx10"
+LABEL org.opencontainers.image.description="Two-node GB10 DSpark/NVFP4 vLLM runtime"
+LABEL org.opencontainers.image.licenses="MIT AND Apache-2.0"
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.version="${RELEASE_VERSION}"
+
+COPY LICENSE NOTICE CREDITS.md /usr/share/licenses/dspark-vllm-gx10/
+COPY LICENSES/Apache-2.0.txt \
+  /usr/share/licenses/dspark-vllm-gx10/Apache-2.0.txt
