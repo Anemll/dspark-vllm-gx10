@@ -4,6 +4,15 @@
   "target": "spark-head",
   "started_at_utc": "2026-07-15T05:44:51.282144+00:00",
   "model": "deepseek-v4-flash-dspark-abliterated",
+  "model_artifact": {
+    "huggingface_repo": "drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored",
+    "architecture": "DeepSeek V4 Flash, 284B MoE / approximately 13B active parameters",
+    "weight_format": "FP8 E4M3 with UE8M0 scales and 128x128 blocks",
+    "safetensors_shards": 48,
+    "safetensors_bytes": 166886535336,
+    "safetensors_gib": 155.43,
+    "kv_cache_dtype": "nvfp4_ds_mla"
+  },
   "version": "0.25.2.dev0+g752a3a504.d20260714",
   "sizes": [
     1024,

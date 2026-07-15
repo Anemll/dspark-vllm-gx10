@@ -1,6 +1,8 @@
 Before: `v0211-baseline-steady` / `0.21.1rc1.dev339+g1967a5627bc3`  
 After: `v0251-candidate-steady` / `0.25.2.dev0+g752a3a504.d20260714`
 
+Model: [drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored](https://huggingface.co/drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored), DeepSeek V4 Flash, 284B MoE / approximately 13B active parameters. The checkpoint contains 48 FP8 Safetensors shards totaling 155.43 GiB on each node; the serving KV cache uses `nvfp4_ds_mla`.
+
 | Input tokens | Before server tok/s | After server tok/s | Gain | Before TTFT | After TTFT |
 |---:|---:|---:|---:|---:|---:|
 | 1,024 | 1,778.7 | 2,033.0 | +14.3% | 0.585s | 0.512s |

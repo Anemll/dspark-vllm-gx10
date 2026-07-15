@@ -109,6 +109,16 @@ source build above and does not change runtime code.
 
 ## Performance
 
+Benchmark model:
+
+- [drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored](https://huggingface.co/drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored)
+- DeepSeek V4 Flash, 284B MoE / approximately 13B active parameters
+- FP8 weights (E4M3, UE8M0 scales, 128x128 blocks): 48 Safetensors
+  shards totaling 166,886,535,336 bytes (155.43 GiB) on each node
+- `nvfp4_ds_mla` KV cache; NVFP4 describes the DS-MLA cache format, not the
+  checkpoint's FP8 weight format
+- TP=2 across two GX10 nodes; server maximum context 350,000 tokens
+
 Best aggregate output throughput from the controlled 512-token workload:
 
 | Concurrency | Previous runtime | vLLM 0.25 candidate | Gain |

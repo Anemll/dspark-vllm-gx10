@@ -54,11 +54,29 @@ def main() -> None:
     lines = [
         f"Before: `{before_label}` / `{before.get('version', 'unknown')}`  ",
         f"After: `{after_label}` / `{after.get('version', 'unknown')}`",
-        "",
-        "| Input tokens | Before server tok/s | After server tok/s | Gain | "
-        "Before TTFT | After TTFT |",
-        "|---:|---:|---:|---:|---:|---:|",
     ]
+    artifact = before.get("model_artifact")
+    if isinstance(artifact, dict):
+        lines.extend(
+            [
+                "",
+                "Model: "
+                f"[{artifact['huggingface_repo']}]"
+                f"(https://huggingface.co/{artifact['huggingface_repo']}), "
+                f"{artifact['architecture']}. The checkpoint contains "
+                f"{artifact['safetensors_shards']} FP8 Safetensors shards totaling "
+                f"{artifact['safetensors_gib']} GiB on each node; the serving KV "
+                f"cache uses `{artifact['kv_cache_dtype']}`.",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "| Input tokens | Before server tok/s | After server tok/s | Gain | "
+            "Before TTFT | After TTFT |",
+            "|---:|---:|---:|---:|---:|---:|",
+        ]
+    )
     for size in sizes:
         old = before_rows[size]
         new = after_rows[size]
