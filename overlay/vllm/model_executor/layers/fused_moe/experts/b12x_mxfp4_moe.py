@@ -29,6 +29,9 @@ from vllm.platforms import current_platform
 logger = init_logger(__name__)
 
 
+_B12X_ROUTE_PACK_WARMED: set[tuple[str, int, int, int, int]] = set()
+
+
 def _dtype_element_size(dtype: torch.dtype) -> int:
     return torch.empty((), dtype=dtype).element_size()
 
@@ -389,6 +392,86 @@ def _is_current_stream_capturing() -> bool:
     return bool(is_capturing is not None and is_capturing())
 
 
+def _b12x_route_pack_token_capacities(max_tokens: int) -> tuple[int, ...]:
+    """Return every power-of-two route-pack capacity through ``max_tokens``."""
+    max_tokens = max(int(max_tokens), 1)
+    max_capacity = 1 << (max_tokens - 1).bit_length()
+    return tuple(1 << shift for shift in range(max_capacity.bit_length()))
+
+
+def _prewarm_b12x_route_pack(
+    *,
+    device: torch.device,
+    num_experts: int,
+    topk: int,
+    max_tokens: int,
+) -> None:
+    """Resolve every reachable B12X route-pack Triton specialization."""
+    device = torch.device(device)
+    if device.type != "cuda":
+        raise RuntimeError(f"B12X route-pack warmup requires CUDA, got {device}")
+
+    num_experts = max(int(num_experts), 1)
+    topk = max(int(topk), 1)
+    capacities = _b12x_route_pack_token_capacities(max_tokens)
+
+    from b12x.moe.fused.w4a16.host import select_route_block_size_m
+    from b12x.moe.fused.w4a16.route_pack import pack_topk_routes_by_expert
+
+    with torch.cuda.device(device):
+        if _is_current_stream_capturing():
+            raise RuntimeError(
+                "B12X route-pack warmup must run before CUDA graph capture"
+            )
+        device_index = int(torch.cuda.current_device())
+        cache_key = (
+            device.type,
+            device_index,
+            num_experts,
+            topk,
+            capacities[-1],
+        )
+        if cache_key in _B12X_ROUTE_PACK_WARMED:
+            return
+
+        topk_ids = torch.zeros(
+            (capacities[-1], topk),
+            dtype=torch.int32,
+            device=device,
+        )
+        for token_capacity in capacities:
+            block_size = select_route_block_size_m(
+                token_capacity,
+                topk,
+                num_experts,
+            )
+            # Triton specializes scalar arguments by divisibility in addition
+            # to the explicit route capacity. Warm both the aligned capacity
+            # and a non-aligned live size in the same capacity bucket.
+            live_token_counts = (
+                (token_capacity, token_capacity - 1)
+                if token_capacity > 2
+                else (token_capacity,)
+            )
+            for live_tokens in live_token_counts:
+                pack_topk_routes_by_expert(
+                    topk_ids[:live_tokens],
+                    block_size,
+                    num_experts,
+                )
+        torch.cuda.synchronize(device)
+        _B12X_ROUTE_PACK_WARMED.add(cache_key)
+
+    logger.info(
+        "Prewarmed B12X route-pack capacities %s on cuda:%d "
+        "(experts=%d, topk=%d)",
+        capacities,
+        device_index,
+        num_experts,
+        topk,
+    )
+
+
 def _normalize_b12x_moe_topk_ids(topk_ids: torch.Tensor) -> torch.Tensor:
     if topk_ids.dtype != torch.int32:
         _raise_if_capture_copy_required(topk_ids, "topk_ids dtype normalization")
@@ -470,11 +553,20 @@ class B12xExperts(mk.FusedMoEExpertsModular):
             activation = getattr(moe_config, "activation", MoEActivation.SILU)
         activation = cast(MoEActivation, activation)
 
-        self._get_or_prepare_fp4_moe_weights(
+        prepared = self._get_or_prepare_fp4_moe_weights(
             w1=layer.w13_weight,
             w2=layer.w2_weight,
             activation=activation,
             params_dtype=params_dtype,
+        )
+        prepared_w4a16 = prepared.w4a16
+        if prepared_w4a16 is None:
+            raise RuntimeError("B12X W4A16 weights were not prepared during loading")
+        _prewarm_b12x_route_pack(
+            device=device,
+            num_experts=int(prepared_w4a16.num_experts),
+            topk=int(self.moe_config.experts_per_token),
+            max_tokens=int(self.moe_config.max_num_tokens),
         )
         self._release_w4a16_source_scales(layer)
         self._release_w4a16_source_weights(layer)

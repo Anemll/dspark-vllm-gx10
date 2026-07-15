@@ -18,6 +18,53 @@ format, plans caller-owned scratch, and rejects allocations during CUDA graph
 capture. The small-M selector override is opt-in/configurable through the
 `VLLM_B12X_W4A16_*` environment variables.
 
+## B12X route-pack startup warmup
+
+B12X route packing uses Triton kernels specialized by both a power-of-two
+route capacity and the divisibility of the live route count. Previously, a new
+long-prefill shape could compile `_pack_topk_routes_prefix_kernel` after
+request execution began. If compilation occurred during CUDA graph capture,
+it could terminate the engine.
+
+Each TP rank now prewarms route packing during model loading, before CUDA graph
+capture. It covers every power-of-two capacity through
+`MAX_NUM_BATCHED_TOKENS`; for capacities greater than two, it warms both the
+aligned capacity and capacity minus one. Those calls cover Triton's aligned
+and generic scalar specializations. The completed warmup is cached per CUDA
+device, expert count, top-k, and maximum capacity. With the default
+`MAX_NUM_BATCHED_TOKENS=8192`, startup increases by approximately 10--11
+seconds per rank and adds no request-path warmup.
+
+The expected startup log is:
+
+```text
+Prewarmed B12X route-pack capacities (...) on cuda:0 (experts=256, topk=6)
+```
+
+## JIT monitor
+
+Compose enables vLLM's JIT monitor in warning mode by default. Set these values
+in both node environment files when more detail is needed:
+
+```bash
+JIT_MONITOR_MODE=warn
+JIT_MONITOR_VERBOSE=1
+```
+
+`warn` reports unexpected inference-time compilation while allowing the server
+to continue. `error` is intended only for cold-start validation: it terminates
+the engine on any previously unwarmed kernel, including kernels unrelated to
+B12X.
+
+A cold TP=2 run with `JIT_MONITOR_MODE=error` completed 33,966-, 36,549-, and
+40,720-token prefill requests without route-pack compilation. A subsequent
+65,536-token test exposed separate first-use specializations in vLLM's indexer
+(`_build_prefill_chunk_metadata_kernel`) and the CuTeDSL
+`W4A16FusedMoeKernel`. The first decode matrix also compiled a dflash input
+preparation shape. None was a route-pack kernel, so the result validates this
+fix but is not yet a full-stack zero-JIT guarantee for every cold request. Use
+`warn` for normal serving until those independent warmup gaps are addressed.
+
 The new backend was informed by `voipmonitor`'s earlier Apache-2.0 b12x vLLM
 integration in vllm-project/vllm pull request 39634, then expanded for the
 current vLLM modular-MoE APIs and the tested DeepSeek V4 TP=2 path. Full

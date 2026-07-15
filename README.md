@@ -28,7 +28,8 @@ switching, and benchmark evidence.
 - supports TP=2's 32 query heads and pads unsupported sparse-index widths to
   FlashInfer's native 128/512/1024 dispatch widths with invalid-slot sentinels;
 - adds a modular b12x MXFP4 MoE backend with native weight preparation,
-  caller-owned scratch, CUDA-graph-safe execution, and GB10 small-M tuning;
+  caller-owned scratch, CUDA-graph-safe execution, GB10 small-M tuning, and
+  startup route-pack specialization warmup;
 - adds two-node Compose/start/update tooling plus the separate real-time
   dashboard and controlled performance harness.
 
@@ -136,6 +137,10 @@ Best aggregate output throughput from the controlled 512-token workload:
 | 4 | 91.4 tok/s | 103.5 tok/s | 13.2% |
 
 Raw results and the dependency-free client are in `benchmarks/`.
+The post-fix
+[route-pack warmup validation](benchmarks/results/route-pack-warmup-v025.md)
+includes strict-JIT boundary coverage, a 65K prefill check, and decode
+regression results.
 
 Warmed, server-side prefill results on the same two-node TP=2 deployment:
 

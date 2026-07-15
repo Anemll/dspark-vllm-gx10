@@ -138,4 +138,6 @@ services:
         --node-rank ${NODE_RANK}
         --master-addr ${MASTER_ADDR}
         --master-port ${MASTER_PORT:-25000}
+        --jit-monitor-mode ${JIT_MONITOR_MODE:-warn}
+        ${JIT_MONITOR_VERBOSE:+--jit-monitor-verbose}
         ${HEADLESS:+--headless}
