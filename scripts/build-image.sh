@@ -8,7 +8,7 @@ source "$root/upstream.lock"
 build_root="${BUILD_ROOT:-$root/.build}"
 source_dir="$build_root/vllm"
 base_image="${BASE_IMAGE:-dspark-vllm-gx10:vllm-base-$VLLM_TAG}"
-final_image="${FINAL_IMAGE:-ghcr.io/anemll/dspark-vllm-gx10:0.1.0}"
+final_image="${FINAL_IMAGE:-ghcr.io/anemll/dspark-vllm-gx10:0.1.1}"
 
 mkdir -p "$build_root"
 if [[ ! -d "$source_dir/.git" ]]; then

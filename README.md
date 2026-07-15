@@ -94,7 +94,7 @@ backup of the previous environment file.
 The prebuilt ARM64 image is published as:
 
 ```text
-ghcr.io/anemll/dspark-vllm-gx10:0.1.0
+ghcr.io/anemll/dspark-vllm-gx10:0.1.1
 ```
 
 To reproduce it locally, run `./scripts/build-image.sh`. The script checks out

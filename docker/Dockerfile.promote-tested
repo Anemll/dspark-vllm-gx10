@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: MIT
 # Maintainer-only: add public release metadata to an already validated image.
-ARG TESTED_IMAGE=vllm-dspark-runtime:dspark-v0251-candidate
+ARG TESTED_IMAGE=vllm-dspark-runtime:dspark-v025-routewarmup-test
 FROM ${TESTED_IMAGE}
 
 ARG SOURCE_REVISION=unknown
-ARG RELEASE_VERSION=0.1.0
+ARG RELEASE_VERSION=0.1.1
 
 LABEL org.opencontainers.image.source="https://github.com/Anemll/dspark-vllm-gx10"
 LABEL org.opencontainers.image.description="Two-node GB10 DSpark/NVFP4 vLLM runtime"
