@@ -122,7 +122,8 @@ Raw results and the dependency-free client are in `benchmarks/`.
 Prefill can be measured at exact 1K, 2K, 4K, 8K, 16K, and 32K input lengths.
 The harness records client TTFT plus vLLM's server-side prefill duration and
 computed-token count. It uses reproducible, unique token-ID prompts so the
-before and after runs receive identical input without prefix-cache reuse:
+before and after runs receive identical input without prefix-cache reuse. A
+separate 1K warm-up request is excluded from the measurements:
 
 ```bash
 # Run against the previous runtime, then switch the two-node server version.

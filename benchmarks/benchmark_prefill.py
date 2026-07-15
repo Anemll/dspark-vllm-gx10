@@ -217,6 +217,7 @@ def main() -> None:
     parser.add_argument("--sizes", default=DEFAULT_SIZES)
     parser.add_argument("--trials", type=int, default=2)
     parser.add_argument("--seed", type=int, default=4104)
+    parser.add_argument("--warmup-tokens", type=int, default=1024)
     parser.add_argument("--timeout", type=float, default=1800)
     parser.add_argument("--label", default="unlabelled")
     parser.add_argument("--report-target", default="spark-head")
@@ -227,13 +228,26 @@ def main() -> None:
     version = request_json(f"{base_url}/version").get("version", "unknown")
     pool = tokenize(base_url, args.model, TOKEN_CORPUS)
     sizes = [int(value) for value in args.sizes.split(",")]
-    if any(size <= 0 for size in sizes) or args.trials <= 0:
-        parser.error("sizes and trials must be positive")
+    if (
+        any(size <= 0 for size in sizes)
+        or args.trials <= 0
+        or args.warmup_tokens < 0
+    ):
+        parser.error("sizes/trials must be positive and warmup-tokens non-negative")
 
     print(
         f"target {base_url} model {args.model} version {version} label {args.label}",
         flush=True,
     )
+    if args.warmup_tokens:
+        warmup = make_prompt(pool, args.warmup_tokens, 0, args.seed)
+        warmup_ttft, _, _, _ = run_completion(
+            base_url, args.model, warmup, args.timeout
+        )
+        print(
+            f"warmup {args.warmup_tokens:,} tokens: TTFT {warmup_ttft:.3f}s",
+            flush=True,
+        )
     results: list[PrefillResult] = []
     for size in sizes:
         print(f"=== {size:,} input tokens ===", flush=True)
@@ -296,6 +310,7 @@ def main() -> None:
         "version": version,
         "sizes": sizes,
         "trials_per_size": args.trials,
+        "warmup_tokens": args.warmup_tokens,
         "seed": args.seed,
         "token_pool_sha256": hashlib.sha256(
             ",".join(str(token) for token in pool).encode()
