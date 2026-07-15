@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MIT
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Python syntax
+        run: python -m compileall -q dashboard benchmarks overlay
+      - name: Shell syntax
+        run: find scripts dashboard -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Overlay license markers
+        run: |
+          missing="$(find overlay/vllm -type f -name '*.py' \
+            -exec grep -L '^# SPDX-License-Identifier: Apache-2.0' {} +)"
+          test -z "$missing" || { printf '%s\n' "$missing"; exit 1; }
+      - name: Private-data guard
+        run: ./scripts/check-private-data.sh

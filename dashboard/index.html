@@ -1,0 +1,352 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MIT -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#071016" />
+    <title>DSpark Live Monitor</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #071016;
+        --panel: rgba(14, 27, 38, 0.88);
+        --panel-strong: #102434;
+        --line: rgba(148, 181, 203, 0.14);
+        --muted: #8aa1af;
+        --text: #f1f7fa;
+        --cyan: #44d9e6;
+        --green: #55e6a5;
+        --yellow: #ffd166;
+        --red: #ff7185;
+        --blue: #7aa7ff;
+        --shadow: 0 20px 60px rgba(0, 0, 0, 0.32);
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-width: 320px;
+        min-height: 100vh;
+        color: var(--text);
+        background:
+          radial-gradient(900px 520px at 4% -10%, rgba(39, 160, 178, 0.2), transparent 70%),
+          radial-gradient(800px 500px at 105% 0%, rgba(45, 96, 194, 0.18), transparent 65%),
+          var(--bg);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      }
+
+      .shell { width: min(1460px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 34px; }
+      .topbar { display: flex; justify-content: space-between; align-items: start; gap: 22px; margin-bottom: 20px; }
+      .eyebrow { color: var(--cyan); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; }
+      h1 { margin: 7px 0 8px; font-size: clamp(26px, 3vw, 43px); letter-spacing: -0.055em; font-family: ui-sans-serif, system-ui, sans-serif; }
+      .subline { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+      .top-meta { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; max-width: 560px; }
+      .chip { border: 1px solid var(--line); background: rgba(11, 24, 34, 0.62); color: #c3d3dc; padding: 8px 10px; border-radius: 8px; font-size: 11px; white-space: nowrap; }
+      .chip.live { border-color: rgba(85, 230, 165, 0.36); color: var(--green); background: rgba(42, 162, 111, 0.11); }
+      .chip.stale { border-color: rgba(255, 113, 133, 0.42); color: var(--red); background: rgba(174, 49, 71, 0.12); }
+      .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; background: currentColor; box-shadow: 0 0 14px currentColor; }
+
+      .hero, .card, .chart-panel, .table-panel { border: 1px solid var(--line); background: var(--panel); box-shadow: var(--shadow); border-radius: 14px; }
+      .hero { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; padding: 24px 26px; margin-bottom: 14px; overflow: hidden; position: relative; }
+      .hero::after { content: ""; position: absolute; inset: auto -60px -90px auto; width: 260px; height: 260px; border-radius: 50%; background: rgba(68, 217, 230, 0.08); filter: blur(4px); }
+      .hero-label, .metric-label, .section-kicker { color: var(--muted); font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; font-weight: 700; }
+      .big-rate { margin-top: 8px; display: flex; align-items: baseline; gap: 11px; }
+      .big-rate strong { color: var(--green); font-size: clamp(47px, 7.5vw, 91px); letter-spacing: -0.075em; line-height: .85; font-family: ui-sans-serif, system-ui, sans-serif; }
+      .big-rate span { color: #a5c6d2; font-size: clamp(14px, 1.7vw, 20px); }
+      .hero-note { margin-top: 12px; color: var(--muted); font-size: 11px; }
+      .hero-side { z-index: 1; text-align: right; min-width: 195px; }
+      .hero-side b { display: block; color: var(--cyan); font-size: 22px; margin: 6px 0; }
+      .hero-side small { color: var(--muted); font-size: 10px; }
+
+      .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+      .card { min-height: 132px; padding: 18px; position: relative; overflow: hidden; }
+      .card .value { margin-top: 14px; font: 700 clamp(24px, 3vw, 40px)/.9 ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.05em; }
+      .card .unit { color: var(--muted); font-size: 12px; margin-left: 4px; }
+      .card .detail { position: absolute; bottom: 17px; left: 18px; color: var(--muted); font-size: 10px; }
+      .green { color: var(--green); }.cyan { color: var(--cyan); }.blue { color: var(--blue); }.yellow { color: var(--yellow); }.red { color: var(--red); }
+
+      .hardware-panel { display: grid; grid-template-columns: minmax(220px, .72fr) minmax(0, 1.4fr); gap: 20px; padding: 20px 22px; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(115deg, rgba(16, 37, 52, .92), rgba(11, 23, 33, .88)); box-shadow: var(--shadow); }
+      .hardware-title { margin-top: 6px; font: 700 19px ui-sans-serif, system-ui, sans-serif; letter-spacing: -.025em; }
+      .hardware-copy p { margin: 8px 0 0; color: var(--muted); font-size: 10px; line-height: 1.55; }
+      .hardware-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+      .hardware-card { min-height: 112px; padding: 15px 16px; border-radius: 10px; border: 1px solid var(--line); background: rgba(4, 13, 19, .48); }
+      .hardware-value { margin-top: 10px; font: 700 32px/.9 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.05em; }
+      .hardware-detail { margin-top: 14px; color: var(--muted); font-size: 10px; }
+      .hardware-node-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+      .hardware-node-grid span { display: block; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+      .hardware-node-grid b { display: block; margin-top: 5px; font: 700 24px/.9 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.05em; }
+
+      .chart-panel { padding: 20px 22px 13px; margin-bottom: 14px; }
+      .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+      .chart-title { font: 700 17px ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.025em; }
+      .chart-caption { color: var(--muted); font-size: 10px; }
+      .chart-wrap { height: 266px; position: relative; }
+      canvas { display: block; width: 100%; height: 100%; }
+      .chart-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 12px; pointer-events: none; }
+      .chart-empty[hidden] { display: none; }
+
+      .bottom-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; }
+      .table-panel { padding: 18px; }
+      .table-title { margin-bottom: 12px; font: 700 14px ui-sans-serif, system-ui, sans-serif; }
+      .metric-row { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); font-size: 12px; }
+      .metric-row:first-of-type { border-top: 0; }.metric-row span { color: var(--muted); }.metric-row b { font-weight: 600; }
+      .state-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 5px; }
+      .state { border-radius: 9px; background: rgba(4, 13, 19, 0.56); border: 1px solid var(--line); padding: 12px; }
+      .state label { display: block; color: var(--muted); font-size: 10px; }.state b { display: block; margin-top: 7px; font-size: 23px; font-family: ui-sans-serif, system-ui, sans-serif; }
+      footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 16px; color: #708895; font-size: 10px; }
+      code { color: #b9d4df; font-family: inherit; }
+
+      @media (max-width: 920px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.bottom-grid, .hardware-panel { grid-template-columns: 1fr; }.topbar { flex-direction: column; }.top-meta { justify-content: start; }.hero-side { text-align: left; } }
+      @media (max-width: 560px) { .shell { width: min(100% - 20px, 1460px); padding-top: 16px; }.hero { grid-template-columns: 1fr; padding: 21px; }.metric-grid { grid-template-columns: 1fr 1fr; gap: 9px; }.card { min-height: 120px; padding: 14px; }.card .detail { left: 14px; bottom: 13px; }.hardware-panel { padding: 16px; }.hardware-grid { grid-template-columns: 1fr; }.chart-panel { padding: 16px; }.chart-wrap { height: 220px; }.big-rate strong { font-size: 62px; } }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <div class="eyebrow">vLLM <span id="vllmVersion">detecting…</span> · TP=2 · NVFP4 DS MLA</div>
+          <h1>DSpark Live Monitor</h1>
+          <div class="subline"><span id="modelName">Connecting to vLLM…</span> · <code>GX10-30c1:8888</code></div>
+        </div>
+        <div class="top-meta">
+          <span class="chip" id="refreshChip">refreshing…</span>
+          <span class="chip live" id="healthChip"><i class="dot"></i>LIVE</span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <div class="hero-label">Aggregate live generation rate</div>
+          <div class="big-rate"><strong id="generationTps">—</strong><span>tokens / second</span></div>
+          <div class="hero-note" id="heroNote">Waiting for the first two vLLM counter samples…</div>
+        </div>
+        <div class="hero-side">
+          <div class="metric-label">Per active request</div>
+          <b id="perRequest">—</b>
+          <small>aggregate t/s ÷ running requests</small>
+        </div>
+      </section>
+
+      <section class="chart-panel">
+        <div class="chart-head"><div><div class="section-kicker">Rolling window</div><div class="chart-title">Decode &amp; prefill throughput · last 60 seconds</div></div><div class="chart-caption" id="chartSummary">collecting samples</div></div>
+        <div class="chart-wrap"><canvas id="throughputChart" aria-label="Decode and prefill tokens per second chart"></canvas><div class="chart-empty" id="chartEmpty">Waiting for live throughput data</div></div>
+        <div class="chart-caption" style="margin-top:9px">Green/right = decode TPS · red/left = prefill TPS · dashed lines = active non-zero averages.</div>
+      </section>
+
+      <section class="metric-grid">
+        <article class="card"><div class="metric-label">Model load · 30c1</div><div class="value cyan" id="headLoad">—</div><div class="detail" id="headLoadDetail">container log</div></article>
+        <article class="card"><div class="metric-label">Model load · 3fe8</div><div class="value blue" id="workerLoad">—</div><div class="detail" id="workerLoadDetail">container log</div></article>
+        <article class="card"><div class="metric-label">Requests</div><div class="value cyan" id="requests">—</div><div class="detail">running <span id="waiting">—</span> waiting</div></article>
+        <article class="card"><div class="metric-label">KV cache</div><div class="value blue" id="kvCache">—</div><div class="detail">NVFP4 DS MLA cache utilization</div></article>
+        <article class="card"><div class="metric-label">DSpark acceptance</div><div class="value yellow" id="acceptance">—</div><div class="detail">accepted DSpark drafts / proposed DSpark drafts</div></article>
+        <article class="card"><div class="metric-label">Prefill rate</div><div class="value green" id="prefillTps">—</div><div class="detail">prompt tokens per second</div></article>
+      </section>
+
+      <section class="hardware-panel">
+        <div class="hardware-copy">
+          <div class="section-kicker">2 × GX10 hardware</div>
+          <div class="hardware-title">Thermals &amp; power</div>
+          <p id="hardwareStatus">Sampling both GB10 GPUs…</p>
+        </div>
+        <div class="hardware-grid">
+          <article class="hardware-card"><div class="metric-label">Peak GPU temperature</div><div class="hardware-value red" id="maxTemperature">—</div><div class="hardware-detail" id="temperatureDetail">GX10-30c1 — · GX10-3fe8 —</div></article>
+          <article class="hardware-card"><div class="metric-label">XFlash NVMe temperature</div><div class="hardware-value green" id="xflashTemperature">—</div><div class="hardware-detail" id="xflashDetail">NVMe SMART composite temperature</div></article>
+          <article class="hardware-card"><div class="metric-label">Combined GB10 power</div><div class="hardware-value yellow" id="combinedPower">—</div><div class="hardware-detail" id="powerDetail">GPU-board draw; not whole-system power</div></article>
+          <article class="hardware-card"><div class="metric-label">GPU compute</div><div class="hardware-node-grid"><div><span>GX10-30c1</span><b class="cyan" id="headCompute">—</b></div><div><span>GX10-3fe8</span><b class="cyan" id="workerCompute">—</b></div></div><div class="hardware-detail">GPU/SM active time · not memory use</div></article>
+        </div>
+      </section>
+
+      <section class="bottom-grid">
+        <section class="table-panel">
+          <div class="table-title">Request latency · newly completed requests</div>
+          <div class="metric-row"><span>Time to first token</span><b id="ttft">—</b></div>
+          <div class="metric-row"><span>Inter-token latency</span><b id="itl">—</b></div>
+          <div class="metric-row"><span>End-to-end latency</span><b id="e2e">—</b></div>
+          <div class="metric-row"><span>Completed requests</span><b id="completed">—</b></div>
+        </section>
+        <section class="table-panel">
+          <div class="table-title">Scheduler state</div>
+          <div class="state-strip">
+            <div class="state"><label>RUNNING</label><b class="green" id="runningState">—</b></div>
+            <div class="state"><label>CAPACITY QUEUE</label><b class="yellow" id="capacityState">—</b></div>
+            <div class="state"><label>DEFERRED</label><b class="blue" id="deferredState">—</b></div>
+          </div>
+          <div class="metric-row" style="margin-top:12px"><span>Generated tokens total</span><b id="generatedTotal">—</b></div>
+          <div class="metric-row"><span>Prefill tokens total</span><b id="promptTotal">—</b></div>
+          <div class="metric-row"><span>Errors</span><b id="errors">—</b></div>
+        </section>
+      </section>
+
+      <footer><span id="footerStatus">Connecting…</span><span>Source: vLLM Prometheus metrics · 1 s UI refresh</span></footer>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const formatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
+      const oneDecimal = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+      let latest = null;
+
+      const value = (number, suffix = "", fallback = "—") => number == null || !Number.isFinite(number) ? fallback : `${oneDecimal.format(number)}${suffix}`;
+      const integer = (number) => number == null || !Number.isFinite(number) ? "—" : formatter.format(number);
+      const latency = (number) => number == null || !Number.isFinite(number) ? "No new request" : number < 1 ? `${oneDecimal.format(number * 1000)} µs` : `${oneDecimal.format(number)} ms`;
+      const nodeValue = (node, field, suffix) => node && node.available && Number.isFinite(node[field]) ? `${oneDecimal.format(node[field])}${suffix}` : "—";
+
+      function setHealth(ok, message) {
+        const chip = $("healthChip");
+        chip.className = `chip ${ok ? "live" : "stale"}`;
+        chip.innerHTML = `<i class="dot"></i>${ok ? "LIVE" : "STALE"}`;
+        $("footerStatus").textContent = message;
+      }
+
+      function render(data) {
+        latest = data;
+        const rate = data.generationTps;
+        $("modelName").textContent = data.model || "vLLM";
+        $("vllmVersion").textContent = data.vllmVersion || "unavailable";
+        $("generationTps").textContent = value(rate, "", "—");
+        $("perRequest").textContent = data.running > 0 && rate != null ? `${oneDecimal.format(rate / data.running)} t/s` : "—";
+        $("requests").textContent = integer(data.running);
+        $("waiting").textContent = integer(data.waiting);
+        $("kvCache").textContent = value(data.kvCachePct, "%");
+        $("acceptance").textContent = value(data.dsparkAcceptancePct, "%");
+        $("prefillTps").textContent = value(data.prefillTps, " t/s");
+        $("ttft").textContent = latency(data.ttftMs);
+        $("itl").textContent = latency(data.itlMs);
+        $("e2e").textContent = latency(data.e2eMs);
+        $("completed").textContent = integer(data.completedRequests);
+        $("runningState").textContent = integer(data.running);
+        $("capacityState").textContent = integer(data.waitingCapacity);
+        $("deferredState").textContent = integer(data.waitingDeferred);
+        $("generatedTotal").textContent = integer(data.generatedTokens);
+        $("promptTotal").textContent = integer(data.promptTokens);
+        $("errors").textContent = integer(data.errors);
+        const load = data.load || {}, showLoad = (node) => {
+          if (!node) return ["—", "unavailable"];
+          if (node.state === "ready") return ["ready", node.detail || "model serving"];
+          if (node.state === "target_weights") return node.done == null ? ["active", "TP rank loading; vLLM hides shard count"] : [`${node.percent}%`, `${node.done}/${node.total} target shards`];
+          return [node.state.split("_").join(" "), node.detail || "container log"];
+        };
+        let [headLoad, headDetail] = showLoad(load["GX10-30c1"]), [workerLoad, workerDetail] = showLoad(load["GX10-3fe8"]);
+        $("headLoad").textContent = headLoad; $("headLoadDetail").textContent = headDetail;
+        $("workerLoad").textContent = workerLoad; $("workerLoadDetail").textContent = workerDetail;
+        const hardware = data.hardware || {}, nodes = hardware.nodes || {};
+        const head = nodes["GX10-30c1"], worker = nodes["GX10-3fe8"];
+        const xflash = hardware.xflash || {};
+        $("maxTemperature").textContent = value(hardware.maxTemperatureC, "°C");
+        $("temperatureDetail").textContent = `30c1 ${nodeValue(head, "temperatureC", "°C")} · 3fe8 ${nodeValue(worker, "temperatureC", "°C")}`;
+        $("xflashTemperature").textContent = xflash.available ? value(xflash.temperatureC, "°C") : "—";
+        $("xflashDetail").textContent = xflash.available ? "XFlash NVMe SMART composite temperature" : "NVMe SMART unavailable";
+        $("combinedPower").textContent = value(hardware.combinedGpuPowerW, " W");
+        $("powerDetail").textContent = `30c1 ${nodeValue(head, "powerW", " W")} · 3fe8 ${nodeValue(worker, "powerW", " W")} · GPU-board draw`;
+        $("headCompute").textContent = nodeValue(head, "utilizationPct", "%");
+        $("workerCompute").textContent = nodeValue(worker, "utilizationPct", "%");
+        $("hardwareStatus").textContent = hardware.available ? `${hardware.reportedNodes}/${hardware.expectedNodes} GB10 GPUs reporting · XFlash ${xflash.available ? value(xflash.temperatureC, "°C") : "unavailable"} · combined GPU-board power, not wall power` : "Hardware telemetry temporarily unavailable";
+        $("refreshChip").textContent = `scrape ${value(data.scrapeMs, " ms", "—")}`;
+        const elapsed = new Date(data.sampledAt).toLocaleTimeString();
+        const status = data.warmup ? "Sampling baseline…" : data.counterReset ? "vLLM counter reset detected; chart restarted" : rate === 0 ? "Server is idle — no tokens are currently generating" : "Live server-side aggregate decode throughput";
+        $("heroNote").textContent = status;
+        setHealth(Boolean(data.healthy), data.healthy ? `Last successful metric sample ${elapsed}` : (data.message || "Metrics unavailable"));
+        drawChart(data.history || []);
+      }
+
+      function activeAverage(samples, field) {
+        const included = samples.map((point) => point[field]).filter((number) => Number.isFinite(number) && number > 0);
+        return included.length ? included.reduce((sum, number) => sum + number, 0) / included.length : null;
+      }
+
+      function scaleMax(values) {
+        const peak = Math.max(...values.filter(Number.isFinite), 1);
+        const magnitude = 10 ** Math.floor(Math.log10(peak));
+        const step = magnitude / 2;
+        return Math.max(1, Math.ceil(peak / step) * step);
+      }
+
+      function scaleLabel(number) {
+        return number >= 1000 ? `${oneDecimal.format(number / 1000)}k` : `${Math.round(number)}`;
+      }
+
+      function lastFinite(samples, field) {
+        for (let index = samples.length - 1; index >= 0; index -= 1) if (Number.isFinite(samples[index][field])) return samples[index][field];
+        return null;
+      }
+
+      function traceSeries(ctx, samples, field, xAt, yAt) {
+        let first = -1, last = -1, started = false;
+        ctx.beginPath();
+        samples.forEach((point, index) => {
+          const number = point[field];
+          if (!Number.isFinite(number)) return;
+          if (!started) { ctx.moveTo(xAt(index), yAt(number)); first = index; started = true; }
+          else ctx.lineTo(xAt(index), yAt(number));
+          last = index;
+        });
+        return { first, last, started };
+      }
+
+      function drawChart(history) {
+        const canvas = $("throughputChart"), empty = $("chartEmpty"), box = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1, width = Math.max(1, Math.floor(box.width * dpr)), height = Math.max(1, Math.floor(box.height * dpr));
+        if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+        const ctx = canvas.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, box.width, box.height);
+        const samples = history.filter((point) => Number.isFinite(point.generationTps) || Number.isFinite(point.prefillTps));
+        const decodeValues = samples.map((point) => point.generationTps).filter(Number.isFinite);
+        const prefillValues = samples.map((point) => point.prefillTps).filter(Number.isFinite);
+        empty.hidden = samples.length >= 2;
+        if (samples.length < 2) { $("chartSummary").textContent = "collecting samples"; return; }
+
+        const decodeMax = scaleMax(decodeValues), prefillMax = scaleMax(prefillValues);
+        const decodeAverage = activeAverage(samples, "generationTps"), prefillAverage = activeAverage(samples, "prefillTps");
+        const decodeCurrent = lastFinite(samples, "generationTps"), prefillCurrent = lastFinite(samples, "prefillTps");
+        $("chartSummary").textContent = `decode ${decodeCurrent == null ? "—" : oneDecimal.format(decodeCurrent)} / avg ${decodeAverage == null ? "—" : oneDecimal.format(decodeAverage)} · prefill ${prefillCurrent == null ? "—" : oneDecimal.format(prefillCurrent)} / avg ${prefillAverage == null ? "—" : oneDecimal.format(prefillAverage)} tok/s`;
+
+        const pad = { top: 20, right: 54, bottom: 24, left: 50 }, w = box.width - pad.left - pad.right, h = box.height - pad.top - pad.bottom;
+        const xAt = (index) => pad.left + (index / Math.max(1, samples.length - 1)) * w;
+        const yDecode = (number) => pad.top + h - Math.min(1, number / decodeMax) * h;
+        const yPrefill = (number) => pad.top + h - Math.min(1, number / prefillMax) * h;
+        ctx.font = "10px ui-monospace, monospace";
+        for (let tick = 0; tick <= 4; tick++) {
+          const y = pad.top + h - (h * tick / 4);
+          ctx.strokeStyle = "rgba(148,181,203,.14)"; ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + w, y); ctx.stroke();
+          ctx.fillStyle = "#ff8b9b"; ctx.textAlign = "right"; ctx.fillText(scaleLabel(prefillMax * tick / 4), pad.left - 9, y + 3);
+          ctx.fillStyle = "#80e6b6"; ctx.textAlign = "left"; ctx.fillText(scaleLabel(decodeMax * tick / 4), pad.left + w + 9, y + 3);
+        }
+        ctx.fillStyle = "#ff8b9b"; ctx.textAlign = "left"; ctx.fillText("PREFILL t/s", pad.left, 11);
+        ctx.fillStyle = "#80e6b6"; ctx.textAlign = "right"; ctx.fillText("DECODE t/s", pad.left + w, 11);
+
+        const drawFilledSeries = (field, yAt, color, fillTop) => {
+          const shape = traceSeries(ctx, samples, field, xAt, yAt);
+          if (!shape.started) return;
+          ctx.lineTo(xAt(shape.last), pad.top + h); ctx.lineTo(xAt(shape.first), pad.top + h); ctx.closePath();
+          const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + h); gradient.addColorStop(0, fillTop); gradient.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = gradient; ctx.fill();
+          traceSeries(ctx, samples, field, xAt, yAt); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.shadowColor = color; ctx.shadowBlur = 10; ctx.stroke(); ctx.shadowBlur = 0;
+        };
+        drawFilledSeries("prefillTps", yPrefill, "#ff7185", "rgba(255,113,133,.16)");
+        drawFilledSeries("generationTps", yDecode, "#55e6a5", "rgba(85,230,165,.27)");
+
+        const drawAverage = (average, yAt, color, label, align) => {
+          if (average == null) return;
+          const y = yAt(average); ctx.save(); ctx.setLineDash([6, 6]); ctx.strokeStyle = color; ctx.lineWidth = 1.25; ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + w, y); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle = color; ctx.textAlign = align; const x = align === "left" ? pad.left + 5 : pad.left + w - 5; ctx.fillText(label, x, Math.max(pad.top + 12, y - 6)); ctx.restore();
+        };
+        drawAverage(prefillAverage, yPrefill, "#ff7185", `prefill avg ${oneDecimal.format(prefillAverage)}`, "left");
+        drawAverage(decodeAverage, yDecode, "#ffd166", `decode avg ${oneDecimal.format(decodeAverage)}`, "right");
+
+        const drawLatestPoint = (field, yAt, color) => { const last = lastFinite(samples, field); if (last == null) return; const index = [...samples].reverse().findIndex((point) => Number.isFinite(point[field])); const actualIndex = samples.length - 1 - index; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(xAt(actualIndex), yAt(last), 3.5, 0, Math.PI * 2); ctx.fill(); };
+        drawLatestPoint("prefillTps", yPrefill, "#ff7185"); drawLatestPoint("generationTps", yDecode, "#f1f7fa");
+        ctx.fillStyle = "#78919d"; ctx.textAlign = "left"; ctx.fillText("60s ago", pad.left, box.height - 5); ctx.textAlign = "right"; ctx.fillText("now", pad.left + w, box.height - 5);
+      }
+
+      async function poll() {
+        try {
+          const response = await fetch("/api/snapshot", { cache: "no-store" });
+          if (!response.ok) throw new Error("snapshot unavailable");
+          render(await response.json());
+        } catch (_) {
+          setHealth(false, "Dashboard connection unavailable; retrying…");
+        } finally { window.setTimeout(poll, 1000); }
+      }
+      new ResizeObserver(() => latest && drawChart(latest.history || [])).observe($("throughputChart").parentElement);
+      poll();
+    </script>
+  </body>
+</html>

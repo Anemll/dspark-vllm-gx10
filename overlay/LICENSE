@@ -1,0 +1,5 @@
+The files below this directory are modifications of, or additions to, vLLM.
+They are licensed under Apache-2.0 and retain the vLLM project copyright and
+SPDX notices in each source file.
+
+The full Apache License 2.0 text is at ../LICENSES/Apache-2.0.txt.

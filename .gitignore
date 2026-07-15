@@ -1,0 +1,14 @@
+.DS_Store
+.build/
+.env
+.env.*
+!*.env.example
+config/head.env
+config/worker.env
+dashboard/dashboard.env
+__pycache__/
+*.pyc
+*.log
+*.pem
+*.key
+id_*

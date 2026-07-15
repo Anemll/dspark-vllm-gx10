@@ -1,0 +1,23 @@
+DSpark vLLM GX10 runtime overlay
+Copyright 2026 Anemll project contributors
+
+Repo-local dashboard, deployment, documentation, and benchmark code is
+available under the MIT License in LICENSE.
+
+Files under overlay/ are based on vLLM, or implement adapters against vLLM's
+interfaces, and remain under Apache-2.0. They retain the vLLM contributor SPDX
+notices. The full Apache-2.0 text is included in LICENSES/Apache-2.0.txt.
+
+The runtime image also contains separately licensed dependencies, including:
+
+- vLLM, Copyright contributors to the vLLM project — Apache-2.0
+- FlashInfer, Copyright FlashInfer contributors — Apache-2.0
+- b12x, authored/maintained by Luke Alonso — Apache-2.0 as declared by the
+  pinned package metadata
+
+The b12x adapter was informed in part by the Apache-2.0 work from `voipmonitor`
+in vllm-project/vllm pull request 39634. See CREDITS.md for exact revisions and
+the complete serving/model lineage.
+
+Model weights are not included. Users are responsible for obtaining and using
+model weights under the applicable model license.

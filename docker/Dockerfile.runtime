@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: MIT
+ARG VLLM_BASE=vllm/vllm-openai:v0.25.1
+ARG FLASHINFER_COMMIT=0472b9b3f2fba11b463f8526f390297d52a8aad7
+ARG B12X_COMMIT=7dc6fb8fcc6446ea093537d1657df81985fa5f43
+ARG CUTLASS_DSL_VERSION=4.5.2
+ARG CUDA_PYTHON_VERSION=13.3.1
+ARG TVM_FFI_VERSION=0.1.9
+
+FROM ${VLLM_BASE}
+
+ARG FLASHINFER_COMMIT
+ARG B12X_COMMIT
+ARG CUTLASS_DSL_VERSION
+ARG CUDA_PYTHON_VERSION
+ARG TVM_FFI_VERSION
+
+LABEL org.opencontainers.image.source="https://github.com/anemll/dspark-vllm-gx10"
+LABEL org.opencontainers.image.description="Two-node GB10 DSpark/NVFP4 vLLM runtime"
+LABEL org.opencontainers.image.licenses="MIT AND Apache-2.0"
+
+COPY LICENSE NOTICE CREDITS.md /usr/share/licenses/dspark-vllm-gx10/
+COPY LICENSES/Apache-2.0.txt \
+  /usr/share/licenses/dspark-vllm-gx10/Apache-2.0.txt
+
+ENV FLASHINFER_DISABLE_VERSION_CHECK=1
+RUN python3 -m pip install --no-cache-dir \
+      "cuda-python==${CUDA_PYTHON_VERSION}" \
+      "nvidia-cutlass-dsl==${CUTLASS_DSL_VERSION}" \
+      "nvidia-cutlass-dsl-libs-base==${CUTLASS_DSL_VERSION}" \
+      "nvidia-cutlass-dsl-libs-cu13==${CUTLASS_DSL_VERSION}" \
+      "apache-tvm-ffi==${TVM_FFI_VERSION}" && \
+    python3 -m pip install --no-cache-dir --no-deps --no-build-isolation \
+      "https://github.com/lukealonso/b12x/archive/${B12X_COMMIT}.tar.gz" && \
+    python3 -m pip install --no-cache-dir --no-deps --no-build-isolation \
+      --force-reinstall \
+      "https://github.com/flashinfer-ai/flashinfer/archive/${FLASHINFER_COMMIT}.tar.gz"
+
+# Merge the downstream Python overlay into the installed vLLM package.
+COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/
+
+ENTRYPOINT ["vllm", "serve"]
