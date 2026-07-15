@@ -119,6 +119,14 @@ Benchmark model:
   checkpoint's FP8 weight format
 - TP=2 across two GX10 nodes; server maximum context 350,000 tokens
 
+Single-node reference: the unchanged checkpoint is **not runnable on one
+GX10**. Its 155.43 GiB of weight files exceed the node's approximately 121 GiB
+of usable unified memory before KV cache and runtime allocations. A controlled
+TP=1 launch reached NVIDIA `NV_ERR_NO_MEMORY` before the API became ready, so
+there are no valid single-node throughput samples. The full
+[fit-check record](benchmarks/results/prefill-v0251-single-node-fit.md) is kept
+with the benchmark results.
+
 Best aggregate output throughput from the controlled 512-token workload:
 
 | Concurrency | Previous runtime | vLLM 0.25 candidate | Gain |

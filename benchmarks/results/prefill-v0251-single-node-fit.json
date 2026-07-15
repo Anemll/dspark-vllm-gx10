@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "label": "v0251-single-node-fit-check",
+  "status": "not_runnable",
+  "reason": "The unchanged FP8 checkpoint does not fit in one GX10's unified memory, so the API never became ready and no valid throughput trials exist.",
+  "started_at_utc": "2026-07-15T06:36:54Z",
+  "model": "deepseek-v4-flash-dspark-abliterated",
+  "model_artifact": {
+    "huggingface_repo": "drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored",
+    "architecture": "DeepSeek V4 Flash, 284B MoE / approximately 13B active parameters",
+    "weight_format": "FP8 E4M3 with UE8M0 scales and 128x128 blocks",
+    "safetensors_shards": 48,
+    "safetensors_bytes": 166886535336,
+    "safetensors_gib": 155.43,
+    "kv_cache_dtype": "nvfp4_ds_mla"
+  },
+  "version": "0.25.2.dev0+g752a3a504.d20260714",
+  "hardware": {
+    "nodes": 1,
+    "accelerator": "NVIDIA GB10 / ASUS GX10",
+    "reported_physical_memory_gib": 121,
+    "tensor_parallel_size": 1
+  },
+  "server_config": {
+    "max_model_len": 350000,
+    "max_num_seqs": 12,
+    "max_num_batched_tokens": 8192,
+    "gpu_memory_utilization": 0.78,
+    "mtp_num_tokens": 5
+  },
+  "observation": {
+    "model_loading_started_at_utc": "2026-07-15T06:37:12Z",
+    "minimum_available_memory_mib": 369,
+    "api_ready": false,
+    "nvidia_driver_error": "NV_ERR_NO_MEMORY",
+    "first_driver_oom_at_utc": "2026-07-15T06:37:24Z",
+    "container_exit_code": 137,
+    "termination": "The engine was terminated with SIGKILL after driver OOM errors to recover the host."
+  },
+  "results": [],
+  "restoration": {
+    "tensor_parallel_size": 2,
+    "status": "healthy",
+    "version": "0.25.2.dev0+g752a3a504.d20260714",
+    "model_memory_per_rank_gib": 79.17,
+    "weight_loading_seconds": 193.25,
+    "kv_cache_per_rank_gib": 10.74,
+    "live_completion_tokens": 12,
+    "live_completion_seconds": 1.366
+  }
+}

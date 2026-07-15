@@ -69,6 +69,17 @@ def main() -> None:
                 f"cache uses `{artifact['kv_cache_dtype']}`.",
             ]
         )
+    single_node = after.get("single_node_reference")
+    if isinstance(single_node, dict):
+        lines.extend(
+            [
+                "",
+                "Single-node reference: "
+                f"{single_node['reason']} See the "
+                f"[TP=1 fit check]({single_node['report']}); no single-node "
+                "throughput samples are valid.",
+            ]
+        )
     lines.extend(
         [
             "",

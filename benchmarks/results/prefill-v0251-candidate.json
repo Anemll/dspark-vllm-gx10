@@ -13,6 +13,11 @@
     "safetensors_gib": 155.43,
     "kv_cache_dtype": "nvfp4_ds_mla"
   },
+  "single_node_reference": {
+    "status": "not_runnable",
+    "reason": "The unchanged 155.43 GiB checkpoint exceeds one GX10's approximately 121 GiB of usable unified memory.",
+    "report": "prefill-v0251-single-node-fit.md"
+  },
   "version": "0.25.2.dev0+g752a3a504.d20260714",
   "sizes": [
     1024,

@@ -3,6 +3,8 @@ After: `v0251-candidate-steady` / `0.25.2.dev0+g752a3a504.d20260714`
 
 Model: [drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored](https://huggingface.co/drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored), DeepSeek V4 Flash, 284B MoE / approximately 13B active parameters. The checkpoint contains 48 FP8 Safetensors shards totaling 155.43 GiB on each node; the serving KV cache uses `nvfp4_ds_mla`.
 
+Single-node reference: The unchanged 155.43 GiB checkpoint exceeds one GX10's approximately 121 GiB of usable unified memory. See the [TP=1 fit check](prefill-v0251-single-node-fit.md); no single-node throughput samples are valid.
+
 | Input tokens | Before server tok/s | After server tok/s | Gain | Before TTFT | After TTFT |
 |---:|---:|---:|---:|---:|---:|
 | 1,024 | 1,778.7 | 2,033.0 | +14.3% | 0.585s | 0.512s |
