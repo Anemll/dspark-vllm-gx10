@@ -32,9 +32,14 @@ switching, and benchmark evidence.
   startup route-pack specialization warmup;
 - adds two-node Compose/start/update tooling plus the separate real-time
   dashboard and controlled performance harness.
+- optionally makes TP rank 0 the sole checkpoint payload reader and streams
+  only TP rank 1's required raw weight writes into RAM over NCCL/RoCE.
 
 The exact file-level implementation is described in
 [docs/implementation.md](docs/implementation.md).
+
+The opt-in, reversible startup weight path is documented in
+[docs/ROCE_RAM_WEIGHT_LOADING.md](docs/ROCE_RAM_WEIGHT_LOADING.md).
 
 Model weights are **not** included. Set `DSPARK_MODEL_HOST` to a model directory
 you are licensed to use.

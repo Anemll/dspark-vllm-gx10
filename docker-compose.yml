@@ -65,6 +65,11 @@ services:
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE:-0}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT:-0}"
 
+      # Opt-in startup-only checkpoint transport. `auto` preserves the v0.1.1
+      # behavior where both TP ranks read checkpoint payloads locally.
+      DSPARK_WEIGHT_LOAD_FORMAT: "${DSPARK_WEIGHT_LOAD_FORMAT:-auto}"
+      DSPARK_ROCE_LOAD_BUFFER_MB: "${DSPARK_ROCE_LOAD_BUFFER_MB:-256}"
+
       TORCH_CUDA_ARCH_LIST: "${TORCH_CUDA_ARCH_LIST:-12.1a}"
       FLASHINFER_CUDA_ARCH_LIST: "${FLASHINFER_CUDA_ARCH_LIST:-12.1a}"
       FLASHINFER_DISABLE_VERSION_CHECK: "${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
@@ -105,12 +110,18 @@ services:
         export CUDA_PATH="$${CUDA_PATH:-$${CUDA_HOME}}";
         export CUDAToolkit_ROOT="$${CUDAToolkit_ROOT:-$${CUDA_HOME}}";
         export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$${LD_LIBRARY_PATH:-}";
+        MODEL_LOADER_EXTRA_CONFIG='{}';
+        if [[ "$${DSPARK_WEIGHT_LOAD_FORMAT:-auto}" == "roce_tp" ]]; then
+          MODEL_LOADER_EXTRA_CONFIG="{\"buffer_size_mb\":$${DSPARK_ROCE_LOAD_BUFFER_MB:-256}}";
+        fi;
         SPECULATIVE_CONFIG="{\"method\":\"dspark\",\"num_speculative_tokens\":${MTP_NUM_TOKENS:-3},\"draft_sample_method\":\"probabilistic\"}";
         exec /usr/local/bin/vllm serve ${DSPARK_MODEL:-/models/dsv4-abliterated}
         --served-model-name ${SERVED_MODEL_NAME:-deepseek-v4-flash-dspark-abliterated}
         --host ${VLLM_HOST:-127.0.0.1}
         --port ${VLLM_PORT:-8888}
         --trust-remote-code
+        --load-format "$${DSPARK_WEIGHT_LOAD_FORMAT:-auto}"
+        --model-loader-extra-config "$${MODEL_LOADER_EXTRA_CONFIG}"
         --tensor-parallel-size 2
         --pipeline-parallel-size 1
         --kv-cache-dtype nvfp4_ds_mla
