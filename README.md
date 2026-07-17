@@ -178,18 +178,22 @@ The [comparison](benchmarks/results/prefill-v0211-vs-v0251.md) and
 
 Prefill is measured at exact 1K, 2K, 4K, 8K, 16K, and 32K input lengths.
 The harness records client TTFT plus vLLM's server-side prefill duration and
-computed-token count. It uses reproducible, unique token-ID prompts so the
-before and after runs receive identical input without prefix-cache reuse.
-An initial warm-up plus one excluded pass at every tested input length prevents
-first-shape compilation from contaminating the three-trial medians:
+computed-token count. It uses reproducible token-ID prompts and checks both
+full-prompt and first-16-token prefix hashes. The server's cache-hit counter is
+the authoritative guard against prefix-cache reuse.
+The default remains concurrency 1; pass `--concurrency 1,2,4` for synchronized
+multi-request rows with aggregate input throughput, mean/p95 TTFT, and nested
+per-request metrics. An initial warm-up plus one excluded pass at every tested
+`(length, concurrency)` shape prevents first-shape compilation from
+contaminating the three-trial medians:
 
 ```bash
 # Run against the previous runtime, then switch the two-node server version.
-python3 benchmarks/benchmark_prefill.py --label before \
+python3 benchmarks/benchmark_prefill.py --label before --concurrency 1,2,4 \
   --output benchmarks/results/prefill-before.json
 
 # Run the identical matrix against the candidate runtime.
-python3 benchmarks/benchmark_prefill.py --label after \
+python3 benchmarks/benchmark_prefill.py --label after --concurrency 1,2,4 \
   --output benchmarks/results/prefill-after.json
 
 python3 benchmarks/compare_prefill.py \
@@ -197,8 +201,13 @@ python3 benchmarks/compare_prefill.py \
   benchmarks/results/prefill-after.json
 ```
 
-Run these tests on an otherwise idle server. The harness detects overlapping
-requests and excludes contaminated server-side trials from its median.
+Run these tests on an otherwise idle server. A shape is reported only when all
+of its trials have the expected request count, exact per-request usage and
+Prometheus/computed-token totals, and zero cache hits; otherwise its summary is
+marked invalid while raw per-request diagnostics are retained. At concurrency
+2/4, aggregate input tokens divided by batch TTFT is the scaling metric. The
+server duration-derived rate is a mean request-service rate because its
+denominator sums overlapping per-request durations.
 
 ## Important operational note
 

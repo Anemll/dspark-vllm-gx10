@@ -694,6 +694,7 @@ python3 benchmarks/benchmark_prefill.py \
   --base-url <head-api-url> \
   --model <served-model-name> \
   --sizes 1024,2048,4096,8192,16384,32768 \
+  --concurrency 1,2,4 \
   --trials 3 \
   --shape-warmup-trials 1 \
   --seed 4104 \
@@ -704,6 +705,7 @@ python3 benchmarks/benchmark_prefill.py \
   --base-url <head-api-url> \
   --model <served-model-name> \
   --sizes 33966,36549,40720,65536 \
+  --concurrency 1 \
   --trials 2 \
   --shape-warmup-trials 1 \
   --seed 4104 \
@@ -711,10 +713,20 @@ python3 benchmarks/benchmark_prefill.py \
   --output "$ARTIFACTS/api/prefill-long-<variant>.json"
 ```
 
-Require `metrics_exact=true` for server-side prefill comparisons, zero
-unexpected prefix-cache hits, matching prompt hashes, and one excluded warmup
-per shape. Compare median server prefill tokens/s, client input tokens/s,
-TTFT, p95 where available, computed tokens, and logs.
+Each `(input length, concurrency)` row receives its own synchronized shape
+warmup. Every request uses a deterministic token-ID prompt keyed by size,
+concurrency, trial, and request index; the harness fails on either a full-prompt
+or guarded first-16-token prefix collision. The server cache-hit counter remains
+the authoritative isolation check. Require `measurement_valid=true`, which
+gates the exact Prometheus request delta, zero cache hits, exact per-request
+prompt/completion usage, and exact Prometheus prompt/computed-token totals. A
+shape is comparison-eligible only when all trials pass. For concurrency 2/4,
+compare aggregate input tokens/s (total input divided by batch TTFT), median
+TTFT, pooled request-TTFT p95, each request's TTFT/input rate/finish reason,
+computed tokens, and logs. Treat the server duration-derived rate only as a mean
+request-service diagnostic because its denominator sums overlapping request
+durations. Keep the 34K-65K boundary matrix at concurrency 1 unless a separately
+budgeted long-concurrency stress test is intended.
 
 Treat a single difference below roughly 3% as noise. A useful W4A4 promotion
 target is a repeatable gain above 5% at multiple prefill lengths with no

@@ -29,6 +29,8 @@ jobs:
           python -m unittest discover -s tests \
             -p 'test_benchmark_nvfp4_a4w4_sm121.py' -v
           python -m unittest discover -s tests \
+            -p 'test_benchmark_prefill.py' -v
+          python -m unittest discover -s tests \
             -p 'test_build_hybrid_nvfp4_dspark_checkpoint.py' -v
           python -m unittest discover -s tests \
             -p 'test_verify_hybrid_nvfp4_dspark_checkpoint.py' -v

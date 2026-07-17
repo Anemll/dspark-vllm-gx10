@@ -14,22 +14,59 @@ def load_report(path: str) -> dict[str, object]:
         return json.load(source)
 
 
-def rows_by_size(report: dict[str, object]) -> dict[int, dict[str, object]]:
+def rows_by_shape(
+    report: dict[str, object],
+) -> dict[tuple[int, int], dict[str, object]]:
     return {
-        int(row["target_tokens"]): row
+        (int(row.get("concurrency", 1)), int(row["target_tokens"])): row
         for row in report["summary"]  # type: ignore[index]
     }
 
 
+def rows_by_size(report: dict[str, object]) -> dict[int, dict[str, object]]:
+    """Retain the original concurrency-1 helper for external callers."""
+    return {
+        size: row
+        for (concurrency, size), row in rows_by_shape(report).items()
+        if concurrency == 1
+    }
+
+
+def request_prompt_fingerprints(
+    report: dict[str, object],
+) -> dict[tuple[int, int, int], tuple[str, ...]]:
+    fingerprints: dict[tuple[int, int, int], tuple[str, ...]] = {}
+    for row in report["results"]:  # type: ignore[index]
+        requests = row.get("requests")
+        if isinstance(requests, list):
+            hashes = tuple(str(request["prompt_sha256"]) for request in requests)
+        else:
+            hashes = (str(row["prompt_sha256"]),)
+        key = (
+            int(row.get("concurrency", 1)),
+            int(row["target_tokens"]),
+            int(row["trial"]),
+        )
+        fingerprints[key] = hashes
+    return fingerprints
+
+
 def prompt_fingerprints(report: dict[str, object]) -> dict[tuple[int, int], str]:
+    """Retain the original concurrency-1 fingerprint helper."""
     return {
         (int(row["target_tokens"]), int(row["trial"])): str(row["prompt_sha256"])
         for row in report["results"]  # type: ignore[index]
+        if int(row.get("concurrency", 1)) == 1
     }
 
 
 def number(value: object, digits: int = 1) -> str:
     return f"{float(value):,.{digits}f}" if value is not None else "n/a"
+
+
+def row_is_valid(row: dict[str, object]) -> bool:
+    """Old reports predate row_valid; new reports fail closed explicitly."""
+    return bool(row.get("row_valid", True))
 
 
 def main() -> None:
@@ -41,13 +78,14 @@ def main() -> None:
 
     before = load_report(args.before)
     after = load_report(args.after)
-    before_rows = rows_by_size(before)
-    after_rows = rows_by_size(after)
-    if prompt_fingerprints(before) != prompt_fingerprints(after):
+    before_rows = rows_by_shape(before)
+    after_rows = rows_by_shape(after)
+    if request_prompt_fingerprints(before) != request_prompt_fingerprints(after):
         parser.error("reports did not use identical token prompts")
-    sizes = sorted(before_rows.keys() & after_rows.keys())
-    if not sizes:
-        parser.error("reports do not contain any common prompt sizes")
+    shapes = sorted(before_rows.keys() & after_rows.keys())
+    if not shapes:
+        parser.error("reports do not contain any common prompt shapes")
+    multi_concurrency = any(concurrency != 1 for concurrency, _size in shapes)
 
     before_label = str(before.get("label") or Path(args.before).stem)
     after_label = str(after.get("label") or Path(args.after).stem)
@@ -80,40 +118,101 @@ def main() -> None:
                 "throughput samples are valid.",
             ]
         )
-    lines.extend(
-        [
-            "",
-            "| Input tokens | Before server tok/s | After server tok/s | Gain | "
-            "Before TTFT | After TTFT |",
-            "|---:|---:|---:|---:|---:|---:|",
-        ]
-    )
-    for size in sizes:
-        old = before_rows[size]
-        new = after_rows[size]
-        old_tps = old.get("median_server_prefill_tps")
-        new_tps = new.get("median_server_prefill_tps")
-        gain = (
-            (float(new_tps) / float(old_tps) - 1) * 100
-            if old_tps is not None and new_tps is not None and float(old_tps) != 0
-            else None
+    if multi_concurrency:
+        lines.extend(
+            [
+                "",
+                "| Concurrency | Input tokens | Valid | "
+                "Before aggregate tok/s | After aggregate tok/s | Gain | "
+                "Before median TTFT | After median TTFT | "
+                "Before pooled p95 | After pooled p95 |",
+                "|---:|---:|:---:|---:|---:|---:|---:|---:|---:|---:|",
+            ]
         )
-        gain_text = f"{gain:+.1f}%" if gain is not None else "n/a"
-        lines.append(
-            f"| {size:,} | {number(old_tps)} | {number(new_tps)} | "
-            f"{gain_text} | {number(old['median_ttft_s'], 3)}s | "
-            f"{number(new['median_ttft_s'], 3)}s |"
+    else:
+        lines.extend(
+            [
+                "",
+                "| Input tokens | Before server tok/s | After server tok/s | "
+                "Gain | Before TTFT | After TTFT |",
+                "|---:|---:|---:|---:|---:|---:|",
+            ]
         )
-    lines.extend(
-        [
-            "",
+    for concurrency, size in shapes:
+        old = before_rows[(concurrency, size)]
+        new = after_rows[(concurrency, size)]
+        if multi_concurrency:
+            valid = row_is_valid(old) and row_is_valid(new)
+            old_aggregate = (
+                old.get(
+                    "median_aggregate_input_tps",
+                    old.get("median_client_input_tps"),
+                )
+                if valid
+                else None
+            )
+            new_aggregate = (
+                new.get(
+                    "median_aggregate_input_tps",
+                    new.get("median_client_input_tps"),
+                )
+                if valid
+                else None
+            )
+            gain = (
+                (float(new_aggregate) / float(old_aggregate) - 1) * 100
+                if old_aggregate is not None
+                and new_aggregate is not None
+                and float(old_aggregate) != 0
+                else None
+            )
+            gain_text = f"{gain:+.1f}%" if gain is not None else "n/a"
+            old_ttft = old.get("median_ttft_s") if valid else None
+            new_ttft = new.get("median_ttft_s") if valid else None
+            old_p95 = old.get("pooled_p95_ttft_s") if valid else None
+            new_p95 = new.get("pooled_p95_ttft_s") if valid else None
+            lines.append(
+                f"| {concurrency} | {size:,} | {'yes' if valid else 'no'} | "
+                f"{number(old_aggregate)} | {number(new_aggregate)} | "
+                f"{gain_text} | {number(old_ttft, 3)}s | "
+                f"{number(new_ttft, 3)}s | {number(old_p95, 3)}s | "
+                f"{number(new_p95, 3)}s |"
+            )
+        else:
+            old_tps = old.get("median_server_prefill_tps")
+            new_tps = new.get("median_server_prefill_tps")
+            gain = (
+                (float(new_tps) / float(old_tps) - 1) * 100
+                if old_tps is not None
+                and new_tps is not None
+                and float(old_tps) != 0
+                else None
+            )
+            gain_text = f"{gain:+.1f}%" if gain is not None else "n/a"
+            lines.append(
+                f"| {size:,} | {number(old_tps)} | {number(new_tps)} | "
+                f"{gain_text} | {number(old['median_ttft_s'], 3)}s | "
+                f"{number(new['median_ttft_s'], 3)}s |"
+            )
+    if multi_concurrency:
+        footer = (
+            "Warmed steady-state comparison on two GX10 nodes (TP=2): "
+            f"{before.get('trials_per_size', 'unknown')} trials per shape, "
+            f"seed {before.get('seed', 'unknown')}, one output token, matching "
+            "per-request prompt hashes, and no unrelated requests. A row is "
+            "valid only when every trial has exact usage/Prometheus/computed "
+            "token counts and zero prefix-cache hits."
+        )
+    else:
+        # Preserve the legacy concurrency-1 rendering verbatim.
+        footer = (
             "Warmed steady-state comparison on two GX10 nodes (TP=2): "
             f"{before.get('trials_per_size', 'unknown')} trials per size, "
             f"seed {before.get('seed', 'unknown')}, one output token, zero "
             "prefix-cache hits, no overlapping requests, and matching prompt "
-            "hashes across versions.",
-        ]
-    )
+            "hashes across versions."
+        )
+    lines.extend(["", footer])
     rendered = "\n".join(lines) + "\n"
     print(rendered, end="")
     if args.output:
