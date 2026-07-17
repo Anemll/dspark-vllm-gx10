@@ -20,6 +20,16 @@ jobs:
         run: python -m compileall -q dashboard benchmarks overlay
       - name: Dashboard weight-load diagnostics
         run: python -m unittest discover -s tests -p 'test_dashboard_weight_load.py' -v
+      - name: NVFP4 A4W4 offline integration
+        run: |
+          python -m unittest discover -s tests \
+            -p 'test_deepseek_v4_mixed_quant_dispatch.py' -v
+          python -m unittest discover -s tests \
+            -p 'test_nvfp4_b12x_clamp.py' -v
+          python -m unittest discover -s tests \
+            -p 'test_benchmark_nvfp4_a4w4_sm121.py' -v
+          python -m unittest discover -s tests \
+            -p 'test_build_hybrid_nvfp4_dspark_checkpoint.py' -v
       - name: Shell syntax
         run: find scripts dashboard -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
       - name: Overlay license markers

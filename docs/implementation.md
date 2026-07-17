@@ -10,13 +10,44 @@ overlay provides the missing integration:
 - supports TP=2 query-head geometry;
 - pads 256-wide DSpark draft indices to the native 512-wide dispatch using
   `-1` sentinels without changing active lengths;
-- carries the b12x NVFP4 MoE integration used by the validated runtime.
+- carries the b12x MoE integration used by the validated runtime.
 
 The b12x adapter registers `flashinfer_b12x` with vLLM's modular MXFP4 oracle,
 prepares the checkpoint's native MXFP4 tensors into b12x's W4A16 runtime
 format, plans caller-owned scratch, and rejects allocations during CUDA graph
 capture. The small-M selector override is opt-in/configurable through the
 `VLLM_B12X_W4A16_*` environment variables.
+
+## Optional ModelOpt NVFP4 W4A4 target
+
+The NVIDIA DeepSeek V4 Flash NVFP4 checkpoint changes the routed target
+experts from native MXFP4/W4A16 execution to ModelOpt NVFP4/W4A4. It does not
+provide the three native draft stages required by this deployment. The
+optional integration therefore has three explicit contracts:
+
+- `deepseek_v4/quant_config.py` sends decoder layers below
+  `num_hidden_layers` to `ModelOptNvFp4FusedMoE`, while the synthetic DSpark
+  layers at and above that boundary remain on `Mxfp4MoEMethod`;
+- the SM121 FlashInfer B12X adapter maps DeepSeek's clamped SiLU to
+  `swigluoai_uninterleave(alpha=1, beta=0, limit=10)` and preserves the
+  physical `[up/w3, gate/w1]` FC1 layout;
+- the NVFP4 oracle accepts `flashinfer_b12x` when selected explicitly, but
+  keeps it out of AUTO until the real SM121 correctness/performance matrix is
+  archived.
+
+`scripts/build_hybrid_nvfp4_dspark_checkpoint.py` constructs a strict
+metadata/symlink view from NVIDIA target shards and native-MXFP4 DSpark draft
+shards without rewriting tensor payloads. The resulting hybrid is a functional
+integration artifact, not the existing abliterated production lineage. See
+`docs/NVFP4_DSPARK_HYBRID_CHECKPOINT.md` for its exact counts and provenance
+rules.
+
+`benchmarks/benchmark_nvfp4_a4w4_sm121.py` compares W4A4 against an
+activation-matched B12X W4A16 path using the same packed ModelOpt weights,
+routes, TP slice, shapes, clamp, and seed. It separates decode M values from
+prefill M values and records eager/graph latency, tactic proof, numerical
+metrics, and provenance. Full promotion still requires the lock-gated TP=2
+and API gates in `docs/NVFP4_A4W4_TEST_AND_OPTIMIZATION_PLAN.md`.
 
 ## B12X route-pack startup warmup
 

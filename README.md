@@ -30,8 +30,13 @@ switching, and benchmark evidence.
 - adds a modular b12x MXFP4 MoE backend with native weight preparation,
   caller-owned scratch, CUDA-graph-safe execution, GB10 small-M tuning, and
   startup route-pack specialization warmup;
+- adds an opt-in ModelOpt NVFP4 W4A4 routed-expert path for DeepSeek V4,
+  including mixed dispatch that keeps three-stage DSpark draft experts on
+  their native MXFP4 path and preserves DeepSeek's clamped SwiGLU contract;
+- adds a strict NVIDIA-target/DSpark-draft hybrid-checkpoint builder and a
+  same-weight SM121 W4A4-versus-W4A16 decode/prefill kernel harness;
 - adds two-node Compose/start/update tooling plus the separate real-time
-  dashboard and controlled performance harness.
+  dashboard and controlled performance harness;
 - optionally makes TP rank 0 the sole checkpoint payload reader and streams
   only TP rank 1's required raw weight writes into RAM over NCCL/RoCE.
 
@@ -40,6 +45,15 @@ The exact file-level implementation is described in
 
 The opt-in, reversible startup weight path is documented in
 [docs/ROCE_RAM_WEIGHT_LOADING.md](docs/ROCE_RAM_WEIGHT_LOADING.md).
+
+The NVFP4 evidence audit, checkpoint contract, SM121 harness, and complete
+test/optimization plan are documented in
+[docs/NVFP4_A4W4_EXTERNAL_EVIDENCE.md](docs/NVFP4_A4W4_EXTERNAL_EVIDENCE.md),
+[docs/NVFP4_DSPARK_HYBRID_CHECKPOINT.md](docs/NVFP4_DSPARK_HYBRID_CHECKPOINT.md),
+[benchmarks/NVFP4_A4W4_SM121.md](benchmarks/NVFP4_A4W4_SM121.md), and
+[docs/NVFP4_A4W4_TEST_AND_OPTIMIZATION_PLAN.md](docs/NVFP4_A4W4_TEST_AND_OPTIMIZATION_PLAN.md).
+The hybrid is an integration artifact using NVIDIA's target and the native
+DSpark draft; it is not the production abliterated checkpoint lineage.
 
 Model weights are **not** included. Set `DSPARK_MODEL_HOST` to a model directory
 you are licensed to use.
@@ -119,10 +133,11 @@ Benchmark model:
 
 - [drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored](https://huggingface.co/drowzeys/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored)
 - DeepSeek V4 Flash, 284B MoE / approximately 13B active parameters
-- FP8 weights (E4M3, UE8M0 scales, 128x128 blocks): 48 Safetensors
-  shards totaling 166,886,535,336 bytes (155.43 GiB) on each node
+- mixed native checkpoint: FP8 block-quantized non-expert linear tensors plus
+  native MXFP4 routed experts, executed as W4A16 by the current b12x path; 48
+  Safetensors shards totaling 166,886,535,336 bytes (155.43 GiB) on each node
 - `nvfp4_ds_mla` KV cache; NVFP4 describes the DS-MLA cache format, not the
-  checkpoint's FP8 weight format
+  checkpoint's routed-expert weight/activation format
 - TP=2 across two GX10 nodes; server maximum context 350,000 tokens
 
 Single-node reference: the unchanged checkpoint is **not runnable on one
