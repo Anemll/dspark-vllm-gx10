@@ -4,7 +4,9 @@
 topology. TP rank 0 is the only process that opens checkpoint payload files.
 TP rank 1 runs the model's normal weight-loader functions against storage-free
 tensor metadata; the requested source slices and transformations are evaluated
-on rank 0, packed, and sent over the existing TP NCCL/RoCE communicator.
+on rank 0 and sent over the existing TP NCCL/RoCE communicator. Matching,
+contiguous rank-1 writes are received directly into their final CUDA parameter
+storage rather than through a second full-size packed allocation.
 
 This feature only changes how weights reach rank 1 RAM. It is not shared
 storage, NFS, checkpoint replication, KV transfer, or runtime weight syncing.
@@ -18,11 +20,22 @@ other non-weight metadata required to construct the model.
   slice, packed dtype view, padding, and fused-parameter destination.
 - Only source bytes used by rank 1 writes are transferred. TP-sharded tensors
   therefore send the rank-1 shard; replicated parameters are sent in full.
-- Transfers are packed into approximately 256 MiB NCCL messages by default to
-  avoid per-expert send overhead. `DSPARK_ROCE_LOAD_BUFFER_MB` controls the
-  bound. One checkpoint tensor's writes can form an oversized batch when they
-  exceed that value.
-- Rank 1 writes directly into final model parameters. B12X and other
+- Rank 0 uses one reusable 64 MiB CUDA staging window by default. Every logical
+  source view is split into element-aligned frames at or below that hard cap;
+  a non-contiguous TP view is sliced before copying, so it cannot silently
+  materialize an oversized contiguous transport buffer.
+- Matching contiguous writes use PyNccl/NCCL receive directly into final rank-1
+  parameter storage. Dtype-converting, non-contiguous, and small broadcast
+  writes use one lazy fixed-size receive window and then copy locally.
+- `DSPARK_ROCE_LOAD_BUFFER_MB` controls the hard transport-frame and scratch
+  bound. Shape-changing writes larger than one frame fail explicitly instead
+  of falling back to an unbounded allocation.
+- The bound applies to transport scratch. A model-specific recipe such as a
+  padding `cat` or dtype conversion can still materialize its one complete
+  logical write on rank 0 before that write is chunked. Writes are processed
+  and released one at a time; `max_write_bytes` makes this distinct from the
+  fixed-frame bound in diagnostics.
+- B12X and other
   `process_weights_after_loading` transformations still execute locally after
   the raw checkpoint writes have arrived.
 
@@ -63,19 +76,23 @@ worker or publish an untested development image to GHCR. Save/compress the
 candidate on the head, copy its archive only over the fabric interface, load it
 on the worker, and compare `docker image inspect --format '{{.Id}}'` on both
 nodes. Keep the digest-pinned production image and its clean checkout intact.
+The loader also negotiates an explicit protocol version, frame size, and
+PyNccl-versus-ProcessGroup transport before the first checkpoint tensor. A
+mixed image or asymmetric NCCL configuration therefore fails on the control
+plane before any weight payload is sent.
 
 Set the following values in both `config/head.env` and `config/worker.env`:
 
 ```dotenv
 DSPARK_VLLM_IMAGE=dspark-vllm-gx10:dev-<12-char-commit>
 DSPARK_WEIGHT_LOAD_FORMAT=roce_tp
-DSPARK_ROCE_LOAD_BUFFER_MB=256
+DSPARK_ROCE_LOAD_BUFFER_MB=64
 ```
 
 Start the worker first through the existing cluster launcher. Successful
 startup logs include `rank 0 is the sole checkpoint reader`, `rank 1 will not
 open checkpoint payload files`, the transferred GiB count, and the number of
-packed batches. Each model phase also emits `DSPARK_WEIGHT_LOAD` start,
+bounded frames. Each model phase also emits `DSPARK_WEIGHT_LOAD` start,
 complete, or failed records. A completion record is written only after the
 current CUDA stream is synchronized, so its elapsed time covers weights being
 resident in RAM rather than only the enqueue interval.
@@ -86,7 +103,12 @@ The completion counters are exact within the loader's application boundary:
   not a physical-disk byte counter;
 - `traffic_bytes` is the tensor payload handed to NCCL for rank 1, excluding
   NCCL/RoCE/Ethernet overhead;
-- `tensors` and `batches` count logical source tensors and packed sends.
+- `tensors` and `batches` count logical source tensors and bounded NCCL frames;
+- `direct_bytes` and `staged_bytes` separate direct-to-parameter traffic from
+  traffic that required the fixed rank-1 receive window;
+- `max_frame_bytes` proves the configured hard transport bound, while
+  `max_write_bytes` records the largest logical recipe payload before
+  chunking (which can be smaller than a broadcast destination).
 
 The dashboard sums the slower rank for each target/drafter phase as the
 cluster-critical elapsed time and labels payload/time as an effective

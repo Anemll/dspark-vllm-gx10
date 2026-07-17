@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import contextlib
 import itertools
+import math
 import os
 import time
 import uuid
@@ -41,10 +42,15 @@ logger = init_logger(__name__)
 
 _READER_RANK = 0
 _RECEIVER_RANK = 1
+_PROTOCOL_VERSION = 2
 _REMOTE_EXPR_TAG = "__vllm_roce_remote_expr__"
 _SUPPORTED_SOURCE_FORMATS = {"auto", "hf", "pt", "safetensors"}
 _LOAD_SEQUENCE = itertools.count()
 _LOAD_RUN_ID = uuid.uuid4().hex
+
+
+class _RoCEPeerAbortedError(RuntimeError):
+    """The other TP rank already reported the failure; do not echo it back."""
 
 
 def _dtype_name(dtype: torch.dtype) -> str:
@@ -60,6 +66,146 @@ def _dtype_from_name(name: str) -> torch.dtype:
 
 def _tensor_nbytes(tensor: torch.Tensor) -> int:
     return int(tensor.numel()) * int(tensor.element_size())
+
+
+def _chunk_indices(
+    shape: tuple[int, ...], max_elements: int
+) -> Generator[tuple[slice, ...], None, None]:
+    """Yield row-major logical slices whose element counts fit the limit.
+
+    Slicing before copying is important for TP views that are not contiguous:
+    calling ``contiguous()`` on the complete view would defeat the transport
+    memory bound.  Every yielded index retains all dimensions so the same
+    schedule can be used to scatter into a non-contiguous destination.
+    """
+    if max_elements <= 0:
+        raise ValueError(f"max_elements must be positive, got {max_elements}")
+    if any(dimension < 0 for dimension in shape):
+        raise ValueError(f"Invalid negative tensor shape: {shape}")
+    if math.prod(shape) == 0:
+        return
+    if not shape:
+        yield ()
+        return
+
+    def visit(
+        dimension: int, prefix: tuple[slice, ...]
+    ) -> Generator[tuple[slice, ...], None, None]:
+        remaining = math.prod(shape[dimension:])
+        if remaining <= max_elements:
+            yield prefix + (slice(None),) * (len(shape) - dimension)
+            return
+
+        tail = math.prod(shape[dimension + 1 :])
+        if tail <= max_elements:
+            step = max_elements // tail
+            for start in range(0, shape[dimension], step):
+                stop = min(start + step, shape[dimension])
+                yield prefix + (slice(start, stop),) + (slice(None),) * (
+                    len(shape) - dimension - 1
+                )
+            return
+
+        for index in range(shape[dimension]):
+            yield from visit(dimension + 1, prefix + (slice(index, index + 1),))
+
+    yield from visit(0, ())
+
+
+def _shape_after_index(
+    shape: tuple[int, ...], index: tuple[slice, ...]
+) -> tuple[int, ...]:
+    if len(shape) != len(index):
+        raise ValueError(f"Shape/index rank mismatch: shape={shape}, index={index}")
+    result: list[int] = []
+    for dimension, item in zip(shape, index, strict=True):
+        start, stop, step = item.indices(dimension)
+        if step != 1:
+            raise ValueError(f"RoCE chunk slices must have unit stride, got {item}")
+        result.append(max(0, stop - start))
+    return tuple(result)
+
+
+def _can_broadcast_to(
+    source_shape: tuple[int, ...], destination_shape: tuple[int, ...]
+) -> bool:
+    if len(source_shape) > len(destination_shape):
+        return False
+    return all(
+        source == 1 or source == destination
+        for source, destination in zip(
+            reversed(source_shape), reversed(destination_shape), strict=False
+        )
+    )
+
+
+def _recv_into(group: Any, tensor: torch.Tensor, src: int) -> None:
+    """Receive NCCL payload directly into caller-owned CUDA storage.
+
+    GroupCoordinator.recv() allocates a fresh tensor.  The pinned vLLM CUDA
+    communicator also exposes its grouped PyNccl path, which accepts a P2POp
+    backed by an existing tensor.  Using it here lets rank 1 receive matching,
+    contiguous writes directly into final model parameters.
+    """
+    if tensor.device.type != "cuda":
+        raise ValueError(f"RoCE NCCL destination must be CUDA, got {tensor.device}")
+    if not tensor.is_contiguous():
+        raise ValueError("RoCE NCCL destination must be contiguous")
+    device_communicator = group.device_communicator
+    transport_mode = _device_transport_mode(group)
+    if transport_mode == "unavailable":
+        raise ValueError("RoCE TP group has no device communicator")
+    if transport_mode == "pynccl":
+        operation = object.__new__(torch.distributed.P2POp)
+        operation.op = torch.distributed.irecv
+        operation.tensor = tensor
+        operation.group_peer = src
+        device_communicator.batch_isend_irecv([operation])
+    else:
+        # Match CudaCommunicator.send's ProcessGroupNCCL fallback exactly.
+        torch.distributed.recv(
+            tensor,
+            src=group.ranks[src],
+            group=group.device_group,
+        )
+
+
+def _device_transport_mode(group: Any) -> str:
+    device_communicator = getattr(group, "device_communicator", None)
+    if device_communicator is None:
+        return "unavailable"
+    pynccl_communicator = getattr(device_communicator, "pynccl_comm", None)
+    if pynccl_communicator is not None and not pynccl_communicator.disabled:
+        return "pynccl"
+    return "process_group"
+
+
+def _negotiate_protocol(group: Any, rank: int, buffer_size_bytes: int) -> str:
+    """Fail safely before data traffic if image/config/transport differ."""
+    transport_mode = _device_transport_mode(group)
+    local = (_PROTOCOL_VERSION, transport_mode, buffer_size_bytes)
+    if rank == _READER_RANK:
+        group.send_object(("hello", *local), dst=_RECEIVER_RANK)
+        response = group.recv_object(src=_RECEIVER_RANK)
+        if response != ("hello_ack", *local):
+            raise RuntimeError(
+                "RoCE TP protocol negotiation failed: "
+                f"local={local!r}, receiver={response!r}"
+            )
+    else:
+        request = group.recv_object(src=_READER_RANK)
+        expected = ("hello", *local)
+        if request != expected or transport_mode == "unavailable":
+            error = (
+                "hello_error",
+                f"local={local!r}, reader={request!r}",
+            )
+            group.send_object(error, dst=_READER_RANK)
+            raise RuntimeError(f"RoCE TP protocol negotiation failed: {error[1]}")
+        group.send_object(("hello_ack", *local), dst=_READER_RANK)
+    if transport_mode == "unavailable":
+        raise RuntimeError("RoCE TP group has no usable device transport")
+    return transport_mode
 
 
 def _iter_remote_tensors(value: Any) -> Generator["_RemoteTensor", None, None]:
@@ -153,12 +299,22 @@ class _CapturedWrite:
     source_dtype: torch.dtype
     nbytes: int
 
+    def direct_eligible(self) -> bool:
+        return (
+            self.destination.layout == torch.strided
+            and self.destination.device.type == "cuda"
+            and self.destination.is_contiguous()
+            and tuple(self.destination.shape) == self.source_shape
+            and self.destination.dtype == self.source_dtype
+        )
+
     def specification(self) -> dict[str, Any]:
         return {
             "expression": self.expression,
             "shape": self.source_shape,
             "dtype": _dtype_name(self.source_dtype),
             "nbytes": self.nbytes,
+            "direct": self.direct_eligible(),
         }
 
 
@@ -316,81 +472,138 @@ class _RoCEWeightSender:
                 f"got {self.device}"
             )
         self.buffer_size_bytes = buffer_size_bytes
-        self.pending: list[torch.Tensor] = []
-        self.pending_bytes = 0
+        self.staging = torch.empty(
+            buffer_size_bytes, dtype=torch.uint8, device=self.device
+        )
         self.source_bytes = 0
         self.sent_bytes = 0
         self.batch_count = 0
         self.tensor_count = 0
+        self.direct_bytes = 0
+        self.staged_bytes = 0
+        self.max_frame_bytes = 0
+        self.max_write_bytes = 0
+        self.control_state = "receiver_control"
 
-    def _flush(self) -> None:
-        if not self.pending:
-            return
-        count = len(self.pending)
-        total_bytes = self.pending_bytes
-        packed = torch.empty(total_bytes, dtype=torch.uint8, device=self.device)
-        offset = 0
-        for payload in self.pending:
-            raw = payload.contiguous().view(torch.uint8).reshape(-1)
-            nbytes = int(raw.numel())
-            packed[offset : offset + nbytes].copy_(raw)
-            offset += nbytes
-        if offset != total_bytes:
-            raise RuntimeError(
-                f"RoCE packed-byte mismatch: packed={offset}, expected={total_bytes}"
+    def _validate_payload(
+        self,
+        payload: Any,
+        spec: dict[str, Any],
+    ) -> torch.Tensor:
+        if not isinstance(payload, torch.Tensor):
+            raise TypeError(
+                "RoCE recipe produced a non-tensor payload: "
+                f"{type(payload).__name__}"
             )
+        expected_shape = tuple(spec["shape"])
+        expected_dtype = _dtype_from_name(spec["dtype"])
+        expected_nbytes = int(spec["nbytes"])
+        if tuple(payload.shape) != expected_shape:
+            raise RuntimeError(
+                "RoCE recipe shape mismatch: "
+                f"evaluated={tuple(payload.shape)}, expected={expected_shape}"
+            )
+        if payload.dtype != expected_dtype:
+            raise RuntimeError(
+                "RoCE recipe dtype mismatch: "
+                f"evaluated={payload.dtype}, expected={expected_dtype}"
+            )
+        if _tensor_nbytes(payload) != expected_nbytes:
+            raise RuntimeError(
+                "RoCE recipe byte-count mismatch: "
+                f"evaluated={_tensor_nbytes(payload)}, expected={expected_nbytes}"
+            )
+        if payload.layout != torch.strided:
+            raise NotImplementedError(
+                "RoCE TP loading requires strided payload tensors, got "
+                f"{payload.layout}"
+            )
+        return payload
 
-        # Pack before announcing the receive. If allocation or copy fails, the
-        # peer is still waiting for a control object instead of a tensor that
-        # will never be sent.
-        self.group.send_object(("flush", count, total_bytes), dst=_RECEIVER_RANK)
-        self.group.send(packed, dst=_RECEIVER_RANK)
-        self.sent_bytes += total_bytes
-        self.batch_count += 1
-        self.pending.clear()
-        self.pending_bytes = 0
+    def _send_payload(
+        self,
+        payload: torch.Tensor,
+        direct: bool,
+        write_index: int,
+    ) -> None:
+        element_size = int(payload.element_size())
+        max_elements = self.buffer_size_bytes // element_size
+        if max_elements <= 0:
+            raise ValueError(
+                "RoCE buffer is smaller than one payload element: "
+                f"buffer={self.buffer_size_bytes}, element={element_size}"
+            )
+        write_bytes = _tensor_nbytes(payload)
+        self.max_write_bytes = max(self.max_write_bytes, write_bytes)
+        for frame_index, index in enumerate(
+            _chunk_indices(tuple(payload.shape), max_elements)
+        ):
+            chunk = payload[index]
+            chunk_bytes = _tensor_nbytes(chunk)
+            staging_bytes = self.staging[:chunk_bytes]
+            staging_bytes.view(payload.dtype).view(chunk.shape).copy_(chunk)
+            # Rank 1 posts ncclRecv only after the frame is prepared. Thus an
+            # expression or staging-copy error can still be reported over the
+            # Gloo control plane without stranding the peer in NCCL.
+            self.group.send_object(
+                ("frame", write_index, frame_index, chunk_bytes),
+                dst=_RECEIVER_RANK,
+            )
+            self.control_state = "device_receive"
+            # Transport raw bytes for every source dtype. PyNccl supports
+            # uint8 universally, and this also preserves packed/FP8 bit
+            # patterns without depending on its typed NCCL mapping.
+            self.group.send(staging_bytes, dst=_RECEIVER_RANK)
+            self.control_state = "frame_control"
+            self.sent_bytes += chunk_bytes
+            self.batch_count += 1
+            self.max_frame_bytes = max(self.max_frame_bytes, chunk_bytes)
+            if direct:
+                self.direct_bytes += chunk_bytes
+            else:
+                self.staged_bytes += chunk_bytes
 
-    def _queue_writes(
+    def _send_writes(
         self,
         source: torch.Tensor,
         specifications: list[dict[str, Any]],
     ) -> None:
-        current: list[torch.Tensor] = []
-        current_bytes = 0
-        for spec in specifications:
-            payload = _evaluate_expression(spec["expression"], source)
-            if not isinstance(payload, torch.Tensor):
-                raise TypeError(
-                    "RoCE recipe produced a non-tensor payload: "
-                    f"{type(payload).__name__}"
-                )
-            expected_shape = tuple(spec["shape"])
-            expected_dtype = _dtype_from_name(spec["dtype"])
-            expected_nbytes = int(spec["nbytes"])
-            if tuple(payload.shape) != expected_shape:
-                raise RuntimeError(
-                    "RoCE recipe shape mismatch: "
-                    f"evaluated={tuple(payload.shape)}, expected={expected_shape}"
-                )
-            if payload.dtype != expected_dtype:
-                raise RuntimeError(
-                    "RoCE recipe dtype mismatch: "
-                    f"evaluated={payload.dtype}, expected={expected_dtype}"
-                )
-            if _tensor_nbytes(payload) != expected_nbytes:
-                raise RuntimeError(
-                    "RoCE recipe byte-count mismatch: "
-                    f"evaluated={_tensor_nbytes(payload)}, expected={expected_nbytes}"
-                )
-            current.append(payload)
-            current_bytes += expected_nbytes
+        for position, spec in enumerate(specifications):
+            payload = self._validate_payload(
+                _evaluate_expression(spec["expression"], source), spec
+            )
+            self._send_payload(
+                payload,
+                bool(spec.get("direct", False)),
+                position,
+            )
+            del payload
 
-        if self.pending and self.pending_bytes + current_bytes > self.buffer_size_bytes:
-            self._flush()
-        self.pending.extend(current)
-        self.pending_bytes += current_bytes
-        if self.pending_bytes >= self.buffer_size_bytes:
-            self._flush()
+    def abort(self, error: BaseException) -> None:
+        """Bring rank 1 back to the control plane, then report rank-0 failure."""
+        if self.control_state in {"aborted", "ended", "peer_failed"}:
+            return
+        if self.control_state == "device_receive":
+            # A device-transport failure after the frame marker cannot be
+            # repaired with Gloo: rank 1 is already inside ncclRecv and should
+            # observe the same communicator failure.
+            logger.error(
+                "RoCE sender cannot issue control abort while a device receive "
+                "is outstanding"
+            )
+            return
+        if self.control_state == "writes":
+            message = self.group.recv_object(src=_RECEIVER_RANK)
+            if isinstance(message, tuple) and message and message[0] == "error":
+                self.control_state = "peer_failed"
+                return
+            self.control_state = "frame_control"
+            if not isinstance(message, tuple) or not message or message[0] != "writes":
+                logger.error(
+                    "Unexpected RoCE receiver response while aborting: %r", message
+                )
+        self.group.send_object(("abort", repr(error)), dst=_RECEIVER_RANK)
+        self.control_state = "aborted"
 
     def iter_weights(
         self,
@@ -408,61 +621,141 @@ class _RoCEWeightSender:
                 ),
                 dst=_RECEIVER_RANK,
             )
+            self.control_state = "writes"
             yield name, source
 
             message = self.group.recv_object(src=_RECEIVER_RANK)
+            self.control_state = "frame_control"
             if not isinstance(message, tuple) or not message:
                 raise RuntimeError(f"Invalid RoCE receiver message: {message!r}")
             if message[0] == "error":
-                raise RuntimeError(f"RoCE receiver failed: {message[1]}")
+                self.control_state = "peer_failed"
+                raise _RoCEPeerAbortedError(
+                    f"RoCE receiver failed: {message[1]}"
+                )
             if message[0] != "writes":
                 raise RuntimeError(f"Unexpected RoCE receiver message: {message!r}")
-            self._queue_writes(source, message[1])
+            self.control_state = "frame_control"
+            self._send_writes(source, message[1])
+            self.control_state = "receiver_control"
             self.tensor_count += 1
 
-        self._flush()
         self.group.send_object(("end", self.source_bytes), dst=_RECEIVER_RANK)
+        self.control_state = "ended"
 
 
 class _RoCEWeightReceiver:
-    def __init__(self) -> None:
+    def __init__(self, model: nn.Module, buffer_size_bytes: int) -> None:
         self.group = get_tp_group()
-        self.pending: list[_CapturedWrite] = []
+        self.device = next(model.parameters()).device
+        if self.device.type != "cuda":
+            raise RuntimeError(
+                "RoCE TP weight loading requires CUDA model parameters, "
+                f"got {self.device}"
+            )
+        self.buffer_size_bytes = buffer_size_bytes
+        self.staging: torch.Tensor | None = None
         self.source_bytes = 0
         self.received_bytes = 0
         self.batch_count = 0
         self.tensor_count = 0
+        self.direct_bytes = 0
+        self.staged_bytes = 0
+        self.max_frame_bytes = 0
+        self.max_write_bytes = 0
 
-    def _receive_flush(self, count: int, total_bytes: int) -> None:
-        if count <= 0 or count > len(self.pending):
-            raise RuntimeError(
-                f"Invalid RoCE flush count {count}; pending writes={len(self.pending)}"
+    def _validate_write(self, write: _CapturedWrite) -> None:
+        if write.destination.layout != torch.strided:
+            raise NotImplementedError(
+                "RoCE TP loading requires strided destinations, got "
+                f"{write.destination.layout}"
             )
-        writes = self.pending[:count]
-        del self.pending[:count]
-        expected_bytes = sum(write.nbytes for write in writes)
-        if expected_bytes != total_bytes:
-            raise RuntimeError(
-                "RoCE flush byte-count mismatch: "
-                f"receiver={expected_bytes}, sender={total_bytes}"
+        if not _can_broadcast_to(
+            write.source_shape, tuple(write.destination.shape)
+        ):
+            raise ValueError(
+                "RoCE source shape cannot be copied into destination: "
+                f"source={write.source_shape}, destination="
+                f"{tuple(write.destination.shape)}"
+            )
+        if (
+            tuple(write.destination.shape) != write.source_shape
+            and write.nbytes > self.buffer_size_bytes
+        ):
+            raise NotImplementedError(
+                "A shape-changing or broadcast RoCE write must fit one bounded "
+                f"frame: write={write.nbytes}, frame={self.buffer_size_bytes}, "
+                f"source={write.source_shape}, destination="
+                f"{tuple(write.destination.shape)}"
+            )
+        if write.source_dtype.itemsize > self.buffer_size_bytes:
+            raise ValueError(
+                "RoCE buffer is smaller than one payload element: "
+                f"buffer={self.buffer_size_bytes}, dtype={write.source_dtype}"
             )
 
-        packed = self.group.recv(
-            torch.Size((total_bytes,)), torch.uint8, src=_READER_RANK
-        )
-        offset = 0
-        for write in writes:
-            raw = packed[offset : offset + write.nbytes]
-            payload = raw.view(write.source_dtype).view(write.source_shape)
-            write.destination.copy_(payload)
-            offset += write.nbytes
-        if offset != total_bytes:
+    def _staging_bytes(self, byte_count: int) -> torch.Tensor:
+        if byte_count > self.buffer_size_bytes:
             raise RuntimeError(
-                "RoCE unpacked-byte mismatch: "
-                f"unpacked={offset}, expected={total_bytes}"
+                f"RoCE frame exceeds hard bound: {byte_count} > "
+                f"{self.buffer_size_bytes}"
             )
-        self.received_bytes += total_bytes
-        self.batch_count += 1
+        if self.staging is None:
+            self.staging = torch.empty(
+                self.buffer_size_bytes, dtype=torch.uint8, device=self.device
+            )
+        return self.staging[:byte_count]
+
+    def _receive_write(self, write: _CapturedWrite, write_index: int) -> None:
+        element_size = write.source_dtype.itemsize
+        max_elements = self.buffer_size_bytes // element_size
+        direct = write.direct_eligible()
+        same_shape = tuple(write.destination.shape) == write.source_shape
+        direct_offset_bytes = 0
+        self.max_write_bytes = max(self.max_write_bytes, write.nbytes)
+        for frame_index, index in enumerate(
+            _chunk_indices(write.source_shape, max_elements)
+        ):
+            chunk_shape = _shape_after_index(write.source_shape, index)
+            elements = math.prod(chunk_shape)
+            chunk_bytes = elements * element_size
+            ready = self.group.recv_object(src=_READER_RANK)
+            if not isinstance(ready, tuple) or not ready:
+                raise RuntimeError(f"Invalid RoCE frame message: {ready!r}")
+            if ready[0] == "abort":
+                raise _RoCEPeerAbortedError(
+                    f"RoCE sender aborted weight loading: {ready[1]}"
+                )
+            expected = ("frame", write_index, frame_index, chunk_bytes)
+            if ready != expected:
+                raise RuntimeError(
+                    f"Unexpected RoCE frame message: {ready!r}, expected={expected!r}"
+                )
+            if direct:
+                destination = write.destination.reshape(-1).view(torch.uint8)[
+                    direct_offset_bytes : direct_offset_bytes + chunk_bytes
+                ]
+                direct_offset_bytes += chunk_bytes
+                _recv_into(self.group, destination, src=_READER_RANK)
+                self.direct_bytes += chunk_bytes
+            else:
+                staging_bytes = self._staging_bytes(chunk_bytes)
+                _recv_into(self.group, staging_bytes, src=_READER_RANK)
+                payload = staging_bytes.view(write.source_dtype).view(chunk_shape)
+                if same_shape:
+                    write.destination[index].copy_(payload)
+                else:
+                    write.destination.copy_(payload.view(write.source_shape))
+                self.staged_bytes += chunk_bytes
+            self.received_bytes += chunk_bytes
+            self.batch_count += 1
+            self.max_frame_bytes = max(self.max_frame_bytes, chunk_bytes)
+
+        if direct and direct_offset_bytes != write.nbytes:
+            raise RuntimeError(
+                "RoCE direct receive byte mismatch: "
+                f"received={direct_offset_bytes}, expected={write.nbytes}"
+            )
 
     def iter_weights(self) -> Generator[tuple[str, torch.Tensor], None, None]:
         while True:
@@ -482,7 +775,8 @@ class _RoCEWeightReceiver:
                     torch.device(device_name),
                 )
                 yield name, remote
-                self.pending.extend(recorder.writes)
+                for write in recorder.writes:
+                    self._validate_write(write)
                 self.group.send_object(
                     (
                         "writes",
@@ -490,20 +784,10 @@ class _RoCEWeightReceiver:
                     ),
                     dst=_READER_RANK,
                 )
+                for position, write in enumerate(recorder.writes):
+                    self._receive_write(write, position)
                 self.tensor_count += 1
-            elif kind == "flush":
-                _, count, total_bytes = message
-                self._receive_flush(int(count), int(total_bytes))
             elif kind == "end":
-                if self.pending:
-                    raise RuntimeError(
-                        f"RoCE sender ended with {len(self.pending)} unapplied writes"
-                    )
-                if len(message) == 1:
-                    # Accept the original protocol during reversible image
-                    # transitions; exact source-byte telemetry is unavailable.
-                    self.source_bytes = 0
-                    return
                 if len(message) != 2 or (
                     isinstance(message[1], bool)
                     or not isinstance(message[1], int)
@@ -513,7 +797,9 @@ class _RoCEWeightReceiver:
                 self.source_bytes = message[1]
                 return
             elif kind == "abort":
-                raise RuntimeError(f"RoCE sender aborted weight loading: {message[1]}")
+                raise _RoCEPeerAbortedError(
+                    f"RoCE sender aborted weight loading: {message[1]}"
+                )
             else:
                 raise RuntimeError(f"Unexpected RoCE sender message: {message!r}")
 
@@ -547,7 +833,7 @@ class RoCETPModelLoader(DefaultModelLoader):
                 f"{unexpected_keys}"
             )
 
-        buffer_size_mb = extra_config.get("buffer_size_mb", 256)
+        buffer_size_mb = extra_config.get("buffer_size_mb", 64)
         if (
             isinstance(buffer_size_mb, bool)
             or not isinstance(buffer_size_mb, int)
@@ -642,14 +928,18 @@ class RoCETPModelLoader(DefaultModelLoader):
             raise ValueError("RoCE TP startup loading does not support torchao loading")
 
         tp_rank = self._validate_topology()
-        get_tp_group().barrier()
+        tp_group = get_tp_group()
+        tp_group.barrier()
+        transport_mode = _negotiate_protocol(
+            tp_group, tp_rank, self.buffer_size_bytes
+        )
         started = time.perf_counter()
         load_id = next(_LOAD_SEQUENCE)
         phase = type(model).__name__
         role = "reader" if tp_rank == _READER_RANK else "receiver"
         logger.info(
             "DSPARK_WEIGHT_LOAD mode=roce_tp event=start run=%s pid=%d id=%d "
-            "rank=%d role=%s phase=%s buffer_bytes=%d",
+            "rank=%d role=%s phase=%s buffer_bytes=%d protocol=%d transport=%s",
             _LOAD_RUN_ID,
             os.getpid(),
             load_id,
@@ -657,20 +947,35 @@ class RoCETPModelLoader(DefaultModelLoader):
             role,
             phase,
             self.buffer_size_bytes,
+            _PROTOCOL_VERSION,
+            transport_mode,
         )
         if tp_rank == _READER_RANK:
             logger.info(
                 "RoCE TP loader enabled: rank 0 is the sole checkpoint reader; "
-                "rank-1 writes target %d MiB packed batches (one source "
-                "tensor's writes may exceed the target)",
+                "rank-1 writes use a hard %d MiB frame cap and direct NCCL "
+                "receive into eligible final parameters",
                 self.buffer_size_bytes // (1024 * 1024),
             )
+            sender: _RoCEWeightSender | None = None
             try:
                 sender = _RoCEWeightSender(model, self.buffer_size_bytes)
                 loaded_weights = model.load_weights(
                     sender.iter_weights(self.get_all_weights(model_config, model))
                 )
             except Exception as exc:
+                try:
+                    if sender is None:
+                        get_tp_group().send_object(
+                            ("abort", repr(exc)), dst=_RECEIVER_RANK
+                        )
+                    else:
+                        sender.abort(exc)
+                except Exception as abort_exc:
+                    logger.error(
+                        "RoCE rank-0 abort handshake failed: %s",
+                        type(abort_exc).__name__,
+                    )
                 logger.error(
                     "DSPARK_WEIGHT_LOAD mode=roce_tp event=failed run=%s "
                     "pid=%d id=%d rank=%d role=%s phase=%s error_type=%s",
@@ -683,16 +988,22 @@ class RoCETPModelLoader(DefaultModelLoader):
                     type(exc).__name__,
                 )
                 raise
+            assert sender is not None
             transferred_bytes = sender.sent_bytes
             source_bytes = sender.source_bytes
             batch_count = sender.batch_count
             tensor_count = sender.tensor_count
+            direct_bytes = sender.direct_bytes
+            staged_bytes = sender.staged_bytes
+            max_frame_bytes = sender.max_frame_bytes
+            max_write_bytes = sender.max_write_bytes
         else:
             logger.info_once(
                 "RoCE TP loader enabled: rank 1 will not open checkpoint payload files"
             )
-            receiver = _RoCEWeightReceiver()
+            receiver: _RoCEWeightReceiver | None = None
             try:
+                receiver = _RoCEWeightReceiver(model, self.buffer_size_bytes)
                 loaded_weights = model.load_weights(receiver.iter_weights())
             except Exception as exc:
                 logger.error(
@@ -706,14 +1017,24 @@ class RoCETPModelLoader(DefaultModelLoader):
                     phase,
                     type(exc).__name__,
                 )
-                # Let rank 0 fail with the receiver's original error instead of
-                # waiting forever for a writes message.
-                get_tp_group().send_object(("error", repr(exc)), dst=_READER_RANK)
+                # Let rank 0 fail with a receiver-originated error instead of
+                # waiting forever for a writes message. A sender-originated
+                # abort has already crossed the control plane, so echoing it
+                # would block after rank 0 has begun unwinding.
+                if not isinstance(exc, _RoCEPeerAbortedError):
+                    get_tp_group().send_object(
+                        ("error", repr(exc)), dst=_READER_RANK
+                    )
                 raise
+            assert receiver is not None
             transferred_bytes = receiver.received_bytes
             source_bytes = receiver.source_bytes
             batch_count = receiver.batch_count
             tensor_count = receiver.tensor_count
+            direct_bytes = receiver.direct_bytes
+            staged_bytes = receiver.staged_bytes
+            max_frame_bytes = receiver.max_frame_bytes
+            max_write_bytes = receiver.max_write_bytes
 
         default_enable_weights_track = (
             model_config.quantization is None and loaded_weights is not None
@@ -724,9 +1045,9 @@ class RoCETPModelLoader(DefaultModelLoader):
             else default_enable_weights_track
         )
 
-        # PyNccl enqueues send/receive and destination copies on the current
-        # CUDA stream. Synchronize once per model phase so completion covers
-        # tracking and actual RAM residency without serializing batches.
+        # PyNccl enqueue, staging-buffer reuse, and destination copies share
+        # the current CUDA stream. Synchronize once per model phase so the
+        # timer covers actual RAM residency without serializing each frame.
         try:
             if enable_weights_track:
                 self.track_weights_loading(model, loaded_weights)
@@ -748,7 +1069,8 @@ class RoCETPModelLoader(DefaultModelLoader):
         logger.info(
             "DSPARK_WEIGHT_LOAD mode=roce_tp event=complete run=%s pid=%d id=%d "
             "rank=%d role=%s phase=%s tensors=%d batches=%d "
-            "source_bytes=%d traffic_bytes=%d elapsed_s=%.6f",
+            "source_bytes=%d traffic_bytes=%d direct_bytes=%d staged_bytes=%d "
+            "max_frame_bytes=%d max_write_bytes=%d elapsed_s=%.6f",
             _LOAD_RUN_ID,
             os.getpid(),
             load_id,
@@ -759,15 +1081,22 @@ class RoCETPModelLoader(DefaultModelLoader):
             batch_count,
             source_bytes,
             transferred_bytes,
+            direct_bytes,
+            staged_bytes,
+            max_frame_bytes,
+            max_write_bytes,
             elapsed,
         )
         logger.info(
-            "RoCE TP RAM weight load rank=%d complete: tensors=%d, batches=%d, "
-            "traffic=%.2f GiB, elapsed=%.2f seconds",
+            "RoCE TP RAM weight load rank=%d complete: tensors=%d, frames=%d, "
+            "traffic=%.2f GiB (direct %.2f GiB, staged %.2f GiB), "
+            "elapsed=%.2f seconds",
             tp_rank,
             tensor_count,
             batch_count,
             transferred_bytes / (1024**3),
+            direct_bytes / (1024**3),
+            staged_bytes / (1024**3),
             elapsed,
         )
 

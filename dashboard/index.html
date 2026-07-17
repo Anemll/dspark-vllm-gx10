@@ -218,6 +218,7 @@
 
         let status = `${modeName} · ${state}`;
         let modeDetail = weight.timingComparable ? "synchronized RAM-resident boundary" : "not eligible for synchronized A/B";
+        if (mode === "roce_tp" && weight.transport) modeDetail += ` · protocol ${integer(weight.protocol)} · ${weight.transport}`;
         if (state === "partial") {
           status = `${modeName} diagnostics are partial`;
           modeDetail = "only one TP rank reported; result is not benchmarked";
@@ -242,7 +243,10 @@
           const source = gibibytes(weight.sourceBytes);
           const rate = Number.isFinite(weight.throughputBytesPerSecond) ? `${oneDecimal.format(weight.throughputBytesPerSecond / (1024 ** 3))} GiB/s effective` : "rate unavailable";
           const ratio = Number.isFinite(weight.payloadRatio) ? `${oneDecimal.format(weight.payloadRatio * 100)}% of logical source bytes` : "source ratio unavailable";
-          $("weightTrafficDetail").textContent = `${source} logical source · ${ratio} · ${rate}`;
+          const direct = Number.isFinite(weight.directBytes) && weight.trafficBytes > 0 ? `${oneDecimal.format(weight.directBytes * 100 / weight.trafficBytes)}% direct-to-parameter` : "direct share unavailable";
+          const frame = Number.isFinite(weight.maxFrameBytes) ? `${oneDecimal.format(weight.maxFrameBytes / (1024 ** 2))} MiB max frame` : "frame bound unavailable";
+          const write = Number.isFinite(weight.maxWriteBytes) ? `${oneDecimal.format(weight.maxWriteBytes / (1024 ** 2))} MiB max recipe payload` : "write size unavailable";
+          $("weightTrafficDetail").textContent = `${source} logical source · ${ratio} · ${direct} · ${frame} · ${write} · ${rate}`;
         } else {
           $("weightTrafficDetail").textContent = mode === "direct"
             ? "local disk traffic is not inferred from logical tensor bytes"

@@ -414,6 +414,20 @@ class LoadSampler:
             diagnostic["batches"] = sum(
                 int(phase.get("batches", 0)) for phase in completed
             )
+            diagnostic["directBytes"] = sum(
+                int(phase.get("directBytes", 0)) for phase in completed
+            )
+            diagnostic["stagedBytes"] = sum(
+                int(phase.get("stagedBytes", 0)) for phase in completed
+            )
+            diagnostic["maxFrameBytes"] = max(
+                (int(phase.get("maxFrameBytes", 0)) for phase in completed),
+                default=0,
+            )
+            diagnostic["maxWriteBytes"] = max(
+                (int(phase.get("maxWriteBytes", 0)) for phase in completed),
+                default=0,
+            )
             if source > 0:
                 diagnostic["payloadRatio"] = traffic / source
             else:
@@ -453,6 +467,8 @@ class LoadSampler:
         rank: int | None = None
         role: str | None = None
         buffer_bytes: int | None = None
+        protocol: int | None = None
+        transport: str | None = None
         for event in events:
             load_id = event.get("id", "0")
             phase = phases.setdefault(
@@ -470,11 +486,18 @@ class LoadSampler:
             role = event.get("role", role)
             if event.get("buffer_bytes", "").isdigit():
                 buffer_bytes = int(event["buffer_bytes"])
+            if event.get("protocol", "").isdigit():
+                protocol = int(event["protocol"])
+            transport = event.get("transport", transport)
             for source_key, result_key in (
                 ("tensors", "tensors"),
                 ("batches", "batches"),
                 ("source_bytes", "sourceBytes"),
                 ("traffic_bytes", "trafficBytes"),
+                ("direct_bytes", "directBytes"),
+                ("staged_bytes", "stagedBytes"),
+                ("max_frame_bytes", "maxFrameBytes"),
+                ("max_write_bytes", "maxWriteBytes"),
             ):
                 if event.get(source_key, "").isdigit():
                     phase[result_key] = int(event[source_key])
@@ -502,6 +525,10 @@ class LoadSampler:
         }
         if buffer_bytes is not None:
             diagnostic["bufferBytes"] = buffer_bytes
+        if protocol is not None:
+            diagnostic["protocol"] = protocol
+        if transport is not None:
+            diagnostic["transport"] = transport
         return cls._rollup_weight_load(diagnostic)
 
     @classmethod
@@ -670,11 +697,18 @@ class LoadSampler:
             "rank",
             "runId",
             "role",
+            "protocol",
+            "transport",
+            "bufferBytes",
             "state",
             "phaseCount",
             "elapsedSeconds",
             "sourceBytes",
             "trafficBytes",
+            "directBytes",
+            "stagedBytes",
+            "maxFrameBytes",
+            "maxWriteBytes",
             "tensors",
             "batches",
             "throughputBytesPerSecond",
@@ -745,16 +779,37 @@ class LoadSampler:
                             for key in (
                                 "sourceBytes",
                                 "trafficBytes",
+                                "directBytes",
+                                "stagedBytes",
+                                "maxFrameBytes",
+                                "maxWriteBytes",
                                 "tensors",
                                 "batches",
                             )
                         )
+                if mode == "roce_tp":
+                    ranks_agree = ranks_agree and all(
+                        complete[0].get(key) == complete[1].get(key)
+                        for key in ("protocol", "transport", "bufferBytes")
+                    )
                 result["ranksAgree"] = ranks_agree
             else:
                 agreement_keys = ["phaseCount"]
                 if mode == "roce_tp":
                     agreement_keys.extend(
-                        ["sourceBytes", "trafficBytes", "tensors", "batches"]
+                        [
+                            "sourceBytes",
+                            "trafficBytes",
+                            "directBytes",
+                            "stagedBytes",
+                            "maxFrameBytes",
+                            "maxWriteBytes",
+                            "protocol",
+                            "transport",
+                            "bufferBytes",
+                            "tensors",
+                            "batches",
+                        ]
                     )
                 result["ranksAgree"] = all(
                     complete[0].get(key) == complete[1].get(key)
@@ -768,6 +823,13 @@ class LoadSampler:
             for key in (
                 "sourceBytes",
                 "trafficBytes",
+                "directBytes",
+                "stagedBytes",
+                "maxFrameBytes",
+                "maxWriteBytes",
+                "protocol",
+                "transport",
+                "bufferBytes",
                 "tensors",
                 "batches",
                 "throughputBytesPerSecond",

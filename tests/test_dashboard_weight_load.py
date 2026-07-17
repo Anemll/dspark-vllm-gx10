@@ -55,16 +55,22 @@ class LoadSamplerDiagnosticsTest(unittest.TestCase):
     def test_roce_load_aggregates_all_phases_with_exact_bytes(self) -> None:
         parsed = LoadSampler()._parse(
             "INFO DSPARK_WEIGHT_LOAD mode=roce_tp event=start pid=41 id=0 "
-            "rank=1 role=receiver phase=Target buffer_bytes=268435456\n"
+            "rank=1 role=receiver phase=Target buffer_bytes=67108864 "
+            "protocol=2 transport=pynccl\n"
             "INFO DSPARK_WEIGHT_LOAD mode=roce_tp event=complete pid=41 id=0 "
             "rank=1 role=receiver phase=Target tensors=120 batches=8 "
             "source_bytes=17179869184 traffic_bytes=8589934592 "
+            "direct_bytes=7516192768 staged_bytes=1073741824 "
+            "max_frame_bytes=67108864 max_write_bytes=536870912 "
             "elapsed_s=10.250000\n"
             "INFO DSPARK_WEIGHT_LOAD mode=roce_tp event=start pid=41 id=1 "
-            "rank=1 role=receiver phase=Drafter buffer_bytes=268435456\n"
+            "rank=1 role=receiver phase=Drafter buffer_bytes=67108864 "
+            "protocol=2 transport=pynccl\n"
             "INFO DSPARK_WEIGHT_LOAD mode=roce_tp event=complete pid=41 id=1 "
             "rank=1 role=receiver phase=Drafter tensors=10 batches=2 "
             "source_bytes=2147483648 traffic_bytes=1073741824 "
+            "direct_bytes=1073741824 staged_bytes=0 "
+            "max_frame_bytes=33554432 max_write_bytes=134217728 "
             "elapsed_s=2.500000\n"
         )
 
@@ -74,11 +80,17 @@ class LoadSamplerDiagnosticsTest(unittest.TestCase):
         self.assertEqual(diagnostic["phaseCount"], 2)
         self.assertEqual(diagnostic["sourceBytes"], 18 * 1024**3)
         self.assertEqual(diagnostic["trafficBytes"], 9 * 1024**3)
+        self.assertEqual(diagnostic["directBytes"], 8 * 1024**3)
+        self.assertEqual(diagnostic["stagedBytes"], 1 * 1024**3)
+        self.assertEqual(diagnostic["maxFrameBytes"], 64 * 1024**2)
+        self.assertEqual(diagnostic["maxWriteBytes"], 512 * 1024**2)
+        self.assertEqual(diagnostic["protocol"], 2)
+        self.assertEqual(diagnostic["transport"], "pynccl")
         self.assertEqual(diagnostic["payloadRatio"], 0.5)
         self.assertEqual(diagnostic["tensors"], 130)
         self.assertEqual(diagnostic["batches"], 10)
         self.assertEqual(diagnostic["elapsedSeconds"], 12.75)
-        self.assertEqual(diagnostic["bufferBytes"], 256 * 1024**2)
+        self.assertEqual(diagnostic["bufferBytes"], 64 * 1024**2)
         self.assertAlmostEqual(
             diagnostic["throughputBytesPerSecond"], 9 * 1024**3 / 12.75
         )
