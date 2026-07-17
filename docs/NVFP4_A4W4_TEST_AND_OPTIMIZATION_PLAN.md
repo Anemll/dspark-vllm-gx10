@@ -85,10 +85,17 @@ single-layer result is never an end-to-end serving result.
 - The first independent `roce_tp` hardware trial on the existing production
   checkpoint proved that NCCL selected `NET/IB`, but rank 0 was OOM-killed
   around shard 22 because the original sender accumulated an unbounded packing
-  backlog. That failed run is not NVFP4 performance evidence. It establishes a
-  hard prerequisite for this plan: use the reviewed bounded-frame/direct-receive
-  loader, begin with its 64 MiB safety setting, and reject any run with growing
-  staging memory or an incomplete rank.
+  backlog. A second candidate limited each frame to 64 MiB and used direct
+  receives, but rank 0 was again OOM-killed at shard 22/48 after 7m13s while
+  rank 1 stayed stable and both IB rails were active. Static review found that
+  `GroupCoordinator.send` only enqueues `ncclSend`; without an intervening
+  completion/release watermark, queued NCCL work and allocator-deferred source
+  storage can remain unbounded even when the reusable frame tensor is bounded.
+  Neither failed run is NVFP4 performance evidence. The hard prerequisite is a
+  hardware-validated loader that bounds both frame size and outstanding send
+  lifetime, with telemetry proving a stable rank-0 memory high-water mark. Do
+  not integrate or test the failed fixed-frame candidate as though it met this
+  prerequisite.
 
 ### Hypotheses to test
 
@@ -464,9 +471,11 @@ DSPARK_WEIGHT_LOAD_FORMAT=roce_tp
 DSPARK_ROCE_LOAD_BUFFER_MB=64
 ```
 
-The 64 MiB value is the safety baseline for the current bounded protocol, not
-a performance conclusion. At lock handoff, use the exact reviewed value from
-the RoCE task if it changed after hardware validation.
+The 64 MiB value is the initial frame-size baseline, not by itself a memory
+safety guarantee or a performance conclusion. At lock handoff, use the exact
+hardware-validated frame size and completion/release watermark from the RoCE
+task. Refuse a candidate that bounds allocation size but leaves an unbounded
+number of asynchronous sends or source storages outstanding.
 
 Required loader evidence includes:
 
@@ -475,6 +484,9 @@ Required loader evidence includes:
 - target and drafter phases both complete on both ranks;
 - `source_bytes`, `traffic_bytes`, tensor count, batch count, and synchronized
   elapsed time are recorded;
+- rank-0 telemetry records outstanding-send count/bytes and the release
+  watermark, and shows that allocator-reserved memory and host RSS/PSS reach a
+  bounded plateau rather than increasing shard by shard;
 - no head OOM, swap storm, peer loss, NCCL timeout, short write, or incomplete
   phase occurs.
 
