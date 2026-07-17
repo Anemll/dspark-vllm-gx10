@@ -55,12 +55,16 @@ single-layer result is never an end-to-end serving result.
 - DeepSeek V4's clamped SwiGLU contract is mapped to FlashInfer B12X
   `swigluoai_uninterleave(alpha=1, beta=0, limit=10)`. The FC1 physical layout
   is `[up/w3, gate/w1]`, named `w13`/`up_gate` by B12X.
-- The Compose runtime explicitly selects `--moe-backend flashinfer_b12x`,
-  chunked prefill, NVFP4 DS-MLA KV cache, TP=2, and DSpark speculation. The
-  W4A4 backend is explicit rather than an AUTO-selection assumption.
+- The Compose runtime selects the explicit `DSPARK_MOE_BACKEND` value on both
+  ranks (default `flashinfer_b12x`), plus chunked prefill, NVFP4 DS-MLA KV
+  cache, TP=2, and DSpark speculation. CUTLASS/B12X A/B runs change only that
+  matched setting; neither backend is an AUTO-selection assumption.
 - The kernel harness compares the same resident ModelOpt NVFP4 weights and the
   same routes:
-  - W4A4: FlashInfer B12X, FP4 weights and FP4 activations.
+  - W4A4: FlashInfer B12X, FP4 weights and dynamically quantized FP4
+    activations.
+  - W4A4: upstream FlashInfer CUTLASS, the same packed weights, raw ModelOpt
+    block scales, and calibrated checkpoint activation globals.
   - W4A16: B12X native ModelOpt path, the same FP4 weights and BF16
     activations.
 - The pinned graph-enabled B12X wrapper reserves 635,144,040 bytes at the
@@ -282,14 +286,16 @@ Gate: the hybrid is metadata-correct, provenance-complete, and its NVIDIA
 python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
   --dry-run \
   --model-path "$NVIDIA_CKPT" \
-  --m 1,2,4,6,12,24,48,72,128,256,512,1024,2048,4096,8192 \
-  --correctness-m 1,24,128,2048 \
+  --backend all \
+  --m 1,2,4,6,12,24,48,64,72,128,256,512,1024,2048,4096,8192 \
+  --correctness-m 1,24,64,128,2048 \
   > "$ARTIFACTS/checkpoint/kernel-plan.json"
 ```
 
 Gate: K=4,096, I/rank=1,024, E=256, top-k=6, NVFP4 group size 16, and the
-expected upstream pins appear in the plan. The activation contract reports
-`input_rms=1.0`.
+expected upstream pins appear in the plan. Representative `w1`/`w3`/`w2`
+`input_scale` keys are present for CUTLASS calibration. The activation contract
+reports `input_rms=1.0`.
 
 ## Phase 1: single-head SM121 kernel validation
 
@@ -317,6 +323,7 @@ stopped and checkpoint reads/GPU work must not overlap another test.
 ```bash
 python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
   --synthetic --synthetic-experts 8 \
+  --backend all \
   --m 1,8,128 \
   --correctness-m 1,8,128 \
   --warmup 2 --iters 5 --repeats 2 \
@@ -324,7 +331,7 @@ python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
   --output <results-mount>/kernel/smoke.json
 ```
 
-Gate: SM121 is detected; both backends import; eager launches work; all graphs
+Gate: SM121 is detected; all three backends import; eager launches work; all graphs
 capture and replay; no allocation-during-capture, unsupported activation,
 layout, CUDA, or JIT error occurs. Synthetic timing is not publishable
 performance evidence.
@@ -340,9 +347,9 @@ for TP_RANK in 0 1; do
   python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
     --model-path <container-nvidia-checkpoint> \
     --layer-idx 0 --tp-size 2 --tp-rank "$TP_RANK" \
-    --backend both \
-    --m 1,2,4,6,12,24,48,72,128,256,512,1024,2048,4096,8192 \
-    --correctness-m 1,24,128,2048 \
+    --backend all \
+    --m 1,2,4,6,12,24,48,64,72,128,256,512,1024,2048,4096,8192 \
+    --correctness-m 1,24,64,128,2048 \
     --routing balanced \
     --seed 4104 \
     --warmup 5 --iters 20 --repeats 5 \
@@ -356,7 +363,7 @@ The agreed matrix is:
 | Phase | M | Routed rows (`M * 6`) | Expected W4A4 family |
 |---|---|---:|---|
 | Decode | 1, 2, 4, 6 | 6-36 | micro |
-| Decode | 12, 24, 48, 72 | 72-432 | static |
+| Decode | 12, 24, 48, 64, 72 | 72-432 | static |
 | Prefill | 128, 256, 512, 1,024, 2,048, 4,096, 8,192 | 768-49,152 | dynamic |
 
 Record eager and graph median/p95, repeat-median range, selected tactic,
@@ -364,12 +371,28 @@ tokens/s, routed rows/s, effective TFLOP/s, peak memory, and graph-vs-eager
 metrics. `speedup_w4a4_over_w4a16` is W4A16 median divided by W4A4 median;
 values above one favor W4A4.
 
+The same run also compares the pinned upstream `flashinfer_cutlass` W4A4
+expert against explicit `flashinfer_b12x` at every M with identical packed
+weight storage, routes, and BF16 inputs. Their scale buffers are intentionally
+distinct: CUTLASS retains raw ModelOpt block scales and applies checkpoint
+activation globals, while B12X bakes weight globals and quantizes activations
+dynamically. The B12X timed closure includes the deployed adapter's
+`output.copy_` from its shared arena; CUTLASS writes the caller-owned output
+directly. Record
+`speedup_flashinfer_b12x_over_flashinfer_cutlass` and the report-level
+`w4a4_backend_crossover` summary. M=64 is deliberate: it makes a candidate
+decode-B12X/prefill-CUTLASS hybrid boundary directly testable. Treat that
+boundary as a hypothesis; choose a hybrid policy only from matched SM121 data.
+
 Correctness gates are initially the harness defaults:
 
 - cosine similarity at least 0.98;
 - normalized RMSE at most 0.25;
 - no graph/eager corruption or non-finite result;
 - no unexpected `w31` layout or unclamped-SiLU path;
+- FlashInfer CUTLASS oracle support is true, the checkpoint `input_scale`
+  tensors were loaded, both W4A4 paths share packed-weight identity, and their
+  raw-CUTLASS/baked-B12X scale storages are proven distinct;
 - all requested graphs captured when `--require-graphs` is used.
 - every post-BF16 per-token RMS is finite and within 1% of 1.0 for every M.
 
@@ -381,7 +404,10 @@ Do not weaken them until at least one known-good hardware report is archived.
 Only after balanced passes, repeat both TP slices with `--routing random`.
 Use `--routing hot` as a skew stress case, not the headline result. Keep all
 other arguments and the seed unchanged. If a result is close to noise, run an
-alternating order such as A/B/B/A and compare repeat medians.
+alternating order such as A/B/B/A and compare repeat medians. For the W4A4
+backend comparison, alternate complete runs using `--w4a4-order b12x-first`
+and `--w4a4-order cutlass-first`; a single fixed-order report cannot set a
+hybrid threshold.
 
 Optional cache sensitivity can use `--l2-flush-mib <size>` with the flush
 outside the event interval. Keep the resident/default run primary because one
@@ -402,6 +428,67 @@ Use these provisional classifications, then revise only from archived data:
 
 The thresholds guide engineering effort; API promotion still depends on the
 end-to-end gates.
+
+### 1.6 Hybrid B12X/CUTLASS serving design gate
+
+The single-layer A/B harness intentionally retains both native scale
+representations so it can compare the existing backends exactly. Do not copy
+that storage strategy into all 43 target layers. At TP=2, the raw W13 and W2
+block scales total 192 MiB per layer; keeping both raw-CUTLASS and baked-B12X
+copies would add 8,256 MiB, or 8.0625 GiB, per rank.
+
+The two current expert classes also cannot simply be attached to the same
+layer:
+
+- CUTLASS receives vLLM-prequantized A4 plus `input_sf`, keeps raw ModelOpt
+  block scales, and folds calibrated `input_scale` into its global alphas.
+- B12X receives BF16, quantizes A4 internally, bakes `weight_scale_2` into its
+  block scales, replaces the weight globals with one, and forces the FC2 input
+  scale to one.
+- `expects_unquantized_inputs` is one outer expert property, and both
+  post-load methods mutate the same layer tensors. Running both postprocessors
+  would double-transform or corrupt the scale state.
+
+The preferred experimental implementation, only after the pure-backend gates
+pass, is:
+
+1. Add an explicit `flashinfer_b12x_cutlass_hybrid` expert; do not add it to
+   AUTO selection.
+2. Keep a BF16 outer contract with Standard activation format, NoOP final
+   reduction, `(M,K)` output, NVFP4 W4A4 only, and reject EP plus DBO/concurrent
+   ubatching.
+3. Extend the pinned B12X call narrowly so FC1 `input_scale` is independent of
+   `w1_alpha`. This permits both branches to share raw ModelOpt block-scale
+   storage: B12X can apply the weight alpha while using its own activation
+   scale, and CUTLASS can retain its calibrated globals.
+4. Normalize weights exactly once. Never call the existing B12X and CUTLASS
+   postprocessors sequentially on one layer.
+5. Select on the post-prepare token count: `M <= T` calls B12X; `M > T`
+   invokes `moe_kernel_quantize_input` inside the hybrid expert and then calls
+   `FlashInferExperts.apply` directly.
+6. Preserve the deployed output contract. B12X must copy its shared wrapper
+   output before reuse; CUTLASS writes the supplied final output directly.
+
+A smaller prototype may try B12X-baked scales with unit CUTLASS globals, but
+that is a new quantization representation, not the native CUTLASS baseline.
+It is acceptable only if it independently passes eager/graph numerical gates
+for both TP slices and full-model quality tests. If it fails, implement the
+separate FC1-input-scale API; do not fall back to the 8.0625-GiB duplicate.
+
+No default threshold exists yet. Sweep at least `T={16,24,32,48,64,96,128}`
+after the two pure backends pass. TensorRT-LLM's `M=64` is an SM120/model-
+specific hypothesis, not a GX10 result. For the pinned TP=2 DSV4 wrapper,
+limiting B12X to `T=24` reserves about 88.5 MiB, `T=64` about 217.3 MiB, while
+the current 8,192-token wrapper reserves about 605.7 MiB. `T <= 106` remains
+inside B12X's 640-routed-row static cutoff at top-k 6.
+
+Promote a threshold only when the winner changes monotonically and repeatably
+on both TP slices, both `--w4a4-order` settings, balanced and random routes,
+and eager plus graph execution. Required implementation tests cover the exact
+threshold boundary, one-and-only-one scale transform, shared-storage identity,
+BF16 versus packed branch inputs, clamp parity, separate graph captures on
+both sides, wrapper memory at `T`, repeated-forward allocator stability, and
+explicit EP/DBO rejection. If winners alternate with M, keep a pure backend.
 
 ## Phase 2: checkpoint staging to the head
 
@@ -447,8 +534,16 @@ the new test owner receives an explicit ACK for a fresh GX10 window.
 - Preserve each node's role-specific environment; never copy the head env
   over the worker env.
 - Render Compose configuration on both nodes and verify image, rank, master,
-  model mount, cache mount, `--moe-backend flashinfer_b12x`, MTP length,
-  scheduler limits, loader mode, and disabled DBO/concurrent ubatching.
+  model mount, cache mount, the same explicit `--moe-backend <selected>` value,
+  MTP length, scheduler limits, loader mode, and disabled DBO/concurrent
+  ubatching. Archive separate renders for B12X and CUTLASS trials.
+- The vLLM pin predates PRs #48428 and #48167. Before deciding to backport
+  either, archive every target/draft attention backend and its CUDA-graph
+  support level. If a target or draft layer resolves the generic FlashInfer
+  prefill builder, require the batch-head-sized workspace fix. If the
+  non-causal draft resolves generic FlashInfer, require the Blackwell DSpark
+  graph fix. The expected DeepSeek V4 path is the custom sparse backend, so a
+  blind generic cherry-pick is not a substitute for call-path proof.
 - Use `JIT_MONITOR_MODE=warn` for normal validation. Reserve `error` for a
   specifically scheduled cold zero-JIT diagnostic after warning-mode success.
 
@@ -533,7 +628,13 @@ dispatch or clamp error occurs. The first full-model profile must show only one
 B12X arena allocation across the 43 target layers, at most 635,144,040 unique
 internal tensor bytes for M=8,192, and no allocator growth across repeated
 full forwards. Compare eager and captured outputs at M=1, 128, and 8,192 and
-require the same numerical envelope as the kernel gate.
+require the same numerical envelope as the kernel gate. Also run a matched
+eager-draft versus configured-graph canary: record the resolved draft attention
+backend/support level, require output and acceptance parity, and reject any
+near-zero acceptance, illegal memory access, or generic non-causal FlashInfer
+full-graph replay. The 8K prefill must complete without a FlashInfer workspace
+error; if it enters generic FlashInfer, its reserved workspace must satisfy the
+batch-head footprint introduced by vLLM PR #48428.
 
 ## Phase 4: end-to-end API quality and performance
 
@@ -647,9 +748,12 @@ hypothesis before moving to the next layer.
    holds at M=1/128/8,192, and repeated full forwards do not grow the allocator.
    Do not trade correctness for per-layer workspaces; one arena is the memory
    prerequisite for the full model.
-3. **W4A4 graph and tactic selection.** Use the matched kernel matrix to tune
-   micro/static/dynamic thresholds only if the returned tactic or latency has
-   a discontinuity. Keep eager and graph results separate.
+3. **W4A4 backend crossover, graphs, and tactics.** Compare FlashInfer B12X
+   and FlashInfer CUTLASS at every M, including M=64, before tuning either.
+   A hybrid decode/prefill policy is allowed only when the winner switch is
+   repeatable on both TP slices and graph/eager behavior is understood. Then
+   tune B12X micro/static/dynamic thresholds only if its selector or latency
+   has a discontinuity.
 4. **Activation quantization and scale generation.** Profile large M when
    W4A4 is unexpectedly close to W4A16. Look for quantize/scale kernels,
    extra layout transforms, or intermediate traffic outside the fused path.
@@ -689,6 +793,7 @@ hypothesis before moving to the next layer.
 | Priority | Work item | First experiment | Promotion condition |
 |---|---|---|---|
 | P0 | Archive real SM121 balanced K matrix for both TP slices. | Phase 1.3 unchanged defaults. | Correctness/graphs pass and tactic proof is present. |
+| P0 | Establish the B12X/CUTLASS crossover. | `--backend w4a4-ab`, including M=64, on both TP slices. | Same-weight numerical gates pass and the per-M winner is repeatable before any hybrid policy is proposed. |
 | P0 | Prove one shared B12X arena in the full model. | M=1/128/8,192 eager/captured profile with allocator counters. | One wrapper, <=635,144,040 unique bytes, parity passes, no repeated-forward growth. |
 | P0 | Boot target-only T through `roce_tp`. | Minimal API smoke, no speculation. | Both ranks ready; rank 1 opens no payloads; output sane. |
 | P0 | Boot hybrid H with mixed quant dispatch. | Same settings as T plus three-stage DSpark. | Three stages load; acceptance and quality smoke pass. |

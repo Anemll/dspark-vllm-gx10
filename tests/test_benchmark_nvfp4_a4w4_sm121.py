@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import math
 import pathlib
@@ -40,7 +41,12 @@ def _write_checkpoint_contract(path: pathlib.Path, *, omit: str | None = None) -
     for expert_id in (0, 255):
         prefix = f"layers.0.ffn.experts.{expert_id}"
         for projection in ("w1", "w3", "w2"):
-            for suffix in ("weight", "weight_scale", "weight_scale_2"):
+            for suffix in (
+                "weight",
+                "weight_scale",
+                "weight_scale_2",
+                "input_scale",
+            ):
                 key = f"{prefix}.{projection}.{suffix}"
                 if key != omit:
                     weight_map[key] = "model-00001-of-00001.safetensors"
@@ -50,6 +56,10 @@ def _write_checkpoint_contract(path: pathlib.Path, *, omit: str | None = None) -
 
 
 class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
+    def test_b12x_timing_mirrors_serving_adapter_output_copy(self) -> None:
+        source = inspect.getsource(bench.run_benchmark)
+        self.assertIn("output_local.copy_(wrapper_output)", source)
+
     def test_parse_positive_int_csv_preserves_order_and_deduplicates(self) -> None:
         self.assertEqual(bench.parse_positive_int_csv("128, 1,128,8"), (128, 1, 8))
         with self.assertRaisesRegex(Exception, "positive"):
@@ -64,11 +74,79 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertAlmostEqual(stats["p95_ms"], 7.0)
         self.assertEqual(stats["repeat_median_ms"], [2.0, 4.0])
 
+    def test_w4a4_crossover_summary_records_switch_without_assuming_winner(self) -> None:
+        def row(m: int, b12x_ms: float, cutlass_ms: float) -> dict[str, object]:
+            return {
+                "m": m,
+                "phase": bench.phase_for_m(m),
+                "modes": {
+                    "w4a4": {"eager": {"median_ms": b12x_ms}},
+                    bench.FLASHINFER_CUTLASS_MODE: {
+                        "eager": {"median_ms": cutlass_ms}
+                    },
+                },
+            }
+
+        summary = bench.summarize_w4a4_backend_crossover(
+            [row(1, 1.0, 2.0), row(64, 3.0, 2.0)], "eager"
+        )
+        self.assertTrue(summary["crossover_observed"])
+        self.assertEqual(
+            [item["preferred_backend"] for item in summary["rows"]],
+            ["flashinfer_b12x", bench.FLASHINFER_CUTLASS_MODE],
+        )
+        self.assertEqual(
+            summary["switch_points"],
+            [
+                {
+                    "m": 64,
+                    "from": "flashinfer_b12x",
+                    "to": bench.FLASHINFER_CUTLASS_MODE,
+                }
+            ],
+        )
+
     def test_w4a4_tactic_boundaries_for_dsv4_topk(self) -> None:
         cases = [(1, "micro"), (4, "micro"), (8, "static"), (64, "static"), (128, "dynamic")]
         for m, expected in cases:
             with self.subTest(m=m):
                 self.assertEqual(bench.tactic_for_shape("w4a4", m, top_k=6), expected)
+
+    def test_backend_selections_preserve_legacy_and_add_explicit_w4a4_ab(self) -> None:
+        self.assertEqual(bench.modes_for_backend("both"), ("w4a4", "w4a16"))
+        self.assertEqual(
+            bench.modes_for_backend("w4a4-ab"),
+            ("w4a4", bench.FLASHINFER_CUTLASS_MODE),
+        )
+        self.assertEqual(
+            bench.modes_for_backend("all"),
+            ("w4a4", bench.FLASHINFER_CUTLASS_MODE, "w4a16"),
+        )
+        self.assertEqual(
+            bench.order_modes(
+                bench.modes_for_backend("all"), "cutlass-first"
+            ),
+            (bench.FLASHINFER_CUTLASS_MODE, "w4a4", "w4a16"),
+        )
+        self.assertEqual(
+            bench.order_modes(bench.modes_for_backend("both"), "cutlass-first"),
+            ("w4a4", "w4a16"),
+        )
+        self.assertEqual(
+            bench.tactic_for_shape(bench.FLASHINFER_CUTLASS_MODE, 8192, 6),
+            "flashinfer-cutlass",
+        )
+        with self.assertRaisesRegex(ValueError, "unsupported backend"):
+            bench.modes_for_backend("unknown")
+
+    def test_modelopt_cutlass_scale_contract_matches_pinned_oracle_algebra(self) -> None:
+        a_gscale, g_alpha = bench.modelopt_cutlass_scale_contract(
+            weight_scale_2=0.125,
+            input_scale=32.0,
+        )
+        self.assertEqual(a_gscale, 1.0 / 32.0)
+        self.assertEqual(g_alpha, 4.0)
+        self.assertEqual(a_gscale * g_alpha, 0.125)
 
     def test_input_rms_contract_gates_per_token_extremes(self) -> None:
         passing = bench.evaluate_input_rms_contract(
@@ -95,6 +173,37 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertFalse(nonfinite["passed"])
         self.assertAlmostEqual(passing["maximum_relative_error"], 0.001)
         json.dumps(nonfinite, allow_nan=False)
+
+    def test_numeric_metrics_gate_rejects_graph_corruption(self) -> None:
+        passing = {
+            "finite": True,
+            "cosine": 0.99,
+            "normalized_rmse": 0.20,
+        }
+        corrupt = passing | {"cosine": 0.10, "normalized_rmse": 1.25}
+        nonfinite = passing | {"cosine": math.nan}
+
+        self.assertTrue(
+            bench.numeric_metrics_pass(
+                passing,
+                min_cosine=0.98,
+                max_normalized_rmse=0.25,
+            )
+        )
+        for metrics in (corrupt, nonfinite, passing | {"finite": False}):
+            with self.subTest(metrics=metrics):
+                self.assertFalse(
+                    bench.numeric_metrics_pass(
+                        metrics,
+                        min_cosine=0.98,
+                        max_normalized_rmse=0.25,
+                    )
+                )
+
+    def test_graph_vs_eager_metrics_are_enforced_as_numeric_failures(self) -> None:
+        source = inspect.getsource(bench.run_benchmark)
+        self.assertIn('"comparison": "graph_vs_eager"', source)
+        self.assertIn('mode_result["graph_numeric_gate_passed"]', source)
 
     def test_workspace_storage_summary_deduplicates_tensor_views(self) -> None:
         class _Storage:
@@ -173,6 +282,7 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                 12,
                 24,
                 48,
+                64,
                 72,
                 128,
                 256,
@@ -214,6 +324,30 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                     root, layer_idx=0, tp_size=2, tp_rank=0
                 )
 
+    def test_checkpoint_contract_requires_modelopt_activation_scales(self) -> None:
+        missing = "layers.0.ffn.experts.255.w3.input_scale"
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            _write_checkpoint_contract(root, omit=missing)
+            with self.assertRaisesRegex(KeyError, "required tensors"):
+                bench.read_checkpoint_contract(
+                    root, layer_idx=0, tp_size=2, tp_rank=0
+                )
+
+    def test_legacy_checkpoint_contract_does_not_require_cutlass_scales(self) -> None:
+        missing = "layers.0.ffn.experts.255.w3.input_scale"
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            _write_checkpoint_contract(root, omit=missing)
+            _, metadata = bench.read_checkpoint_contract(
+                root,
+                layer_idx=0,
+                tp_size=2,
+                tp_rank=0,
+                require_input_scales=False,
+            )
+        self.assertFalse(metadata["input_scales_required"])
+
     def test_non_cuda_dry_run_cli_is_valid_json(self) -> None:
         script = ROOT / "benchmarks" / "benchmark_nvfp4_a4w4_sm121.py"
         completed = subprocess.run(
@@ -246,6 +380,52 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
             bench.INPUT_RMS_RELATIVE_TOLERANCE,
         )
 
+    def test_non_cuda_dry_run_expands_flashinfer_w4a4_ab(self) -> None:
+        script = ROOT / "benchmarks" / "benchmark_nvfp4_a4w4_sm121.py"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-S",
+                str(script),
+                "--dry-run",
+                "--synthetic",
+                "--synthetic-experts",
+                "8",
+                "--backend",
+                "w4a4-ab",
+                "--w4a4-order",
+                "cutlass-first",
+                "--m",
+                "1,128",
+                "--correctness-m",
+                "1,128",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        report = json.loads(completed.stdout)
+        self.assertEqual(
+            report["modes"], [bench.FLASHINFER_CUTLASS_MODE, "w4a4"]
+        )
+        self.assertEqual(report["w4a4_order"], "cutlass-first")
+        for row in report["matrix"]:
+            self.assertEqual(
+                row["tactics"][bench.FLASHINFER_CUTLASS_MODE],
+                "flashinfer-cutlass",
+            )
+        self.assertEqual(
+            report["activation_contract"][bench.FLASHINFER_CUTLASS_MODE],
+            {
+                "name": "silu",
+                "weight_layout": "up_gate",
+                "limit": 10.0,
+                "activation_scale": (
+                    "checkpoint input_scale max-reduced and expanded to E"
+                ),
+            },
+        )
+
     def test_input_rms_must_be_positive_and_finite(self) -> None:
         parser = bench.build_parser()
         for value in ("0", "-1", "nan", "inf"):
@@ -255,6 +435,21 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                 )
                 with self.assertRaisesRegex(ValueError, "input-rms"):
                     bench.validate_args(args)
+
+    def test_cutlass_comparison_rejects_unmatched_swiglu_parameters(self) -> None:
+        parser = bench.build_parser()
+        args = parser.parse_args(
+            [
+                "--dry-run",
+                "--synthetic",
+                "--backend",
+                "w4a4-ab",
+                "--swiglu-alpha",
+                "1.1",
+            ]
+        )
+        with self.assertRaisesRegex(ValueError, "CUTLASS/W4A16"):
+            bench.validate_args(args)
 
 
 if __name__ == "__main__":

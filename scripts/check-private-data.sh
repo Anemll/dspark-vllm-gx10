@@ -16,7 +16,8 @@ patterns=(
 
 failed=0
 for pattern in "${patterns[@]}"; do
-  if grep -RInE --exclude-dir=.git --exclude='check-private-data.sh' \
+  if grep -RInE --exclude-dir=.git --exclude='.git' \
+      --exclude='check-private-data.sh' \
       --exclude-dir=.build --exclude-dir=__pycache__ --exclude='*.pyc' \
       -e "$pattern" .; then
     failed=1

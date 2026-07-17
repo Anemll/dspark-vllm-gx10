@@ -30,8 +30,21 @@ jobs:
             -p 'test_benchmark_nvfp4_a4w4_sm121.py' -v
           python -m unittest discover -s tests \
             -p 'test_build_hybrid_nvfp4_dspark_checkpoint.py' -v
+          python -m unittest discover -s tests \
+            -p 'test_nvfp4_compose_config.py' -v
       - name: Shell syntax
         run: find scripts dashboard -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: Compose NVFP4 backend rendering
+        run: |
+          for env_file in config/head.env.example config/worker.env.example; do
+            rendered="$(docker compose \
+              --env-file "$env_file" -f docker-compose.yml config)"
+            grep -F -- '--moe-backend flashinfer_b12x' <<<"$rendered"
+
+            overridden="$(DSPARK_MOE_BACKEND=flashinfer_cutlass docker compose \
+              --env-file "$env_file" -f docker-compose.yml config)"
+            grep -F -- '--moe-backend flashinfer_cutlass' <<<"$overridden"
+          done
       - name: Overlay license markers
         run: |
           missing="$(find overlay/vllm -type f -name '*.py' \

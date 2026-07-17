@@ -17,7 +17,7 @@ exercise NCCL/RoCE.
 
 ## What is compared
 
-Both paths consume the exact same resident ModelOpt NVFP4 packed weights and
+All paths consume the exact same resident ModelOpt NVFP4 packed weights and
 the same routes:
 
 - Hidden states are generated with per-token RMS 1.0 by default, matching the
@@ -32,9 +32,19 @@ the same routes:
   layout `w13`/`up_gate`; `w31` would mean `[gate, up]` and is intentionally
   rejected by the harness contract.
 
-- **W4A4:** pinned FlashInfer `B12xMoEWrapper` with
+- **W4A4/B12X:** pinned FlashInfer `B12xMoEWrapper` with
   `quant_mode="nvfp4"`. BF16 hidden states are quantized to FP4 inside the
-  fused routed-MoE kernel.
+  fused routed-MoE kernel. The timed closure also copies the wrapper's shared
+  output arena into a caller-owned tensor, exactly like the deployed
+  `FlashInferB12xExperts.apply`; omitting that copy would bias the crossover
+  against CUTLASS at large M.
+- **W4A4/CUTLASS:** vLLM's pinned `FlashInferExperts` implementation selected
+  by `moe_backend="flashinfer_cutlass"`. The harness mirrors vLLM's standard
+  no-DP/EP NVFP4 input quantization before calling the expert. It consumes the
+  same packed W13/W2 storage as B12X, but retains its required raw ModelOpt
+  block scales and calibrated checkpoint `input_scale` values. B12X separately
+  uses weight-global-scale-baked block scales and dynamic activation scaling;
+  conflating those representations would make the comparison invalid.
 - **W4A16:** pinned B12X native-ModelOpt W4A16 kernel. It keeps activations in
   BF16 and dequantizes the same FP4 weights inline.
 
@@ -43,8 +53,9 @@ FlashInfer W4A16 wrapper exposes only ordinary SiLU/ReLU2, while DeepSeek V4
 uses the clamp below. B12X W4A16 supports it, giving an activation-matched A/B:
 
 ```text
-W4A4:  swigluoai_uninterleave(alpha=1, beta=0, limit=10)
-W4A16: silu(swiglu_limit=10)
+B12X W4A4:            swigluoai_uninterleave(alpha=1, beta=0, limit=10)
+FlashInfer CUTLASS:   silu(up_gate layout, swiglu_limit=10)
+B12X W4A16:           silu(swiglu_limit=10)
 ```
 
 These are the same operation: clamp the gate above 10, clamp the up branch to
@@ -59,13 +70,20 @@ index:
 python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
   --dry-run \
   --model-path /path/to/DeepSeek-V4-Flash-NVFP4 \
-  --m 1,2,4,6,12,24,48,72,128,256,512,1024,2048,4096,8192 \
-  --correctness-m 1,24,128,2048
+  --backend all \
+  --m 1,2,4,6,12,24,48,64,72,128,256,512,1024,2048,4096,8192 \
+  --correctness-m 1,24,64,128,2048
 ```
 
 Preflight rejects a checkpoint that does not declare DeepSeek V4, FP4 routed
 experts, NVFP4 MoE quantization, and group size 16. It also checks representative
-first/last expert keys and records SHA-256 hashes of the config and index.
+first/last expert weight, weight-scale, and global-scale keys, then records
+SHA-256 hashes of the config and index. When a CUTLASS mode is selected it also
+requires representative `input_scale` keys; the hardware load then reads all
+three `w1`/`w3`/`w2` activation scales for all experts and rejects any
+non-positive or non-finite value before preparing CUTLASS. Legacy `--backend
+both` neither reads those tensors nor allocates the additional raw-CUTLASS
+scale representation.
 
 ## GPU smoke test
 
@@ -76,6 +94,7 @@ graph capture without reading model shards:
 ```bash
 python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
   --synthetic --synthetic-experts 8 \
+  --backend all \
   --m 1,8,128 \
   --correctness-m 1,8,128 \
   --warmup 2 --iters 5 --repeats 2 \
@@ -94,6 +113,7 @@ prefill chunks:
 python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
   --model-path /models/DeepSeek-V4-Flash-NVFP4 \
   --layer-idx 0 --tp-size 2 --tp-rank 0 \
+  --backend all \
   --routing balanced \
   --output /results/nvfp4-a4w4-layer0-rank0.json
 ```
@@ -110,26 +130,43 @@ sudo docker run --rm --gpus all --ipc=host \
   CANDIDATE_IMAGE \
   /workspace/benchmarks/benchmark_nvfp4_a4w4_sm121.py \
   --model-path /models/DeepSeek-V4-Flash-NVFP4 \
+  --backend all \
   --output /results/nvfp4-a4w4-layer0-rank0.json
 ```
 
-This allocates roughly one TP rank's expert weights plus both backends'
+This allocates roughly one TP rank's expert weights plus the selected backends'
 workspaces. It must run only in an exclusive GX10 test window with the serving
 container stopped; it is not a client-side benchmark.
 
 ## Tactics and M values
 
-With top-k=6, the pinned W4A4 dispatcher selects:
+With top-k=6, the pinned B12X W4A4 dispatcher selects:
 
-| M | Routed rows | Expected W4A4 tactic | Phase |
+| M | Routed rows | Expected B12X W4A4 tactic | Phase |
 |---:|---:|---|---|
 | 1, 2, 4, 6 | 6, 12, 24, 36 | micro | decode |
-| 12, 24, 48, 72 | 72, 144, 288, 432 | static | decode |
+| 12, 24, 48, 64, 72 | 72, 144, 288, 384, 432 | static | decode |
 | 128 and above | 768+ | dynamic | prefill |
 
-The JSON records the selector's returned path as backend proof. W4A16 reports
-its fused native path; its internal small-M/direct choice remains an internal
-kernel decision.
+The JSON records the B12X selector's returned path as backend proof. The
+FlashInfer CUTLASS proof records the oracle support result, TP geometry,
+activation quantizer, clamp, source-weight pointers, calibrated activation
+scale formulas, and the intentional separation of raw-CUTLASS from
+baked-B12X scale storage. W4A16 reports its fused native path; its internal
+small-M/direct choice remains an internal kernel decision.
+
+`--backend both` remains the original B12X-W4A4 versus W4A16 run. Use
+`--backend w4a4-ab` for only B12X versus FlashInfer CUTLASS, or `--backend all`
+for both W4A4 backends plus W4A16. The default M matrix includes exactly M=64
+to test a possible decode/prefill backend crossover; the harness does not
+assume either backend wins. The report's `w4a4_backend_crossover` section lists
+the raw median for each backend, the per-M winner, and every observed winner
+switch separately for eager and graph timing.
+
+Backend deltas this small are order-sensitive. Archive matched runs with both
+`--w4a4-order b12x-first` and `--w4a4-order cutlass-first`; the option changes
+the warmup/JIT and timing iteration order and is recorded in the report. A
+crossover is not promotable unless it survives both orders on both TP slices.
 
 For the exact TP=2, E=256, K=4,096, I/rank=1,024, top-k=6, Mmax=8,192 contract, the
 harness also walks the W4A4 wrapper's static workspace, dynamic workspace, and
@@ -151,12 +188,15 @@ For each M and mode, the report includes:
 
 - eager and graph-replay median, p95, min, max, and per-repeat medians;
 - model tokens/s, routed rows/s, and effective local-rank TFLOP/s;
-- the selected tactic and normalized quant mode;
+- the selected tactic/backend and normalized quant mode;
 - graph-vs-eager numerical metrics where correctness was requested;
 - W4A4-vs-W4A16 max/mean absolute error, RMSE, normalized RMSE, cosine, and
   relative-error percentiles;
+- B12X-W4A4-vs-FlashInfer-CUTLASS numerical metrics on the same correctness M;
 - `speedup_w4a4_over_w4a16`, calculated as W4A16 median divided by W4A4
   median, so values above 1 mean W4A4 is faster.
+- `speedup_flashinfer_b12x_over_flashinfer_cutlass`, calculated as CUTLASS
+  median divided by B12X median, so values above 1 mean B12X is faster.
 
 The default differential gate is provisional: cosine at least 0.98 and
 normalized RMSE at most 0.25. It catches broken layouts, scales, and activation
@@ -178,9 +218,12 @@ Every report prints and stores:
 - expected commits and package versions from `upstream.lock`;
 - actual package versions and module paths;
 - GPU name, CUDA version, and compute capability;
-- callable names/signatures for both measured kernels;
-- sampled SHA-256 fingerprints and data pointers proving both modes received
-  the same source weight tensors;
+- callable names/signatures for all measured kernels and the vLLM NVFP4 input
+  quantizer;
+- sampled SHA-256 fingerprints and data pointers proving all selected modes
+  received the same source weight tensors;
+- per-M hidden-state, route-id, and route-weight data pointers proving every
+  selected closure consumes the same resident inputs;
 - checkpoint config/index hashes, layer, and TP slice.
 
 This is intentionally not an end-to-end vLLM result. It excludes the router,

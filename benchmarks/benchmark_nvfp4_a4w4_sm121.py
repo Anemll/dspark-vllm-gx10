@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Anemll contributors
-"""DeepSeek V4 Flash NVFP4 W4A4-vs-W4A16 kernel harness for SM121.
+"""DeepSeek V4 Flash NVFP4 routed-MoE kernel harness for SM121.
 
 This is a single-rank, single-layer routed-MoE microbenchmark.  It deliberately
 keeps checkpoint loading, route construction, weight preparation, compilation,
-and correctness checks outside the timed region.  Both measured paths consume
+and correctness checks outside the timed region.  Every measured path consumes
 the same packed ModelOpt NVFP4 weight tensors:
 
-* W4A4: FlashInfer ``B12xMoEWrapper(quant_mode="nvfp4")``.
+* W4A4/B12X: FlashInfer ``B12xMoEWrapper(quant_mode="nvfp4")``.
+* W4A4/CUTLASS: vLLM's supported FlashInfer CUTLASS expert backend.
 * W4A16: pinned B12X native-ModelOpt W4A16 kernel.
 
 The W4A16 comparator comes directly from B12X because the pinned FlashInfer
@@ -43,6 +44,15 @@ SCHEMA_VERSION = 1
 INPUT_RMS_RELATIVE_TOLERANCE = 0.01
 DSV4_TP2_M8192_B12X_WRAPPER_CEILING_BYTES = 635_144_040
 B12X_W13_LAYOUT = "w13"
+FLASHINFER_CUTLASS_MODE = "flashinfer_cutlass"
+BACKEND_SELECTIONS = (
+    "both",
+    "all",
+    "w4a4",
+    "w4a4-ab",
+    FLASHINFER_CUTLASS_MODE,
+    "w4a16",
+)
 DEFAULT_M_VALUES = (
     1,
     2,
@@ -51,6 +61,7 @@ DEFAULT_M_VALUES = (
     12,
     24,
     48,
+    64,
     72,
     128,
     256,
@@ -60,7 +71,7 @@ DEFAULT_M_VALUES = (
     4096,
     8192,
 )
-DEFAULT_CORRECTNESS_M = (1, 24, 128, 2048)
+DEFAULT_CORRECTNESS_M = (1, 24, 64, 128, 2048)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -152,15 +163,76 @@ def calculate_dsv4_tp2_m8192_workspace_bytes() -> dict[str, int]:
 @dataclasses.dataclass
 class PreparedWeights:
     w13: Any
+    w13_sf_modelopt: Any
     w13_sf_swizzled: Any
     w13_sf_mma: Any
     w2: Any
+    w2_sf_modelopt: Any
     w2_sf_swizzled: Any
     w2_sf_mma: Any
     alpha1: Any
     alpha2: Any
     fc2_input_scale: Any
+    cutlass_a1_gscale: Any
+    cutlass_a2_gscale: Any
+    cutlass_g1_alphas: Any
+    cutlass_g2_alphas: Any
     metadata: dict[str, Any]
+
+
+@dataclasses.dataclass(frozen=True)
+class FlashInferCutlassRunner:
+    """Prepared upstream expert object plus its exact activation contract."""
+
+    experts: Any
+    activation: Any
+
+
+def modes_for_backend(selection: str) -> tuple[str, ...]:
+    """Expand CLI selections without changing legacy ``--backend both``."""
+
+    selections = {
+        "both": ("w4a4", "w4a16"),
+        "all": ("w4a4", FLASHINFER_CUTLASS_MODE, "w4a16"),
+        "w4a4": ("w4a4",),
+        "w4a4-ab": ("w4a4", FLASHINFER_CUTLASS_MODE),
+        FLASHINFER_CUTLASS_MODE: (FLASHINFER_CUTLASS_MODE,),
+        "w4a16": ("w4a16",),
+    }
+    try:
+        return selections[selection]
+    except KeyError as exc:
+        raise ValueError(f"unsupported backend selection {selection!r}") from exc
+
+
+def order_modes(
+    modes: Sequence[str],
+    w4a4_order: str,
+) -> tuple[str, ...]:
+    """Apply an explicit W4A4 timing order for matched reverse-order runs."""
+
+    ordered = tuple(modes)
+    if w4a4_order == "b12x-first":
+        return ordered
+    if w4a4_order != "cutlass-first":
+        raise ValueError(f"unsupported W4A4 backend order {w4a4_order!r}")
+    if "w4a4" not in ordered or FLASHINFER_CUTLASS_MODE not in ordered:
+        return ordered
+    without_pair = tuple(
+        mode
+        for mode in ordered
+        if mode not in {"w4a4", FLASHINFER_CUTLASS_MODE}
+    )
+    return (FLASHINFER_CUTLASS_MODE, "w4a4", *without_pair)
+
+
+def modelopt_cutlass_scale_contract(
+    weight_scale_2: Any,
+    input_scale: Any,
+) -> tuple[Any, Any]:
+    """Return ``(a_gscale, g_alpha)`` used by vLLM FlashInfer CUTLASS."""
+
+    return 1.0 / input_scale, weight_scale_2 * input_scale
 
 
 def parse_positive_int_csv(value: str) -> tuple[int, ...]:
@@ -211,6 +283,62 @@ def summarize_timing_runs(runs_ms: Sequence[Sequence[float]]) -> dict[str, Any]:
     }
 
 
+def summarize_w4a4_backend_crossover(
+    results: Sequence[dict[str, Any]],
+    timing_kind: str,
+) -> dict[str, Any]:
+    """Summarize per-M B12X/CUTLASS winners without imposing a policy."""
+
+    rows: list[dict[str, Any]] = []
+    switch_points: list[dict[str, Any]] = []
+    previous_winner: str | None = None
+    for result in results:
+        modes = result.get("modes", {})
+        b12x = modes.get("w4a4", {}).get(timing_kind)
+        cutlass = modes.get(FLASHINFER_CUTLASS_MODE, {}).get(timing_kind)
+        if not b12x or not cutlass:
+            continue
+        b12x_ms = float(b12x["median_ms"])
+        cutlass_ms = float(cutlass["median_ms"])
+        if b12x_ms < cutlass_ms:
+            winner = "flashinfer_b12x"
+        elif cutlass_ms < b12x_ms:
+            winner = FLASHINFER_CUTLASS_MODE
+        else:
+            winner = "tie"
+        row = {
+            "m": int(result["m"]),
+            "phase": result["phase"],
+            "flashinfer_b12x_median_ms": b12x_ms,
+            "flashinfer_cutlass_median_ms": cutlass_ms,
+            "speedup_flashinfer_b12x_over_flashinfer_cutlass": (
+                cutlass_ms / b12x_ms
+            ),
+            "preferred_backend": winner,
+        }
+        rows.append(row)
+        if (
+            winner != "tie"
+            and previous_winner is not None
+            and winner != previous_winner
+        ):
+            switch_points.append(
+                {
+                    "m": row["m"],
+                    "from": previous_winner,
+                    "to": winner,
+                }
+            )
+        if winner != "tie":
+            previous_winner = winner
+    return {
+        "timing_kind": timing_kind,
+        "rows": rows,
+        "switch_points": switch_points,
+        "crossover_observed": bool(switch_points),
+    }
+
+
 def expected_pins(repo_root: pathlib.Path) -> dict[str, str]:
     lock_path = repo_root / "upstream.lock"
     if not lock_path.is_file():
@@ -240,6 +368,7 @@ def read_checkpoint_contract(
     tp_size: int,
     tp_rank: int,
     require_keys: bool = True,
+    require_input_scales: bool = True,
 ) -> tuple[Dsv4Shape, dict[str, Any]]:
     config_path = model_path / "config.json"
     index_path = model_path / "model.safetensors.index.json"
@@ -284,6 +413,8 @@ def read_checkpoint_contract(
                         f"{prefix}.{projection}.weight_scale_2",
                     ]
                 )
+                if require_input_scales:
+                    required.append(f"{prefix}.{projection}.input_scale")
         missing = [key for key in required if key not in weight_map]
         if missing:
             raise KeyError(f"checkpoint index lacks {len(missing)} required tensors: {missing[:4]}")
@@ -299,6 +430,7 @@ def read_checkpoint_contract(
         "moe_quant_algo": quant.get("moe_quant_algo"),
         "swiglu_limit": float(config.get("swiglu_limit", 10.0)),
         "layer_idx": layer_idx,
+        "input_scales_required": require_input_scales,
     }
     return shape, metadata
 
@@ -307,6 +439,8 @@ def tactic_for_shape(mode: str, m: int, top_k: int) -> str:
     routed_rows = m * top_k
     if mode == "w4a16":
         return "w4a16-native (internal micro/direct or grouped selector)"
+    if mode == FLASHINFER_CUTLASS_MODE:
+        return "flashinfer-cutlass"
     if routed_rows <= 40:
         return "micro"
     if routed_rows <= 640:
@@ -423,6 +557,7 @@ def b12x_workspace_ceiling_bytes(
 
 
 def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dict[str, Any]:
+    modes = order_modes(modes_for_backend(args.backend), args.w4a4_order)
     if args.synthetic:
         shape = Dsv4Shape(
             num_experts=args.synthetic_experts or 256,
@@ -439,12 +574,15 @@ def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dic
             layer_idx=args.layer_idx,
             tp_size=args.tp_size,
             tp_rank=args.tp_rank,
+            require_input_scales=FLASHINFER_CUTLASS_MODE in modes,
         )
 
-    modes = ("w4a4", "w4a16") if args.backend == "both" else (args.backend,)
     return {
         "schema_version": SCHEMA_VERSION,
         "dry_run": True,
+        "backend_selection": args.backend,
+        "w4a4_order": args.w4a4_order,
+        "modes": list(modes),
         "shape": dataclasses.asdict(shape)
         | {"intermediate_size_per_rank": shape.intermediate_size_per_rank},
         "checkpoint": checkpoint,
@@ -466,6 +604,14 @@ def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dic
                 "alpha": args.swiglu_alpha,
                 "beta": args.swiglu_beta,
                 "limit": args.swiglu_limit,
+            },
+            FLASHINFER_CUTLASS_MODE: {
+                "name": "silu",
+                "weight_layout": "up_gate",
+                "limit": args.swiglu_limit,
+                "activation_scale": (
+                    "checkpoint input_scale max-reduced and expanded to E"
+                ),
             },
             "w4a16": {"name": "silu", "limit": args.swiglu_limit},
         },
@@ -555,18 +701,67 @@ def _finish_scale_preparation(
     w13: Any,
     w13_scale: Any,
     w13_scale_2: Any,
+    w13_input_scale: Any | None,
     w2: Any,
     w2_scale: Any,
     w2_scale_2: Any,
+    w2_input_scale: Any | None,
     shape: Dsv4Shape,
     metadata: dict[str, Any],
+    prepare_cutlass: bool,
 ) -> PreparedWeights:
     from vllm.model_executor.layers.quantization.utils.nvfp4_utils import (
         swizzle_blockscale,
     )
 
+    if prepare_cutlass:
+        if w13_input_scale is None or w2_input_scale is None:
+            raise ValueError(
+                "FlashInfer CUTLASS preparation requires checkpoint input scales"
+            )
+        for name, scale in (
+            ("w13_input_scale", w13_input_scale),
+            ("w2_input_scale", w2_input_scale),
+        ):
+            if tuple(scale.shape) != (shape.num_experts,):
+                raise ValueError(
+                    f"{name} must be expanded to one value per expert, got {scale.shape}"
+                )
+            if not bool(torch.isfinite(scale).all().item()) or not bool(
+                (scale > 0).all().item()
+            ):
+                raise ValueError(f"{name} must contain only positive finite values")
+
+        # Reproduce vLLM's native FlashInfer CUTLASS ModelOpt contract before
+        # B12X normalization mutates a separate copy of the block scales:
+        #   a_gscale = 1 / max(checkpoint input_scale)
+        #   g_alpha  = weight_scale_2 * max(checkpoint input_scale)
+        w13_sf_modelopt = swizzle_blockscale(w13_scale.clone())
+        w2_sf_modelopt = swizzle_blockscale(w2_scale.clone())
+        cutlass_a1_gscale, cutlass_g1_alphas = modelopt_cutlass_scale_contract(
+            w13_scale_2.float(), w13_input_scale.float()
+        )
+        cutlass_a2_gscale, cutlass_g2_alphas = modelopt_cutlass_scale_contract(
+            w2_scale_2.float(), w2_input_scale.float()
+        )
+        cutlass_a1_gscale = cutlass_a1_gscale.to(torch.float32).contiguous()
+        cutlass_a2_gscale = cutlass_a2_gscale.to(torch.float32).contiguous()
+        cutlass_g1_alphas = cutlass_g1_alphas.to(torch.float32).contiguous()
+        cutlass_g2_alphas = cutlass_g2_alphas.to(torch.float32).contiguous()
+    else:
+        if w13_input_scale is not None or w2_input_scale is not None:
+            raise ValueError("input scales were supplied without CUTLASS preparation")
+        w13_sf_modelopt = None
+        w2_sf_modelopt = None
+        cutlass_a1_gscale = None
+        cutlass_a2_gscale = None
+        cutlass_g1_alphas = None
+        cutlass_g2_alphas = None
+
     # Match vLLM FlashInferB12xExperts: absorb ModelOpt's global weight scale
-    # into block scales, then launch both modes with unit alphas.
+    # into a distinct block-scale representation, then use dynamic A4 with
+    # unit alphas/FC2 scale. This is intentionally not CUTLASS's calibrated
+    # static-activation representation.
     _bake_expert_scales(torch, w13_scale, w13_scale_2)
     _bake_expert_scales(torch, w2_scale, w2_scale_2)
     del w13_scale_2, w2_scale_2
@@ -591,12 +786,48 @@ def _finish_scale_preparation(
     fc2_input_scale = torch.ones_like(alpha1)
     torch.cuda.synchronize()
 
-    metadata["sample_fingerprints"] = {
+    sample_fingerprints = {
         "w13": _sample_tensor_digest(torch, w13),
         "w2": _sample_tensor_digest(torch, w2),
-        "w13_scale_swizzled": _sample_tensor_digest(torch, w13_sf_swizzled),
-        "w2_scale_swizzled": _sample_tensor_digest(torch, w2_sf_swizzled),
+        "w13_scale_b12x_baked_swizzled": _sample_tensor_digest(
+            torch, w13_sf_swizzled
+        ),
+        "w2_scale_b12x_baked_swizzled": _sample_tensor_digest(
+            torch, w2_sf_swizzled
+        ),
     }
+    if prepare_cutlass:
+        assert w13_sf_modelopt is not None and w2_sf_modelopt is not None
+        assert w13_input_scale is not None and w2_input_scale is not None
+        sample_fingerprints.update(
+            {
+                "w13_scale_modelopt_swizzled": _sample_tensor_digest(
+                    torch, w13_sf_modelopt
+                ),
+                "w2_scale_modelopt_swizzled": _sample_tensor_digest(
+                    torch, w2_sf_modelopt
+                ),
+            }
+        )
+        metadata["modelopt_activation_scale_contract"] = {
+            "prepared": True,
+            "loaded_from_checkpoint": (
+                metadata.get("source") != "synthetic-shape-only"
+            ),
+            "reduction": "max over all experts/projection shards, expanded to E",
+            "w13_input_scale": float(w13_input_scale[0].item()),
+            "w2_input_scale": float(w2_input_scale[0].item()),
+            "a1_gscale_formula": "1 / w13_input_scale",
+            "a2_gscale_formula": "1 / w2_input_scale",
+            "g1_alpha_formula": "w1.weight_scale_2 * w13_input_scale",
+            "g2_alpha_formula": "w2.weight_scale_2 * w2_input_scale",
+        }
+    else:
+        metadata["modelopt_activation_scale_contract"] = {
+            "prepared": False,
+            "reason": "FlashInfer CUTLASS was not selected",
+        }
+    metadata["sample_fingerprints"] = sample_fingerprints
     metadata["same_source_weight_storage"] = True
     metadata["source_weight_data_ptrs"] = {
         "w13": int(w13.data_ptr()),
@@ -604,14 +835,20 @@ def _finish_scale_preparation(
     }
     return PreparedWeights(
         w13=w13,
+        w13_sf_modelopt=w13_sf_modelopt,
         w13_sf_swizzled=w13_sf_swizzled,
         w13_sf_mma=w13_sf_mma,
         w2=w2,
+        w2_sf_modelopt=w2_sf_modelopt,
         w2_sf_swizzled=w2_sf_swizzled,
         w2_sf_mma=w2_sf_mma,
         alpha1=alpha1,
         alpha2=alpha2,
         fc2_input_scale=fc2_input_scale,
+        cutlass_a1_gscale=cutlass_a1_gscale,
+        cutlass_a2_gscale=cutlass_a2_gscale,
+        cutlass_g1_alphas=cutlass_g1_alphas,
+        cutlass_g2_alphas=cutlass_g2_alphas,
         metadata=metadata,
     )
 
@@ -623,6 +860,7 @@ def load_checkpoint_weights(
     *,
     layer_idx: int,
     checkpoint_metadata: dict[str, Any],
+    prepare_cutlass: bool = False,
 ) -> PreparedWeights:
     loader = IndexedSafetensorLoader(model_path)
     device = torch.device("cuda")
@@ -646,6 +884,9 @@ def load_checkpoint_weights(
     gs1 = torch.empty(experts, dtype=torch.float32, device=device)
     gs3 = torch.empty_like(gs1)
     gs2 = torch.empty_like(gs1)
+    input1 = torch.empty_like(gs1) if prepare_cutlass else None
+    input3 = torch.empty_like(gs1) if prepare_cutlass else None
+    input2 = torch.empty_like(gs1) if prepare_cutlass else None
 
     started = time.perf_counter()
     for expert_id in range(experts):
@@ -672,6 +913,17 @@ def load_checkpoint_weights(
         gs1[expert_id] = loader.get_tensor(f"{prefix}.w1.weight_scale_2").to(device)
         gs3[expert_id] = loader.get_tensor(f"{prefix}.w3.weight_scale_2").to(device)
         gs2[expert_id] = loader.get_tensor(f"{prefix}.w2.weight_scale_2").to(device)
+        if prepare_cutlass:
+            assert input1 is not None and input3 is not None and input2 is not None
+            input1[expert_id] = loader.get_tensor(f"{prefix}.w1.input_scale").to(
+                device
+            )
+            input3[expert_id] = loader.get_tensor(f"{prefix}.w3.input_scale").to(
+                device
+            )
+            input2[expert_id] = loader.get_tensor(f"{prefix}.w2.input_scale").to(
+                device
+            )
         if (expert_id + 1) % 32 == 0 or expert_id + 1 == experts:
             print(f"  loaded experts {expert_id + 1}/{experts}", flush=True)
     torch.cuda.synchronize()
@@ -686,7 +938,46 @@ def load_checkpoint_weights(
     # FlashInfer B12X expects [up/w3, gate/w1] source order.
     w13 = torch.cat((w3, w1), dim=1).contiguous()
     w13_scale = torch.cat((s3, s1), dim=1).contiguous()
-    del w1, w3, s1, s3, gs3
+    w13_input_scale = None
+    w2_input_scale = None
+    if prepare_cutlass:
+        assert input1 is not None and input3 is not None and input2 is not None
+        # Match prepare_nvfp4_moe_layer_for_fi_or_cutlass: global-scale-capable
+        # backends reduce every expert/projection activation scale to one maximum
+        # and then expand that scalar to E.
+        for name, scale in (("w1", input1), ("w3", input3), ("w2", input2)):
+            if not bool(torch.isfinite(scale).all().item()) or not bool(
+                (scale > 0).all().item()
+            ):
+                raise ValueError(
+                    f"checkpoint {name}.input_scale contains "
+                    "non-positive/non-finite values"
+                )
+        w13_input_scalar = torch.stack((input1, input3), dim=1).max().to(
+            torch.float32
+        )
+        w2_input_scalar = input2.max().to(torch.float32)
+        checkpoint_metadata.update(
+            {
+                "checkpoint_input_scale_stats": {
+                    "w1_min": float(input1.min().item()),
+                    "w1_max": float(input1.max().item()),
+                    "w3_min": float(input3.min().item()),
+                    "w3_max": float(input3.max().item()),
+                    "w2_min": float(input2.min().item()),
+                    "w2_max": float(input2.max().item()),
+                    "w1_w3_max_abs_difference": float(
+                        (input1 - input3).abs().max().item()
+                    ),
+                    "w13_global_max": float(w13_input_scalar.item()),
+                    "w2_global_max": float(w2_input_scalar.item()),
+                },
+                "checkpoint_input_scale_tensor_count": 3 * experts,
+            }
+        )
+        w13_input_scale = w13_input_scalar.expand(experts)
+        w2_input_scale = w2_input_scalar.expand(experts)
+    del w1, w3, s1, s3, gs3, input1, input3, input2
     checkpoint_metadata.update(
         {
             "load_seconds": time.perf_counter() - started,
@@ -700,17 +991,22 @@ def load_checkpoint_weights(
         w13=w13,
         w13_scale=w13_scale,
         w13_scale_2=gs1,
+        w13_input_scale=w13_input_scale,
         w2=w2,
         w2_scale=s2,
         w2_scale_2=gs2,
+        w2_input_scale=w2_input_scale,
         shape=shape,
         metadata=checkpoint_metadata,
+        prepare_cutlass=prepare_cutlass,
     )
 
 
 def make_synthetic_weights(
     torch: Any,
     shape: Dsv4Shape,
+    *,
+    prepare_cutlass: bool = False,
 ) -> PreparedWeights:
     device = torch.device("cuda")
     experts = shape.num_experts
@@ -747,9 +1043,11 @@ def make_synthetic_weights(
         w13=w13,
         w13_scale=w13_scale,
         w13_scale_2=ones.clone(),
+        w13_input_scale=ones.clone() if prepare_cutlass else None,
         w2=w2,
         w2_scale=w2_scale,
         w2_scale_2=ones.clone(),
+        w2_input_scale=ones.clone() if prepare_cutlass else None,
         shape=shape,
         metadata={
             "source": "synthetic-shape-only",
@@ -757,6 +1055,7 @@ def make_synthetic_weights(
             "logical_scale": scale_value,
             "w13_layout": "w13 (up/w3, gate/w1; B12X up_gate)",
         },
+        prepare_cutlass=prepare_cutlass,
     )
 
 
@@ -778,6 +1077,10 @@ def runtime_provenance(torch: Any, repo_root: pathlib.Path) -> dict[str, Any]:
         select_sm120_moe_backend,
     )
     from b12x.moe.fused.w4a16.kernel import run_w4a16_moe
+    from vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe import (
+        FlashInferExperts,
+    )
+    from vllm.model_executor.layers.fused_moe.utils import moe_kernel_quantize_input
 
     capability = torch.cuda.get_device_capability()
     return {
@@ -799,12 +1102,25 @@ def runtime_provenance(torch: Any, repo_root: pathlib.Path) -> dict[str, Any]:
         },
         "backend_symbols": {
             "w4a4": f"{B12xMoEWrapper.__module__}.{B12xMoEWrapper.__qualname__}",
+            FLASHINFER_CUTLASS_MODE: (
+                f"{FlashInferExperts.__module__}.{FlashInferExperts.__qualname__}"
+            ),
             "w4a16": f"{run_w4a16_moe.__module__}.{run_w4a16_moe.__qualname__}",
             "selector": (
                 f"{select_sm120_moe_backend.__module__}."
                 f"{select_sm120_moe_backend.__qualname__}"
             ),
             "w4a4_wrapper_source": inspect.getsourcefile(B12xMoEWrapper),
+            "flashinfer_cutlass_experts_source": inspect.getsourcefile(
+                FlashInferExperts
+            ),
+            "flashinfer_cutlass_apply_signature": str(
+                inspect.signature(FlashInferExperts.apply)
+            ),
+            "nvfp4_input_quantize_symbol": (
+                f"{moe_kernel_quantize_input.__module__}."
+                f"{moe_kernel_quantize_input.__qualname__}"
+            ),
             "w4a16_kernel_source": inspect.getsourcefile(run_w4a16_moe),
             "w4a4_run_signature": str(inspect.signature(B12xMoEWrapper.run)),
             "w4a16_run_signature": str(inspect.signature(run_w4a16_moe)),
@@ -891,6 +1207,25 @@ def compare_tensors(torch: Any, actual: Any, reference: Any) -> dict[str, float 
         "relative_p95": float(torch.quantile(relative, 0.95).item()),
         "relative_p99": float(torch.quantile(relative, 0.99).item()),
     }
+
+
+def numeric_metrics_pass(
+    metrics: dict[str, float | int | bool],
+    *,
+    min_cosine: float,
+    max_normalized_rmse: float,
+) -> bool:
+    """Apply the shared finite/cosine/NRMSE correctness contract."""
+
+    cosine = float(metrics["cosine"])
+    normalized_rmse = float(metrics["normalized_rmse"])
+    return (
+        bool(metrics["finite"])
+        and math.isfinite(cosine)
+        and math.isfinite(normalized_rmse)
+        and cosine >= min_cosine
+        and normalized_rmse <= max_normalized_rmse
+    )
 
 
 def measure_cuda_events(
@@ -1020,8 +1355,242 @@ def _make_w4a4_runner(
         "static_workspace": type(wrapper._static_workspace).__name__,
         "dynamic_workspace": type(wrapper._dynamic_workspace).__name__,
         "workspace_memory": workspace_memory,
+        "serving_adapter_output_copy": True,
     }
     return wrapper, proof
+
+
+def _make_flashinfer_cutlass_runner(
+    torch: Any,
+    weights: PreparedWeights,
+    shape: Dsv4Shape,
+    args: argparse.Namespace,
+) -> tuple[FlashInferCutlassRunner, dict[str, Any]]:
+    """Prepare vLLM's supported FlashInfer CUTLASS NVFP4 expert backend.
+
+    CUTLASS keeps raw ModelOpt block scales and calibrated activation globals.
+    B12X consumes the same packed weights but a distinct, weight-global-scale-
+    baked scale representation, so scale storage must not be shared.
+    """
+
+    required = {
+        "w13_sf_modelopt": weights.w13_sf_modelopt,
+        "w2_sf_modelopt": weights.w2_sf_modelopt,
+        "cutlass_a1_gscale": weights.cutlass_a1_gscale,
+        "cutlass_a2_gscale": weights.cutlass_a2_gscale,
+        "cutlass_g1_alphas": weights.cutlass_g1_alphas,
+        "cutlass_g2_alphas": weights.cutlass_g2_alphas,
+    }
+    missing = [name for name, value in required.items() if value is None]
+    if missing:
+        raise RuntimeError(
+            "FlashInfer CUTLASS weights were not prepared; missing "
+            + ", ".join(missing)
+        )
+
+    import vllm.model_executor.layers.fused_moe.modular_kernel as mk
+    from vllm.model_executor.layers.fused_moe.activation import MoEActivation
+    from vllm.model_executor.layers.fused_moe.config import (
+        FusedMoEConfig,
+        FusedMoEParallelConfig,
+        RoutingMethodType,
+        nvfp4_moe_quant_config,
+    )
+    from vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe import (
+        FlashInferExperts,
+    )
+    from vllm.model_executor.layers.quantization.utils.quant_utils import (
+        kNvfp4Dynamic,
+        kNvfp4Static,
+    )
+
+    parallel = FusedMoEParallelConfig(
+        tp_size=shape.tp_size,
+        tp_rank=shape.tp_rank,
+        pcp_size=1,
+        pcp_rank=0,
+        dp_size=1,
+        dp_rank=0,
+        ep_size=1,
+        ep_rank=0,
+        sp_size=1,
+        use_ep=False,
+        all2all_backend="allgather_reducescatter",
+        enable_eplb=False,
+    )
+    activation = MoEActivation.SILU
+    moe_config = FusedMoEConfig(
+        num_experts=shape.num_experts,
+        experts_per_token=shape.top_k,
+        hidden_dim=shape.hidden_size,
+        intermediate_size=shape.intermediate_size,
+        num_local_experts=shape.num_experts,
+        num_logical_experts=shape.num_experts,
+        activation=activation,
+        device="cuda",
+        routing_method=RoutingMethodType.TopK,
+        moe_parallel_config=parallel,
+        in_dtype=torch.bfloat16,
+        moe_backend="flashinfer_cutlass",
+        max_num_tokens=max(args.m),
+        skip_final_all_reduce=True,
+        swiglu_limit=args.swiglu_limit,
+    )
+    if moe_config.intermediate_size_per_partition != shape.intermediate_size_per_rank:
+        raise RuntimeError(
+            "FlashInfer CUTLASS TP geometry does not match the checkpoint slice"
+        )
+
+    quant_config = nvfp4_moe_quant_config(
+        g1_alphas=weights.cutlass_g1_alphas,
+        g2_alphas=weights.cutlass_g2_alphas,
+        a1_gscale=weights.cutlass_a1_gscale,
+        a2_gscale=weights.cutlass_a2_gscale,
+        w1_scale=weights.w13_sf_modelopt,
+        w2_scale=weights.w2_sf_modelopt,
+        is_scale_swizzled=True,
+        gemm1_clamp_limit=args.swiglu_limit,
+    )
+    supported, reason = FlashInferExperts.is_supported_config(
+        FlashInferExperts,
+        moe_config,
+        kNvfp4Static,
+        kNvfp4Dynamic,
+        mk.FusedMoEActivationFormat.Standard,
+    )
+    if not supported:
+        raise RuntimeError(
+            "FlashInfer CUTLASS rejected the exact DSV4 NVFP4 configuration: "
+            f"{reason or 'no reason reported'}"
+        )
+    experts = FlashInferExperts(moe_config=moe_config, quant_config=quant_config)
+
+    packed_weight_contract = {
+        "same_source_w13": int(weights.w13.data_ptr())
+        == int(weights.metadata["source_weight_data_ptrs"]["w13"]),
+        "same_source_w2": int(weights.w2.data_ptr())
+        == int(weights.metadata["source_weight_data_ptrs"]["w2"]),
+    }
+    cutlass_scale_contract = {
+        "quant_config_uses_raw_w13_scale_storage": (
+            int(quant_config.w1_scale.untyped_storage().data_ptr())
+            == int(weights.w13_sf_modelopt.untyped_storage().data_ptr())
+        ),
+        "quant_config_uses_raw_w2_scale_storage": (
+            int(quant_config.w2_scale.untyped_storage().data_ptr())
+            == int(weights.w2_sf_modelopt.untyped_storage().data_ptr())
+        ),
+        "w13_scale_storage_distinct_from_b12x_baked": (
+            int(weights.w13_sf_modelopt.untyped_storage().data_ptr())
+            != int(weights.w13_sf_mma.untyped_storage().data_ptr())
+        ),
+        "w2_scale_storage_distinct_from_b12x_baked": (
+            int(weights.w2_sf_modelopt.untyped_storage().data_ptr())
+            != int(weights.w2_sf_mma.untyped_storage().data_ptr())
+        ),
+    }
+    if not all(packed_weight_contract.values()):
+        raise RuntimeError(
+            "FlashInfer CUTLASS does not share B12X's packed weight storage: "
+            f"{packed_weight_contract}"
+        )
+    if not all(cutlass_scale_contract.values()):
+        raise RuntimeError(
+            "FlashInfer CUTLASS raw ModelOpt scale contract is invalid: "
+            f"{cutlass_scale_contract}"
+        )
+    is_synthetic = weights.metadata.get("source") == "synthetic-shape-only"
+    loaded_input_scale_count = int(
+        weights.metadata.get("checkpoint_input_scale_tensor_count", 0)
+    )
+    if not is_synthetic and loaded_input_scale_count != 3 * shape.num_experts:
+        raise RuntimeError(
+            "FlashInfer CUTLASS requires all checkpoint activation scales: "
+            f"loaded {loaded_input_scale_count}, expected {3 * shape.num_experts}"
+        )
+    proof = {
+        "requested": FLASHINFER_CUTLASS_MODE,
+        "implementation": f"{experts.__class__.__module__}.{experts.__class__.__qualname__}",
+        "normalized_quant_mode": quant_config.quant_dtype,
+        "activation_precision": "nvfp4",
+        "activation_quantizer": (
+            "vllm.model_executor.layers.fused_moe.utils.moe_kernel_quantize_input"
+        ),
+        "activation": "silu",
+        "weight_layout": "up_gate (w13: up/w3, gate/w1)",
+        "swiglu_limit": args.swiglu_limit,
+        "oracle_supported": supported,
+        "oracle_reason": reason,
+        "tp_size": experts.tp_size,
+        "tp_rank": experts.tp_rank,
+        "intermediate_size_per_rank": moe_config.intermediate_size_per_partition,
+        "scale_layout": "raw ModelOpt block scales, swizzled",
+        "global_scales_baked_into_block_scales": False,
+        "process_weights_after_loading_algebra_preapplied": True,
+        "modelopt_activation_scale_contract": weights.metadata[
+            "modelopt_activation_scale_contract"
+        ],
+        "checkpoint_input_scale_tensor_count": loaded_input_scale_count,
+        "checkpoint_input_scale_stats": weights.metadata.get(
+            "checkpoint_input_scale_stats"
+        ),
+    } | packed_weight_contract | cutlass_scale_contract
+    return FlashInferCutlassRunner(experts=experts, activation=activation), proof
+
+
+def _make_flashinfer_cutlass_launch(
+    torch: Any,
+    runner: FlashInferCutlassRunner,
+    weights: PreparedWeights,
+    shape: Dsv4Shape,
+    x: Any,
+    topk_ids: Any,
+    topk_weights: Any,
+) -> tuple[Callable[[], Any], Any]:
+    """Mirror vLLM's no-DP/EP prepare plus ``FlashInferExperts.apply``."""
+
+    from vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe import (
+        is_valid_flashinfer_cutlass_fused_moe,
+    )
+    from vllm.model_executor.layers.fused_moe.utils import moe_kernel_quantize_input
+
+    if not is_valid_flashinfer_cutlass_fused_moe(x, weights.w13, weights.w2):
+        raise RuntimeError(
+            "FlashInfer CUTLASS rejected the BF16 activation/packed-weight dtypes"
+        )
+    output = torch.empty_like(x)
+    quant_config = runner.experts.quant_config
+
+    def launch() -> Any:
+        a1q, a1q_scale = moe_kernel_quantize_input(
+            x,
+            quant_config.a1_gscale,
+            quant_dtype=quant_config.quant_dtype,
+            per_act_token_quant=quant_config.per_act_token_quant,
+            block_shape=quant_config.block_shape,
+            is_scale_swizzled=quant_config.is_scale_swizzled,
+            mx_alignment=quant_config.mx_alignment,
+        )
+        runner.experts.apply(
+            output=output,
+            hidden_states=a1q,
+            w1=weights.w13,
+            w2=weights.w2,
+            topk_weights=topk_weights,
+            topk_ids=topk_ids,
+            activation=runner.activation,
+            global_num_experts=shape.num_experts,
+            expert_map=None,
+            a1q_scale=a1q_scale,
+            a2_scale=None,
+            workspace13=None,
+            workspace2=None,
+            expert_tokens_meta=None,
+            apply_router_weight_on_input=False,
+        )
+        return output
+
+    return launch, output
 
 
 def _prepare_w4a16(
@@ -1120,6 +1689,8 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             f"detected compute capability {capability}"
         )
 
+    modes = order_modes(modes_for_backend(args.backend), args.w4a4_order)
+    prepare_cutlass = FLASHINFER_CUTLASS_MODE in modes
     if args.synthetic:
         shape = Dsv4Shape(
             num_experts=args.synthetic_experts or 256,
@@ -1129,7 +1700,9 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
         shape.validate()
         checkpoint_metadata = {"source": "synthetic-shape-only"}
         print("Creating synthetic real-shape packed NVFP4 weights...", flush=True)
-        weights = make_synthetic_weights(torch, shape)
+        weights = make_synthetic_weights(
+            torch, shape, prepare_cutlass=prepare_cutlass
+        )
     else:
         if args.model_path is None:
             raise ValueError("--model-path is required unless --synthetic is used")
@@ -1138,6 +1711,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             layer_idx=args.layer_idx,
             tp_size=args.tp_size,
             tp_rank=args.tp_rank,
+            require_input_scales=prepare_cutlass,
         )
         print(
             f"Loading NVIDIA NVFP4 layer {args.layer_idx}, TP rank {args.tp_rank}/"
@@ -1150,17 +1724,23 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             shape,
             layer_idx=args.layer_idx,
             checkpoint_metadata=checkpoint_metadata,
+            prepare_cutlass=prepare_cutlass,
         )
 
     provenance = runtime_provenance(torch, repo_root)
-    modes = ("w4a4", "w4a16") if args.backend == "both" else (args.backend,)
     backend_proof: dict[str, Any] = {}
     w4a4_wrapper = None
+    flashinfer_cutlass_runner = None
     w4a16_prepared = None
     if "w4a4" in modes:
         w4a4_wrapper, backend_proof["w4a4"] = _make_w4a4_runner(
             torch, weights, shape, args
         )
+    if FLASHINFER_CUTLASS_MODE in modes:
+        (
+            flashinfer_cutlass_runner,
+            backend_proof[FLASHINFER_CUTLASS_MODE],
+        ) = _make_flashinfer_cutlass_runner(torch, weights, shape, args)
     if "w4a16" in modes:
         w4a16_prepared, backend_proof["w4a16"] = _prepare_w4a16(
             torch, weights, args
@@ -1204,6 +1784,9 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
         "provenance": provenance,
         "backend_proof": backend_proof,
         "settings": {
+            "backend_selection": args.backend,
+            "w4a4_order": args.w4a4_order,
+            "modes": list(modes),
             "m": list(args.m),
             "correctness_m": list(args.correctness_m),
             "routing": args.routing,
@@ -1256,6 +1839,11 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             "phase": phase_for_m(m),
             "routed_rows": m * shape.top_k,
             "input_rms_contract": input_rms_contract,
+            "shared_input_data_ptrs": {
+                "hidden_states": int(x.data_ptr()),
+                "topk_ids": int(topk_ids.data_ptr()),
+                "topk_weights": int(topk_weights.data_ptr()),
+            },
             "modes": {},
         }
         if not input_rms_contract["passed"]:
@@ -1269,14 +1857,16 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
         launches: dict[str, Callable[[], Any]] = {}
         keepalive: list[Any] = []
         if w4a4_wrapper is not None:
+            b12x_output = torch.empty_like(x)
 
             def launch_w4a4(
                 wrapper: Any = w4a4_wrapper,
                 x_local: Any = x,
                 ids_local: Any = topk_ids,
                 route_weights_local: Any = topk_weights,
+                output_local: Any = b12x_output,
             ) -> Any:
-                return wrapper.run(
+                wrapper_output = wrapper.run(
                     x=x_local,
                     w1_weight=weights.w13,
                     w1_weight_sf=weights.w13_sf_mma,
@@ -1288,14 +1878,37 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                     token_selected_experts=ids_local,
                     token_final_scales=route_weights_local,
                 )
+                # Mirror FlashInferB12xExperts.apply exactly. The shared
+                # wrapper owns a reusable output arena, so serving must copy
+                # each layer result before the next layer reuses that arena.
+                output_local.copy_(wrapper_output)
+                return output_local
 
             launches["w4a4"] = launch_w4a4
+            keepalive.append(b12x_output)
+        if flashinfer_cutlass_runner is not None:
+            cutlass_launch, cutlass_output = _make_flashinfer_cutlass_launch(
+                torch,
+                flashinfer_cutlass_runner,
+                weights,
+                shape,
+                x,
+                topk_ids,
+                topk_weights,
+            )
+            launches[FLASHINFER_CUTLASS_MODE] = cutlass_launch
+            keepalive.append(cutlass_output)
         if w4a16_prepared is not None:
             launch_w4a16, buffers = _make_w4a16_launch(
                 torch, w4a16_prepared, x, topk_ids, topk_weights, args
             )
             launches["w4a16"] = launch_w4a16
             keepalive.append(buffers)
+
+        # Preserve the requested timing/JIT order. Closest published backend
+        # deltas are small, so policy requires matched b12x-first and
+        # cutlass-first runs rather than trusting one fixed thermal/cache order.
+        launches = {mode: launches[mode] for mode in modes}
 
         # Compile and retain matched eager outputs only for requested correctness M.
         eager_outputs: dict[str, Any] = {}
@@ -1310,16 +1923,44 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                 torch, eager_outputs["w4a4"], eager_outputs["w4a16"]
             )
             row["w4a4_vs_w4a16"] = metrics
-            passed = (
-                bool(metrics["finite"])
-                and float(metrics["cosine"]) >= args.numeric_min_cosine
-                and float(metrics["normalized_rmse"]) <= args.numeric_max_nrmse
+            passed = numeric_metrics_pass(
+                metrics,
+                min_cosine=args.numeric_min_cosine,
+                max_normalized_rmse=args.numeric_max_nrmse,
             )
             row["numeric_gate_passed"] = passed
             if not passed:
                 report["failures"].append(
                     {
                         "kind": "numeric",
+                        "comparison": "w4a4_vs_w4a16",
+                        "m": m,
+                        "cosine": metrics["cosine"],
+                        "normalized_rmse": metrics["normalized_rmse"],
+                    }
+                )
+
+        if (
+            "w4a4" in eager_outputs
+            and FLASHINFER_CUTLASS_MODE in eager_outputs
+        ):
+            metrics = compare_tensors(
+                torch,
+                eager_outputs["w4a4"],
+                eager_outputs[FLASHINFER_CUTLASS_MODE],
+            )
+            row["w4a4_vs_flashinfer_cutlass"] = metrics
+            passed = numeric_metrics_pass(
+                metrics,
+                min_cosine=args.numeric_min_cosine,
+                max_normalized_rmse=args.numeric_max_nrmse,
+            )
+            row["w4a4_backend_numeric_gate_passed"] = passed
+            if not passed:
+                report["failures"].append(
+                    {
+                        "kind": "numeric",
+                        "comparison": "w4a4_vs_flashinfer_cutlass",
                         "m": m,
                         "cosine": metrics["cosine"],
                         "normalized_rmse": metrics["normalized_rmse"],
@@ -1334,11 +1975,14 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                     quant_mode="nvfp4",
                 )
                 tactic = "micro" if selected == "static" and m * shape.top_k <= 40 else selected
+            elif mode == FLASHINFER_CUTLASS_MODE:
+                selected = FLASHINFER_CUTLASS_MODE
+                tactic = tactic_for_shape(mode, m, shape.top_k)
             else:
                 selected = "w4a16"
                 tactic = tactic_for_shape(mode, m, shape.top_k)
             print(
-                f"M={m:5d} {row['phase']:7s} {mode:5s} tactic={tactic:51s}",
+                f"M={m:5d} {row['phase']:7s} {mode:20s} tactic={tactic:51s}",
                 end="",
                 flush=True,
             )
@@ -1387,9 +2031,31 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                     if mode in eager_outputs:
                         replay()
                         torch.cuda.synchronize()
-                        mode_result["graph_vs_eager"] = compare_tensors(
+                        graph_metrics = compare_tensors(
                             torch, graph_output, eager_outputs[mode]
                         )
+                        mode_result["graph_vs_eager"] = graph_metrics
+                        graph_numeric_passed = numeric_metrics_pass(
+                            graph_metrics,
+                            min_cosine=args.numeric_min_cosine,
+                            max_normalized_rmse=args.numeric_max_nrmse,
+                        )
+                        mode_result["graph_numeric_gate_passed"] = (
+                            graph_numeric_passed
+                        )
+                        if not graph_numeric_passed:
+                            report["failures"].append(
+                                {
+                                    "kind": "numeric",
+                                    "comparison": "graph_vs_eager",
+                                    "m": m,
+                                    "mode": mode,
+                                    "cosine": graph_metrics["cosine"],
+                                    "normalized_rmse": graph_metrics[
+                                        "normalized_rmse"
+                                    ],
+                                }
+                            )
                     print(
                         f" graph={graph_stats['median_ms'] * 1000:9.1f} us "
                         f"p95={graph_stats['p95_ms'] * 1000:9.1f} us",
@@ -1420,8 +2086,35 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                         f"  W4A4 speedup ({timing_kind}): "
                         f"{row['speedup_w4a4_over_w4a16'][timing_kind]:.3f}x"
                     )
+        if (
+            "w4a4" in row["modes"]
+            and FLASHINFER_CUTLASS_MODE in row["modes"]
+        ):
+            row["speedup_flashinfer_b12x_over_flashinfer_cutlass"] = {}
+            for timing_kind in ("eager", "cuda_graph"):
+                b12x = row["modes"]["w4a4"].get(timing_kind)
+                cutlass = row["modes"][FLASHINFER_CUTLASS_MODE].get(
+                    timing_kind
+                )
+                if b12x and cutlass:
+                    speedup = cutlass["median_ms"] / b12x["median_ms"]
+                    row["speedup_flashinfer_b12x_over_flashinfer_cutlass"][
+                        timing_kind
+                    ] = speedup
+                    print(
+                        f"  FlashInfer B12X speedup over FlashInfer CUTLASS "
+                        f"({timing_kind}): {speedup:.3f}x"
+                    )
         report["results"].append(row)
         del eager_outputs, launches, keepalive, x, topk_ids, topk_weights
+
+    if "w4a4" in modes and FLASHINFER_CUTLASS_MODE in modes:
+        report["w4a4_backend_crossover"] = {
+            timing_kind: summarize_w4a4_backend_crossover(
+                report["results"], timing_kind
+            )
+            for timing_kind in ("eager", "cuda_graph")
+        }
 
     report["memory"] = {
         "allocated_gib": torch.cuda.memory_allocated() / (1 << 30),
@@ -1449,8 +2142,8 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Benchmark FlashInfer/B12X NVFP4 W4A4 against same-weight B12X "
-            "W4A16 at DeepSeek V4 Flash routed-MoE shapes on SM121."
+            "Benchmark FlashInfer B12X and CUTLASS NVFP4 W4A4 against "
+            "same-weight B12X W4A16 at DeepSeek V4 routed-MoE shapes on SM121."
         )
     )
     source = parser.add_mutually_exclusive_group()
@@ -1469,7 +2162,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--layer-idx", type=int, default=0)
     parser.add_argument("--tp-size", type=int, default=2)
     parser.add_argument("--tp-rank", type=int, default=0)
-    parser.add_argument("--backend", choices=("both", "w4a4", "w4a16"), default="both")
+    parser.add_argument(
+        "--backend",
+        choices=BACKEND_SELECTIONS,
+        default="both",
+        help=(
+            "'both' preserves B12X-W4A4 vs W4A16; 'w4a4-ab' compares "
+            "FlashInfer B12X vs FlashInfer CUTLASS; 'all' runs all three"
+        ),
+    )
+    parser.add_argument(
+        "--w4a4-order",
+        choices=("b12x-first", "cutlass-first"),
+        default="b12x-first",
+        help=(
+            "Timing/JIT order when both W4A4 backends are selected; run both "
+            "orders before choosing a crossover policy"
+        ),
+    )
     parser.add_argument(
         "--m",
         type=parse_positive_int_csv,
@@ -1480,7 +2190,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--correctness-m",
         type=parse_positive_int_csv,
         default=DEFAULT_CORRECTNESS_M,
-        help="Comma-separated M values for W4A4-vs-W4A16 numerical checks",
+        help="Comma-separated M values for selected cross-backend numerical checks",
     )
     parser.add_argument("--routing", choices=("balanced", "random", "hot"), default="balanced")
     parser.add_argument("--seed", type=int, default=4104)
@@ -1536,11 +2246,14 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--input-rms must be positive and finite")
     if not math.isfinite(args.swiglu_limit) or args.swiglu_limit <= 0:
         raise ValueError("--swiglu-limit must be positive and finite")
-    if args.backend in {"both", "w4a16"} and (
+    modes = modes_for_backend(args.backend)
+    if any(
+        mode in {FLASHINFER_CUTLASS_MODE, "w4a16"} for mode in modes
+    ) and (
         args.swiglu_alpha != 1.0 or args.swiglu_beta != 0.0
     ):
         raise ValueError(
-            "the activation-matched W4A16 comparator requires "
+            "the activation-matched FlashInfer CUTLASS/W4A16 comparators require "
             "--swiglu-alpha 1 and --swiglu-beta 0"
         )
     if not 0.0 <= args.numeric_min_cosine <= 1.0:

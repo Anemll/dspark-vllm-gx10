@@ -137,7 +137,7 @@ services:
         --speculative-config "$${SPECULATIVE_CONFIG}"
         --tokenizer-mode deepseek_v4
         --distributed-executor-backend mp
-        --moe-backend flashinfer_b12x
+        --moe-backend ${DSPARK_MOE_BACKEND:-flashinfer_b12x}
         --tool-call-parser deepseek_v4
         --enable-auto-tool-choice
         --reasoning-parser deepseek_v4

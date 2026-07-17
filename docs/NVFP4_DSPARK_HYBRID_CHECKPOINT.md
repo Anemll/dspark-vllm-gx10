@@ -86,6 +86,22 @@ mapping, and source file sizes. Use `--hash-shards` only when full payload
 SHA-256 values are required; it intentionally reads the complete selected
 checkpoint and is therefore slow.
 
+The two quantization metadata paths have distinct roles. NVIDIA's
+`hf_quant_config.json` declares `MIXED_PRECISION` with 43 `NVFP4` routed-expert
+entries. DeepSeek V4's `config.json` retains the architecture-specific FP8
+configuration plus `moe_quant_algo: NVFP4`. The pinned vLLM model therefore
+constructs `DeepseekV4FP8Config`; the DSpark overlay uses the decoder-layer
+prefix to send target layers `0..42` through `ModelOptNvFp4FusedMoE` and the
+synthetic draft layers `43..45` through the native MXFP4 method. A global
+NVFP4 decision would try to interpret the draft's MXFP4 tensors as ModelOpt
+NVFP4 and is invalid.
+
+Whichever runtime backend is selected must consequently support both halves
+of the hybrid in one process. Keep `DSPARK_MOE_BACKEND` identical on both TP
+ranks and validate `flashinfer_cutlass` and `flashinfer_b12x` separately; the
+presence of NVIDIA metadata alone is not proof that either kernel actually
+ran.
+
 Run the dependency-free focused tests with:
 
 ```bash
