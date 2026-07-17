@@ -31,6 +31,8 @@ jobs:
           python -m unittest discover -s tests \
             -p 'test_build_hybrid_nvfp4_dspark_checkpoint.py' -v
           python -m unittest discover -s tests \
+            -p 'test_verify_hybrid_nvfp4_dspark_checkpoint.py' -v
+          python -m unittest discover -s tests \
             -p 'test_nvfp4_compose_config.py' -v
       - name: Shell syntax
         run: find scripts dashboard -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
@@ -44,6 +46,19 @@ jobs:
             overridden="$(DSPARK_MOE_BACKEND=flashinfer_cutlass docker compose \
               --env-file "$env_file" -f docker-compose.yml config)"
             grep -F -- '--moe-backend flashinfer_cutlass' <<<"$overridden"
+          done
+      - name: Compose speculation-mode rendering
+        run: |
+          for env_file in config/head.env.example config/worker.env.example; do
+            dspark="$(docker compose --env-file "$env_file" \
+              -f docker-compose.yml config --format json)"
+            python -c 'import json, sys; assert json.load(sys.stdin)["services"]["vllm-dspark"]["environment"]["DSPARK_SPECULATION_MODE"] == "dspark"' \
+              <<<"$dspark"
+
+            target_only="$(DSPARK_SPECULATION_MODE=off docker compose \
+              --env-file "$env_file" -f docker-compose.yml config --format json)"
+            python -c 'import json, sys; assert json.load(sys.stdin)["services"]["vllm-dspark"]["environment"]["DSPARK_SPECULATION_MODE"] == "off"' \
+              <<<"$target_only"
           done
       - name: Overlay license markers
         run: |

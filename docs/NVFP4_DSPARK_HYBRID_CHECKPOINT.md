@@ -67,6 +67,33 @@ The builder refuses a nonempty output directory. `--force` is required to
 replace one, and replacement is staged before the old directory is removed.
 Source and output paths may not overlap.
 
+## Verify staged copies
+
+After dereferencing the view onto the serving host, require all 48 shards to
+be regular files with the exact names and sizes recorded by provenance:
+
+```bash
+python3 scripts/verify_hybrid_nvfp4_dspark_checkpoint.py \
+  --checkpoint-dir /path/to/DeepSeek-V4-Flash-NVFP4-DSpark \
+  --mode runnable
+```
+
+A TP worker receiving metadata only must contain exactly the seven metadata
+files, with no shards, symlinks, directories, or other extras:
+
+```bash
+python3 scripts/verify_hybrid_nvfp4_dspark_checkpoint.py \
+  --checkpoint-dir /path/to/DeepSeek-V4-Flash-NVFP4-DSpark-metadata \
+  --mode metadata-only \
+  --reference /path/to/known-good-hybrid
+```
+
+`--reference` is optional and compares SHA-256 values for all seven metadata
+files. The verifier always checks the pinned merged config, index, provenance,
+and metadata artifact identities. It hashes tensor payloads only when the
+provenance was built with `--hash-shards`; otherwise runnable verification is
+limited to shard type, name, and exact byte size and does not read payloads.
+
 ## Config and provenance rules
 
 `config.json` starts as an exact semantic copy of NVIDIA's config. Its complete
