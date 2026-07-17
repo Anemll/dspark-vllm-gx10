@@ -463,7 +463,12 @@ class _RemoteTensor(torch.Tensor):
 
 
 class _RoCEWeightSender:
-    def __init__(self, model: nn.Module, buffer_size_bytes: int) -> None:
+    def __init__(
+        self,
+        model: nn.Module,
+        buffer_size_bytes: int,
+        release_watermark_bytes: int,
+    ) -> None:
         self.group = get_tp_group()
         self.device = next(model.parameters()).device
         if self.device.type != "cuda":
@@ -483,7 +488,47 @@ class _RoCEWeightSender:
         self.staged_bytes = 0
         self.max_frame_bytes = 0
         self.max_write_bytes = 0
+        self.release_watermark_bytes = release_watermark_bytes
+        self.pending_release_bytes = 0
+        self.max_pending_release_bytes = 0
+        self.release_count = 0
+        self.released_reserved_bytes = 0
         self.control_state = "receiver_control"
+
+    def _release_completed(self, *, force: bool = False) -> None:
+        """Drain queued sends and return completed recipe storage to CUDA.
+
+        The fixed staging tensor bounds each transport frame, but rank-1
+        recipes can still materialize a complete CUDA payload before it is
+        framed.  PyNccl and the staging copies use the current stream, so a
+        periodic stream drain makes those payloads reclaimable without
+        serializing every tensor or frame.
+        """
+        if self.pending_release_bytes == 0:
+            return
+        if (
+            not force
+            and self.pending_release_bytes < self.release_watermark_bytes
+        ):
+            return
+        torch.cuda.current_stream(self.device).synchronize()
+        reserved_before = int(torch.cuda.memory_reserved(self.device))
+        torch.cuda.empty_cache()
+        reserved_after = int(torch.cuda.memory_reserved(self.device))
+        self.release_count += 1
+        self.released_reserved_bytes += max(0, reserved_before - reserved_after)
+        logger.info(
+            "RoCE TP sender reclaim: count=%d pending_bytes=%d "
+            "watermark_bytes=%d reserved_before_bytes=%d "
+            "reserved_after_bytes=%d released_reserved_total_bytes=%d",
+            self.release_count,
+            self.pending_release_bytes,
+            self.release_watermark_bytes,
+            reserved_before,
+            reserved_after,
+            self.released_reserved_bytes,
+        )
+        self.pending_release_bytes = 0
 
     def _validate_payload(
         self,
@@ -569,15 +614,30 @@ class _RoCEWeightSender:
         specifications: list[dict[str, Any]],
     ) -> None:
         for position, spec in enumerate(specifications):
+            payload_bytes = int(spec["nbytes"])
+            if (
+                self.pending_release_bytes
+                and self.pending_release_bytes + payload_bytes
+                > self.release_watermark_bytes
+            ):
+                self._release_completed(force=True)
             payload = self._validate_payload(
                 _evaluate_expression(spec["expression"], source), spec
             )
-            self._send_payload(
-                payload,
-                bool(spec.get("direct", False)),
-                position,
+            try:
+                self._send_payload(
+                    payload,
+                    bool(spec.get("direct", False)),
+                    position,
+                )
+            finally:
+                del payload
+            self.pending_release_bytes += payload_bytes
+            self.max_pending_release_bytes = max(
+                self.max_pending_release_bytes,
+                self.pending_release_bytes,
             )
-            del payload
+            self._release_completed()
 
     def abort(self, error: BaseException) -> None:
         """Bring rank 1 back to the control plane, then report rank-0 failure."""
@@ -640,6 +700,7 @@ class _RoCEWeightSender:
             self.control_state = "receiver_control"
             self.tensor_count += 1
 
+        self._release_completed(force=True)
         self.group.send_object(("end", self.source_bytes), dst=_RECEIVER_RANK)
         self.control_state = "ended"
 
@@ -824,6 +885,7 @@ class RoCETPModelLoader(DefaultModelLoader):
             "enable_multithread_load",
             "enable_weights_track",
             "num_threads",
+            "release_watermark_mb",
             "source_load_format",
         }
         unexpected_keys = set(extra_config) - allowed_keys
@@ -843,6 +905,19 @@ class RoCETPModelLoader(DefaultModelLoader):
                 f"buffer_size_mb must be a positive integer, got {buffer_size_mb!r}"
             )
         self.buffer_size_bytes = buffer_size_mb * 1024 * 1024
+
+        release_watermark_mb = extra_config.get("release_watermark_mb", 1024)
+        if (
+            isinstance(release_watermark_mb, bool)
+            or not isinstance(release_watermark_mb, int)
+            or release_watermark_mb < buffer_size_mb
+        ):
+            raise ValueError(
+                "release_watermark_mb must be an integer greater than or equal "
+                f"to buffer_size_mb ({buffer_size_mb}), got "
+                f"{release_watermark_mb!r}"
+            )
+        self.release_watermark_bytes = release_watermark_mb * 1024 * 1024
 
         self.source_load_format = str(
             extra_config.get("source_load_format", "auto")
@@ -939,7 +1014,8 @@ class RoCETPModelLoader(DefaultModelLoader):
         role = "reader" if tp_rank == _READER_RANK else "receiver"
         logger.info(
             "DSPARK_WEIGHT_LOAD mode=roce_tp event=start run=%s pid=%d id=%d "
-            "rank=%d role=%s phase=%s buffer_bytes=%d protocol=%d transport=%s",
+            "rank=%d role=%s phase=%s buffer_bytes=%d "
+            "release_watermark_bytes=%d protocol=%d transport=%s",
             _LOAD_RUN_ID,
             os.getpid(),
             load_id,
@@ -947,6 +1023,7 @@ class RoCETPModelLoader(DefaultModelLoader):
             role,
             phase,
             self.buffer_size_bytes,
+            self.release_watermark_bytes,
             _PROTOCOL_VERSION,
             transport_mode,
         )
@@ -959,7 +1036,11 @@ class RoCETPModelLoader(DefaultModelLoader):
             )
             sender: _RoCEWeightSender | None = None
             try:
-                sender = _RoCEWeightSender(model, self.buffer_size_bytes)
+                sender = _RoCEWeightSender(
+                    model,
+                    self.buffer_size_bytes,
+                    self.release_watermark_bytes,
+                )
                 loaded_weights = model.load_weights(
                     sender.iter_weights(self.get_all_weights(model_config, model))
                 )
@@ -997,6 +1078,9 @@ class RoCETPModelLoader(DefaultModelLoader):
             staged_bytes = sender.staged_bytes
             max_frame_bytes = sender.max_frame_bytes
             max_write_bytes = sender.max_write_bytes
+            release_count = sender.release_count
+            max_pending_release_bytes = sender.max_pending_release_bytes
+            released_reserved_bytes = sender.released_reserved_bytes
         else:
             logger.info_once(
                 "RoCE TP loader enabled: rank 1 will not open checkpoint payload files"
@@ -1035,6 +1119,9 @@ class RoCETPModelLoader(DefaultModelLoader):
             staged_bytes = receiver.staged_bytes
             max_frame_bytes = receiver.max_frame_bytes
             max_write_bytes = receiver.max_write_bytes
+            release_count = 0
+            max_pending_release_bytes = 0
+            released_reserved_bytes = 0
 
         default_enable_weights_track = (
             model_config.quantization is None and loaded_weights is not None
@@ -1045,9 +1132,9 @@ class RoCETPModelLoader(DefaultModelLoader):
             else default_enable_weights_track
         )
 
-        # PyNccl enqueue, staging-buffer reuse, and destination copies share
-        # the current CUDA stream. Synchronize once per model phase so the
-        # timer covers actual RAM residency without serializing each frame.
+        # Periodic sender drains bound temporary recipe lifetime. Keep this
+        # final synchronization on both ranks so the timer covers actual RAM
+        # residency, including destination copies after the last payload.
         try:
             if enable_weights_track:
                 self.track_weights_loading(model, loaded_weights)
@@ -1070,7 +1157,9 @@ class RoCETPModelLoader(DefaultModelLoader):
             "DSPARK_WEIGHT_LOAD mode=roce_tp event=complete run=%s pid=%d id=%d "
             "rank=%d role=%s phase=%s tensors=%d batches=%d "
             "source_bytes=%d traffic_bytes=%d direct_bytes=%d staged_bytes=%d "
-            "max_frame_bytes=%d max_write_bytes=%d elapsed_s=%.6f",
+            "max_frame_bytes=%d max_write_bytes=%d releases=%d "
+            "max_pending_release_bytes=%d released_reserved_bytes=%d "
+            "elapsed_s=%.6f",
             _LOAD_RUN_ID,
             os.getpid(),
             load_id,
@@ -1085,6 +1174,9 @@ class RoCETPModelLoader(DefaultModelLoader):
             staged_bytes,
             max_frame_bytes,
             max_write_bytes,
+            release_count,
+            max_pending_release_bytes,
+            released_reserved_bytes,
             elapsed,
         )
         logger.info(

@@ -30,11 +30,17 @@ other non-weight metadata required to construct the model.
 - `DSPARK_ROCE_LOAD_BUFFER_MB` controls the hard transport-frame and scratch
   bound. Shape-changing writes larger than one frame fail explicitly instead
   of falling back to an unbounded allocation.
+- `DSPARK_ROCE_RELEASE_WATERMARK_MB` bounds completed rank-1 payload queued on
+  rank 0 before it synchronizes the PyNccl stream and returns unused recipe
+  allocations to CUDA. The default is 1024 MiB and it must be at least the
+  transport-frame size.
 - The bound applies to transport scratch. A model-specific recipe such as a
   padding `cat` or dtype conversion can still materialize its one complete
-  logical write on rank 0 before that write is chunked. Writes are processed
-  and released one at a time; `max_write_bytes` makes this distinct from the
-  fixed-frame bound in diagnostics.
+  logical write on rank 0 before that write is chunked. Evaluation remains
+  one-write-at-a-time, and completed CUDA work is drained at the release
+  watermark. Peak temporary residency is therefore the largest logical
+  recipe plus the release window and one transport frame; `max_write_bytes`,
+  `max_pending_release_bytes`, and the sender-drain count expose those bounds.
 - B12X and other
   `process_weights_after_loading` transformations still execute locally after
   the raw checkpoint writes have arrived.
@@ -87,6 +93,7 @@ Set the following values in both `config/head.env` and `config/worker.env`:
 DSPARK_VLLM_IMAGE=dspark-vllm-gx10:dev-<12-char-commit>
 DSPARK_WEIGHT_LOAD_FORMAT=roce_tp
 DSPARK_ROCE_LOAD_BUFFER_MB=64
+DSPARK_ROCE_RELEASE_WATERMARK_MB=1024
 ```
 
 Start the worker first through the existing cluster launcher. Successful

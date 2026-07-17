@@ -56,7 +56,7 @@ class LoadSamplerDiagnosticsTest(unittest.TestCase):
         parsed = LoadSampler()._parse(
             "INFO DSPARK_WEIGHT_LOAD mode=roce_tp event=start pid=41 id=0 "
             "rank=1 role=receiver phase=Target buffer_bytes=67108864 "
-            "protocol=2 transport=pynccl\n"
+            "release_watermark_bytes=1073741824 protocol=2 transport=pynccl\n"
             "INFO DSPARK_WEIGHT_LOAD mode=roce_tp event=complete pid=41 id=0 "
             "rank=1 role=receiver phase=Target tensors=120 batches=8 "
             "source_bytes=17179869184 traffic_bytes=8589934592 "
@@ -91,9 +91,31 @@ class LoadSamplerDiagnosticsTest(unittest.TestCase):
         self.assertEqual(diagnostic["batches"], 10)
         self.assertEqual(diagnostic["elapsedSeconds"], 12.75)
         self.assertEqual(diagnostic["bufferBytes"], 64 * 1024**2)
+        self.assertEqual(diagnostic["releaseWatermarkBytes"], 1024**3)
         self.assertAlmostEqual(
             diagnostic["throughputBytesPerSecond"], 9 * 1024**3 / 12.75
         )
+
+    def test_roce_reader_reclaim_diagnostics_are_parsed(self) -> None:
+        diagnostic = LoadSampler._parse_weight_load(
+            "DSPARK_WEIGHT_LOAD mode=roce_tp event=start run=a pid=41 id=0 "
+            "rank=0 role=reader phase=Target buffer_bytes=67108864 "
+            "release_watermark_bytes=1073741824 protocol=2 transport=pynccl\n"
+            "DSPARK_WEIGHT_LOAD mode=roce_tp event=complete run=a pid=41 id=0 "
+            "rank=0 role=reader phase=Target tensors=120 batches=80 "
+            "source_bytes=17179869184 traffic_bytes=8589934592 "
+            "direct_bytes=7516192768 staged_bytes=1073741824 "
+            "max_frame_bytes=67108864 max_write_bytes=2147483648 "
+            "releases=8 max_pending_release_bytes=2147483648 "
+            "released_reserved_bytes=32212254720 elapsed_s=70.0\n"
+        )
+
+        self.assertIsNotNone(diagnostic)
+        assert diagnostic is not None
+        self.assertEqual(diagnostic["releaseCount"], 8)
+        self.assertEqual(diagnostic["releaseWatermarkBytes"], 1024**3)
+        self.assertEqual(diagnostic["maxPendingReleaseBytes"], 2 * 1024**3)
+        self.assertEqual(diagnostic["releasedReservedBytes"], 30 * 1024**3)
 
     def test_roce_failure_is_exposed_without_log_message_injection(self) -> None:
         parsed = LoadSampler()._parse(
@@ -280,6 +302,43 @@ class LoadSamplerDiagnosticsTest(unittest.TestCase):
         self.assertEqual(summary["trafficBytes"], 1000)
         self.assertAlmostEqual(summary["throughputBytesPerSecond"], 1000 / 45.0)
         self.assertTrue(summary["ranksAgree"])
+
+    def test_summary_uses_reader_reclaim_and_receiver_traffic(self) -> None:
+        head = {
+            "mode": "roce_tp",
+            "state": "complete",
+            "rank": 0,
+            "role": "reader",
+            "phaseCount": 2,
+            "elapsedSeconds": 44.0,
+            "sourceBytes": 2000,
+            "trafficBytes": 1000,
+            "tensors": 20,
+            "batches": 4,
+            "releaseCount": 9,
+            "releaseWatermarkBytes": 1024**3,
+            "maxPendingReleaseBytes": 2 * 1024**3,
+            "releasedReservedBytes": 30 * 1024**3,
+        }
+        worker = dict(
+            head,
+            rank=1,
+            role="receiver",
+            elapsedSeconds=45.0,
+            releaseCount=0,
+            maxPendingReleaseBytes=0,
+            releasedReservedBytes=0,
+        )
+
+        summary = LoadSampler._summarize(
+            {HEAD_NODE_LABEL: _node(head), WORKER_NODE_LABEL: _node(worker)}
+        )
+
+        self.assertEqual(summary["trafficBytes"], 1000)
+        self.assertEqual(summary["releaseCount"], 9)
+        self.assertEqual(summary["releaseWatermarkBytes"], 1024**3)
+        self.assertEqual(summary["maxPendingReleaseBytes"], 2 * 1024**3)
+        self.assertEqual(summary["releasedReservedBytes"], 30 * 1024**3)
 
     def test_summary_sums_each_phases_slowest_rank(self) -> None:
         head = {

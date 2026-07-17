@@ -428,6 +428,20 @@ class LoadSampler:
                 (int(phase.get("maxWriteBytes", 0)) for phase in completed),
                 default=0,
             )
+            diagnostic["releaseCount"] = sum(
+                int(phase.get("releaseCount", 0)) for phase in completed
+            )
+            diagnostic["maxPendingReleaseBytes"] = max(
+                (
+                    int(phase.get("maxPendingReleaseBytes", 0))
+                    for phase in completed
+                ),
+                default=0,
+            )
+            diagnostic["releasedReservedBytes"] = sum(
+                int(phase.get("releasedReservedBytes", 0))
+                for phase in completed
+            )
             if source > 0:
                 diagnostic["payloadRatio"] = traffic / source
             else:
@@ -467,6 +481,7 @@ class LoadSampler:
         rank: int | None = None
         role: str | None = None
         buffer_bytes: int | None = None
+        release_watermark_bytes: int | None = None
         protocol: int | None = None
         transport: str | None = None
         for event in events:
@@ -486,6 +501,8 @@ class LoadSampler:
             role = event.get("role", role)
             if event.get("buffer_bytes", "").isdigit():
                 buffer_bytes = int(event["buffer_bytes"])
+            if event.get("release_watermark_bytes", "").isdigit():
+                release_watermark_bytes = int(event["release_watermark_bytes"])
             if event.get("protocol", "").isdigit():
                 protocol = int(event["protocol"])
             transport = event.get("transport", transport)
@@ -498,6 +515,9 @@ class LoadSampler:
                 ("staged_bytes", "stagedBytes"),
                 ("max_frame_bytes", "maxFrameBytes"),
                 ("max_write_bytes", "maxWriteBytes"),
+                ("releases", "releaseCount"),
+                ("max_pending_release_bytes", "maxPendingReleaseBytes"),
+                ("released_reserved_bytes", "releasedReservedBytes"),
             ):
                 if event.get(source_key, "").isdigit():
                     phase[result_key] = int(event[source_key])
@@ -525,6 +545,8 @@ class LoadSampler:
         }
         if buffer_bytes is not None:
             diagnostic["bufferBytes"] = buffer_bytes
+        if release_watermark_bytes is not None:
+            diagnostic["releaseWatermarkBytes"] = release_watermark_bytes
         if protocol is not None:
             diagnostic["protocol"] = protocol
         if transport is not None:
@@ -601,7 +623,12 @@ class LoadSampler:
                 phases[str(phase.get("id"))] = dict(phase)
         merged = dict(current)
         merged["phases"] = list(phases.values())
-        for key in ("bufferBytes", "runId", "processId"):
+        for key in (
+            "bufferBytes",
+            "releaseWatermarkBytes",
+            "runId",
+            "processId",
+        ):
             if merged.get(key) is None and previous.get(key) is not None:
                 merged[key] = previous[key]
         return cls._rollup_weight_load(merged)
@@ -837,6 +864,18 @@ class LoadSampler:
             ):
                 if receiver.get(key) is not None:
                     result[key] = receiver[key]
+            reader = next(
+                (item for _, item in diagnostics if item.get("role") == "reader"),
+                diagnostics[0][1],
+            )
+            for key in (
+                "releaseCount",
+                "releaseWatermarkBytes",
+                "maxPendingReleaseBytes",
+                "releasedReservedBytes",
+            ):
+                if reader.get(key) is not None:
+                    result[key] = reader[key]
             traffic = result.get("trafficBytes")
             critical = result.get("criticalElapsedSeconds")
             if (

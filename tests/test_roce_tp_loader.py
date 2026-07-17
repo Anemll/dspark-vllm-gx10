@@ -20,6 +20,7 @@ from vllm.model_executor.model_loader.roce_tp_loader import (
     _evaluate_expression,
     _negotiate_protocol,
     _shape_after_index,
+    RoCETPModelLoader,
     TimedDefaultModelLoader,
 )
 
@@ -97,13 +98,194 @@ def test_sender_reports_source_bytes_in_end_message() -> None:
     sender.source_bytes = 0
     sender.tensor_count = 0
     sender._send_writes = lambda source, specifications: None
+    release_calls: list[dict[str, bool]] = []
+    sender._release_completed = lambda **kwargs: release_calls.append(kwargs)
     source = torch.empty((3, 5), dtype=torch.float32)
 
     yielded = list(sender.iter_weights([("weight", source)]))
 
     assert yielded == [("weight", source)]
     assert sender.source_bytes == source.numel() * source.element_size()
+    assert release_calls == [{"force": True}]
     assert group.sent[-1] == (("end", sender.source_bytes), 1)
+
+
+def test_sender_release_synchronizes_before_empty_cache(monkeypatch) -> None:
+    events: list[str] = []
+    reserved = iter((4096, 1024))
+
+    class _FakeStream:
+        def synchronize(self) -> None:
+            events.append("synchronize")
+
+    sender = _RoCEWeightSender.__new__(_RoCEWeightSender)
+    sender.device = torch.device("cpu")
+    sender.release_watermark_bytes = 1024
+    sender.pending_release_bytes = 1024
+    sender.release_count = 0
+    sender.released_reserved_bytes = 0
+    monkeypatch.setattr(
+        torch.cuda,
+        "current_stream",
+        lambda device=None: _FakeStream(),
+    )
+    monkeypatch.setattr(
+        torch.cuda,
+        "memory_reserved",
+        lambda device=None: events.append("reserved") or next(reserved),
+    )
+    monkeypatch.setattr(
+        torch.cuda,
+        "empty_cache",
+        lambda: events.append("empty_cache"),
+    )
+
+    sender._release_completed()
+
+    assert events == ["synchronize", "reserved", "empty_cache", "reserved"]
+    assert sender.pending_release_bytes == 0
+    assert sender.release_count == 1
+    assert sender.released_reserved_bytes == 3072
+
+
+def test_sender_release_watermark_drains_before_and_after_payload() -> None:
+    sender = _RoCEWeightSender.__new__(_RoCEWeightSender)
+    sender.pending_release_bytes = 900
+    sender.release_watermark_bytes = 1024
+    sender.max_pending_release_bytes = 900
+    events: list[tuple] = []
+
+    def release(*, force: bool = False) -> None:
+        events.append(("release", force, sender.pending_release_bytes))
+        if force or sender.pending_release_bytes >= sender.release_watermark_bytes:
+            sender.pending_release_bytes = 0
+
+    sender._release_completed = release
+    sender._send_payload = lambda payload, direct, position: events.append(
+        ("send", payload.numel() * payload.element_size(), direct, position)
+    )
+    first = torch.arange(50, dtype=torch.float32)
+    second = torch.arange(512, dtype=torch.float32)
+
+    sender._send_writes(
+        first,
+        [
+            {
+                "expression": ("input",),
+                "shape": tuple(first.shape),
+                "dtype": "float32",
+                "nbytes": first.numel() * first.element_size(),
+                "direct": True,
+            }
+        ],
+    )
+    sender._send_writes(
+        second,
+        [
+            {
+                "expression": ("input",),
+                "shape": tuple(second.shape),
+                "dtype": "float32",
+                "nbytes": second.numel() * second.element_size(),
+                "direct": False,
+            }
+        ],
+    )
+
+    assert events == [
+        ("release", True, 900),
+        ("send", 200, True, 0),
+        ("release", False, 200),
+        ("release", True, 200),
+        ("send", 2048, False, 0),
+        ("release", False, 2048),
+    ]
+    assert sender.pending_release_bytes == 0
+    assert sender.max_pending_release_bytes == 2048
+
+
+def test_sender_release_watermark_drains_at_exact_threshold() -> None:
+    sender = _RoCEWeightSender.__new__(_RoCEWeightSender)
+    sender.pending_release_bytes = 0
+    sender.release_watermark_bytes = 16
+    sender.max_pending_release_bytes = 0
+    events: list[tuple] = []
+
+    def release(*, force: bool = False) -> None:
+        events.append(("release", force, sender.pending_release_bytes))
+        if force or sender.pending_release_bytes >= sender.release_watermark_bytes:
+            sender.pending_release_bytes = 0
+
+    sender._release_completed = release
+    sender._send_payload = lambda payload, direct, position: events.append(
+        ("send", payload.numel() * payload.element_size())
+    )
+    source = torch.arange(4, dtype=torch.float32)
+
+    sender._send_writes(
+        source,
+        [
+            {
+                "expression": ("input",),
+                "shape": tuple(source.shape),
+                "dtype": "float32",
+                "nbytes": 16,
+            }
+        ],
+    )
+
+    assert events == [("send", 16), ("release", False, 16)]
+    assert sender.pending_release_bytes == 0
+
+
+def test_sender_failed_send_does_not_advance_or_drain_watermark() -> None:
+    sender = _RoCEWeightSender.__new__(_RoCEWeightSender)
+    sender.pending_release_bytes = 100
+    sender.release_watermark_bytes = 1024
+    sender.max_pending_release_bytes = 100
+    releases: list[bool] = []
+    sender._release_completed = lambda *, force=False: releases.append(force)
+
+    def fail_send(payload, direct, position) -> None:
+        del payload, direct, position
+        raise RuntimeError("synthetic transport failure")
+
+    sender._send_payload = fail_send
+    source = torch.arange(4, dtype=torch.float32)
+
+    with pytest.raises(RuntimeError, match="synthetic transport failure"):
+        sender._send_writes(
+            source,
+            [
+                {
+                    "expression": ("input",),
+                    "shape": tuple(source.shape),
+                    "dtype": "float32",
+                    "nbytes": 16,
+                }
+            ],
+        )
+
+    assert releases == []
+    assert sender.pending_release_bytes == 100
+    assert sender.max_pending_release_bytes == 100
+
+
+def test_release_watermark_config_must_cover_transport_frame(monkeypatch) -> None:
+    monkeypatch.setattr(
+        roce_loader.BaseModelLoader,
+        "__init__",
+        lambda self, load_config: setattr(self, "load_config", load_config),
+    )
+    load_config = SimpleNamespace(
+        model_loader_extra_config={
+            "buffer_size_mb": 64,
+            "release_watermark_mb": 32,
+        }
+    )
+
+    with pytest.raises(ValueError, match="greater than or equal"):
+        RoCETPModelLoader(load_config)
 
 
 def test_chunk_schedule_preserves_order_and_hard_bound() -> None:

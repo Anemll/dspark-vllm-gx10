@@ -69,6 +69,7 @@ services:
       # behavior where both TP ranks read checkpoint payloads locally.
       DSPARK_WEIGHT_LOAD_FORMAT: "${DSPARK_WEIGHT_LOAD_FORMAT:-auto}"
       DSPARK_ROCE_LOAD_BUFFER_MB: "${DSPARK_ROCE_LOAD_BUFFER_MB:-64}"
+      DSPARK_ROCE_RELEASE_WATERMARK_MB: "${DSPARK_ROCE_RELEASE_WATERMARK_MB:-1024}"
 
       TORCH_CUDA_ARCH_LIST: "${TORCH_CUDA_ARCH_LIST:-12.1a}"
       FLASHINFER_CUDA_ARCH_LIST: "${FLASHINFER_CUDA_ARCH_LIST:-12.1a}"
@@ -112,7 +113,7 @@ services:
         export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$${LD_LIBRARY_PATH:-}";
         MODEL_LOADER_EXTRA_CONFIG='{}';
         if [[ "$${DSPARK_WEIGHT_LOAD_FORMAT:-auto}" == "roce_tp" ]]; then
-          MODEL_LOADER_EXTRA_CONFIG="{\"buffer_size_mb\":$${DSPARK_ROCE_LOAD_BUFFER_MB:-64}}";
+          MODEL_LOADER_EXTRA_CONFIG="{\"buffer_size_mb\":$${DSPARK_ROCE_LOAD_BUFFER_MB:-64},\"release_watermark_mb\":$${DSPARK_ROCE_RELEASE_WATERMARK_MB:-1024}}";
         fi;
         SPECULATIVE_CONFIG="{\"method\":\"dspark\",\"num_speculative_tokens\":${MTP_NUM_TOKENS:-3},\"draft_sample_method\":\"probabilistic\"}";
         exec /usr/local/bin/vllm serve ${DSPARK_MODEL:-/models/dsv4-abliterated}
