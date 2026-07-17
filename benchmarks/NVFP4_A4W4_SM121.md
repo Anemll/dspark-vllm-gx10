@@ -131,6 +131,13 @@ The JSON records the selector's returned path as backend proof. W4A16 reports
 its fused native path; its internal small-M/direct choice remains an internal
 kernel decision.
 
+For the exact TP=2, E=256, K=4,096, I/rank=1,024, top-k=6, Mmax=8,192 contract, the
+harness also walks the W4A4 wrapper's static workspace, dynamic workspace, and
+output tensor, deduplicates views by underlying storage, and fails if their
+combined unique storage exceeds 635,144,040 bytes. This is the one-arena
+ceiling; the 43-layer sharing regression is separately enforced by the overlay
+unit test and must still be confirmed by full-model allocator telemetry.
+
 Use `--routing random` after the balanced baseline to sample realistic route
 imbalance, and `--routing hot` only as a skew stress case. Keep route mode and
 seed identical for comparisons. `--l2-flush-mib N` touches a buffer before

@@ -10,6 +10,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import dataclass
+from types import SimpleNamespace
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -93,6 +95,71 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertFalse(nonfinite["passed"])
         self.assertAlmostEqual(passing["maximum_relative_error"], 0.001)
         json.dumps(nonfinite, allow_nan=False)
+
+    def test_workspace_storage_summary_deduplicates_tensor_views(self) -> None:
+        class _Storage:
+            def __init__(self, pointer: int, size: int) -> None:
+                self.pointer = pointer
+                self.size = size
+
+            def data_ptr(self) -> int:
+                return self.pointer
+
+            def nbytes(self) -> int:
+                return self.size
+
+        class _Tensor:
+            def __init__(self, storage: _Storage) -> None:
+                self.storage = storage
+                self.device = "cuda:0"
+
+            def untyped_storage(self) -> _Storage:
+                return self.storage
+
+        @dataclass
+        class _Workspace:
+            original: _Tensor
+            view: _Tensor
+            independent: _Tensor
+
+        shared_storage = _Storage(100, 64)
+        workspace = _Workspace(
+            original=_Tensor(shared_storage),
+            view=_Tensor(shared_storage),
+            independent=_Tensor(_Storage(200, 32)),
+        )
+
+        summary = bench.summarize_unique_tensor_storage(
+            SimpleNamespace(is_tensor=lambda value: isinstance(value, _Tensor)),
+            (workspace,),
+        )
+
+        self.assertEqual(summary["tensor_object_count"], 3)
+        self.assertEqual(summary["unique_storage_count"], 2)
+        self.assertEqual(summary["unique_storage_bytes"], 96)
+
+    def test_workspace_ceiling_requires_exact_tp2_geometry(self) -> None:
+        breakdown = bench.calculate_dsv4_tp2_m8192_workspace_bytes()
+        self.assertEqual(breakdown["static_workspace_bytes"], 378_803_724)
+        self.assertEqual(breakdown["dynamic_workspace_bytes"], 189_231_452)
+        self.assertEqual(breakdown["output_bytes"], 67_108_864)
+        self.assertEqual(
+            breakdown["total_bytes"],
+            bench.DSV4_TP2_M8192_B12X_WRAPPER_CEILING_BYTES,
+        )
+        self.assertEqual(
+            bench.b12x_workspace_ceiling_bytes(bench.Dsv4Shape(), 8192),
+            bench.DSV4_TP2_M8192_B12X_WRAPPER_CEILING_BYTES,
+        )
+        self.assertIsNone(
+            bench.b12x_workspace_ceiling_bytes(
+                bench.Dsv4Shape(intermediate_size=1024, tp_size=1),
+                8192,
+            )
+        )
+        self.assertIsNone(
+            bench.b12x_workspace_ceiling_bytes(bench.Dsv4Shape(), 4096)
+        )
 
     def test_default_matrix_and_phase_boundary(self) -> None:
         self.assertEqual(bench.B12X_W13_LAYOUT, "w13")

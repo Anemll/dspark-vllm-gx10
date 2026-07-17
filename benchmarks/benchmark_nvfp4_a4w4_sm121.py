@@ -41,6 +41,7 @@ from typing import Any
 
 SCHEMA_VERSION = 1
 INPUT_RMS_RELATIVE_TOLERANCE = 0.01
+DSV4_TP2_M8192_B12X_WRAPPER_CEILING_BYTES = 635_144_040
 B12X_W13_LAYOUT = "w13"
 DEFAULT_M_VALUES = (
     1,
@@ -92,6 +93,60 @@ class Dsv4Shape:
             raise ValueError(
                 "SM121 W4A4 requires per-rank intermediate size divisible by 128"
             )
+
+
+def calculate_dsv4_tp2_m8192_workspace_bytes() -> dict[str, int]:
+    """Reproduce the pinned B12X workspace allocation geometry in pure Python."""
+
+    experts = 256
+    hidden = 4096
+    intermediate_per_rank = 1024
+    top_k = 6
+    max_tokens = 8192
+    tile_m = tile_n = 128
+    static_cutover_rows = 640
+    scale_cols = ((hidden // 16 + 3) // 4) * 4
+    routed_rows = max_tokens * top_k
+
+    static_rows = min(routed_rows, static_cutover_rows)
+    static_rows_padded = ((static_rows + tile_m - 1) // tile_m) * tile_m
+    static = (
+        experts * 4  # row_counts
+        + experts * static_rows * 4  # token_map
+        + experts * static_rows * 4  # token_weights
+        + experts * static_rows * (hidden // 2)  # packed_input
+        + experts * static_rows_padded * scale_cols  # packed_input_scale
+        + 3 * 4  # barrier_count, barrier_epoch, active_expert_count
+        + experts * 4  # weight_expert_ids
+        + experts * 4  # global_to_local_expert
+        + max(experts, static_rows) * 4  # compact_topk_ids
+    )
+
+    base_tiles = (routed_rows + tile_m - 1) // tile_m
+    physical_tiles = base_tiles + min(experts, routed_rows) - 1
+    dynamic_rows = physical_tiles * tile_m
+    gate_tiles = (intermediate_per_rank + tile_n - 1) // tile_n
+    max_tasks = physical_tiles * gate_tiles
+    dynamic = (
+        experts * 4  # row_counts
+        + dynamic_rows * 4  # token_map
+        + dynamic_rows * 4  # token_weights
+        + dynamic_rows * (hidden // 2)  # packed_input
+        + dynamic_rows * scale_cols  # packed_input_scale
+        + 2 * 4  # barrier_count, barrier_epoch
+        + experts * 4  # expert_write_rows
+        + (experts + 1) * 4  # expert_tile_base
+        + 5 * 4  # pair/producers/published/task head/task tail
+        + 6 * max_tasks * 4  # task queue arrays
+        + physical_tiles * 4  # tile_write_count
+    )
+    output = max_tokens * hidden * 2  # BF16 wrapper output
+    return {
+        "static_workspace_bytes": static,
+        "dynamic_workspace_bytes": dynamic,
+        "output_bytes": output,
+        "total_bytes": static + dynamic + output,
+    }
 
 
 @dataclasses.dataclass
@@ -303,6 +358,68 @@ def evaluate_input_rms_contract(
             and maximum_relative_error <= relative_tolerance
         ),
     }
+
+
+def summarize_unique_tensor_storage(
+    torch: Any,
+    roots: Sequence[Any],
+) -> dict[str, int]:
+    """Count tensor storages once, even when a workspace contains views."""
+
+    stack = list(roots)
+    visited_objects: set[int] = set()
+    unique_storages: dict[tuple[str, int, int], int] = {}
+    tensor_object_count = 0
+    while stack:
+        value = stack.pop()
+        if value is None:
+            continue
+        object_id = id(value)
+        if object_id in visited_objects:
+            continue
+        visited_objects.add(object_id)
+        if torch.is_tensor(value):
+            tensor_object_count += 1
+            storage = value.untyped_storage()
+            storage_bytes = int(storage.nbytes())
+            storage_key = (
+                str(value.device),
+                int(storage.data_ptr()),
+                storage_bytes,
+            )
+            unique_storages[storage_key] = storage_bytes
+        elif dataclasses.is_dataclass(value) and not isinstance(value, type):
+            stack.extend(
+                getattr(value, field.name) for field in dataclasses.fields(value)
+            )
+        elif isinstance(value, dict):
+            stack.extend(value.values())
+        elif isinstance(value, (list, tuple, set, frozenset)):
+            stack.extend(value)
+    return {
+        "tensor_object_count": tensor_object_count,
+        "unique_storage_count": len(unique_storages),
+        "unique_storage_bytes": sum(unique_storages.values()),
+    }
+
+
+def b12x_workspace_ceiling_bytes(
+    shape: Dsv4Shape,
+    max_num_tokens: int,
+) -> int | None:
+    """Return the reviewed ceiling only for the exact DSV4 TP=2 geometry."""
+
+    if (
+        shape.tp_size == 2
+        and shape.hidden_size == 4096
+        and shape.intermediate_size == 2048
+        and shape.intermediate_size_per_rank == 1024
+        and shape.num_experts == 256
+        and shape.top_k == 6
+        and max_num_tokens == 8192
+    ):
+        return DSV4_TP2_M8192_B12X_WRAPPER_CEILING_BYTES
+    return None
 
 
 def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dict[str, Any]:
@@ -860,6 +977,36 @@ def _make_w4a4_runner(
         quant_mode="nvfp4",
         source_format="modelopt",
     )
+    required_roots_present = all(
+        root is not None
+        for root in (
+            wrapper._static_workspace,
+            wrapper._dynamic_workspace,
+            wrapper._moe_output,
+        )
+    )
+    workspace_memory: dict[str, Any] = summarize_unique_tensor_storage(
+        torch,
+        (
+            wrapper._static_workspace,
+            wrapper._dynamic_workspace,
+            wrapper._moe_output,
+        ),
+    )
+    workspace_ceiling = b12x_workspace_ceiling_bytes(shape, max(args.m))
+    contract_applies = workspace_ceiling is not None
+    workspace_passed = None
+    if workspace_ceiling is not None:
+        workspace_passed = bool(
+            required_roots_present
+            and workspace_memory["unique_storage_bytes"] <= workspace_ceiling
+        )
+    workspace_memory |= {
+        "contract_applies": contract_applies,
+        "required_roots_present": required_roots_present,
+        "ceiling_bytes": workspace_ceiling,
+        "passed": workspace_passed,
+    }
     proof = {
         "requested": "w4a4",
         "implementation": f"{wrapper.__class__.__module__}.{wrapper.__class__.__qualname__}",
@@ -872,6 +1019,7 @@ def _make_w4a4_runner(
         "source_format": wrapper.source_format,
         "static_workspace": type(wrapper._static_workspace).__name__,
         "dynamic_workspace": type(wrapper._dynamic_workspace).__name__,
+        "workspace_memory": workspace_memory,
     }
     return wrapper, proof
 
@@ -1074,6 +1222,18 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
         "results": [],
         "failures": [],
     }
+    if "w4a4" in backend_proof:
+        workspace_memory = backend_proof["w4a4"]["workspace_memory"]
+        if (
+            workspace_memory["contract_applies"]
+            and not workspace_memory["passed"]
+        ):
+            report["failures"].append(
+                {
+                    "kind": "workspace_memory",
+                    "contract": workspace_memory,
+                }
+            )
 
     for m in args.m:
         x, topk_ids, topk_weights = make_routes(

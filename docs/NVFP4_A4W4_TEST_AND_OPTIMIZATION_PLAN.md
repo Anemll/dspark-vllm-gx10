@@ -63,7 +63,7 @@ single-layer result is never an end-to-end serving result.
   - W4A4: FlashInfer B12X, FP4 weights and FP4 activations.
   - W4A16: B12X native ModelOpt path, the same FP4 weights and BF16
     activations.
-- The pinned graph-enabled B12X wrapper reserves 635,143,016 bytes at the
+- The pinned graph-enabled B12X wrapper reserves 635,144,040 bytes at the
   TP=2, M=8,192 target shape (static workspace, dynamic workspace, and BF16
   output). Constructing one wrapper for every target layer would reserve about
   25.44 GiB per rank outside vLLM's planner. The overlay therefore shares one
@@ -518,7 +518,7 @@ layers 43-45 on native MXFP4. Run:
 Gate: all three draft stages load, output is sane, tool calls and streaming are
 well formed, DSpark acceptance is nonzero and stable, and no mixed-quant
 dispatch or clamp error occurs. The first full-model profile must show only one
-B12X arena allocation across the 43 target layers, at most 635,143,016 unique
+B12X arena allocation across the 43 target layers, at most 635,144,040 unique
 internal tensor bytes for M=8,192, and no allocator growth across repeated
 full forwards. Compare eager and captured outputs at M=1, 128, and 8,192 and
 require the same numerical envelope as the kernel gate.
@@ -677,7 +677,7 @@ hypothesis before moving to the next layer.
 | Priority | Work item | First experiment | Promotion condition |
 |---|---|---|---|
 | P0 | Archive real SM121 balanced K matrix for both TP slices. | Phase 1.3 unchanged defaults. | Correctness/graphs pass and tactic proof is present. |
-| P0 | Prove one shared B12X arena in the full model. | M=1/128/8,192 eager/captured profile with allocator counters. | One wrapper, <=635,143,016 unique bytes, parity passes, no repeated-forward growth. |
+| P0 | Prove one shared B12X arena in the full model. | M=1/128/8,192 eager/captured profile with allocator counters. | One wrapper, <=635,144,040 unique bytes, parity passes, no repeated-forward growth. |
 | P0 | Boot target-only T through `roce_tp`. | Minimal API smoke, no speculation. | Both ranks ready; rank 1 opens no payloads; output sane. |
 | P0 | Boot hybrid H with mixed quant dispatch. | Same settings as T plus three-stage DSpark. | Three stages load; acceptance and quality smoke pass. |
 | P1 | Confirm large-M prefill advantage. | Balanced then random M=128-8,192. | Repeatable material gain with stable p95. |
