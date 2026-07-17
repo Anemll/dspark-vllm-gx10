@@ -817,7 +817,12 @@ class LoadSampler:
                 if mode == "roce_tp":
                     ranks_agree = ranks_agree and all(
                         complete[0].get(key) == complete[1].get(key)
-                        for key in ("protocol", "transport", "bufferBytes")
+                        for key in (
+                            "protocol",
+                            "transport",
+                            "bufferBytes",
+                            "releaseWatermarkBytes",
+                        )
                     )
                 result["ranksAgree"] = ranks_agree
             else:
@@ -834,6 +839,7 @@ class LoadSampler:
                             "protocol",
                             "transport",
                             "bufferBytes",
+                            "releaseWatermarkBytes",
                             "tensors",
                             "batches",
                         ]

@@ -98,16 +98,15 @@ class LoadSamplerDiagnosticsTest(unittest.TestCase):
 
     def test_roce_reader_reclaim_diagnostics_are_parsed(self) -> None:
         diagnostic = LoadSampler._parse_weight_load(
-            "DSPARK_WEIGHT_LOAD mode=roce_tp event=start run=a pid=41 id=0 "
-            "rank=0 role=reader phase=Target buffer_bytes=67108864 "
-            "release_watermark_bytes=1073741824 protocol=2 transport=pynccl\n"
             "DSPARK_WEIGHT_LOAD mode=roce_tp event=complete run=a pid=41 id=0 "
             "rank=0 role=reader phase=Target tensors=120 batches=80 "
             "source_bytes=17179869184 traffic_bytes=8589934592 "
             "direct_bytes=7516192768 staged_bytes=1073741824 "
             "max_frame_bytes=67108864 max_write_bytes=2147483648 "
             "releases=8 max_pending_release_bytes=2147483648 "
-            "released_reserved_bytes=32212254720 elapsed_s=70.0\n"
+            "released_reserved_bytes=32212254720 buffer_bytes=67108864 "
+            "release_watermark_bytes=1073741824 protocol=2 "
+            "transport=pynccl elapsed_s=70.0\n"
         )
 
         self.assertIsNotNone(diagnostic)

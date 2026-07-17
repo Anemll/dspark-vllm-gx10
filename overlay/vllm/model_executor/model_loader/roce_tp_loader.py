@@ -1159,7 +1159,8 @@ class RoCETPModelLoader(DefaultModelLoader):
             "source_bytes=%d traffic_bytes=%d direct_bytes=%d staged_bytes=%d "
             "max_frame_bytes=%d max_write_bytes=%d releases=%d "
             "max_pending_release_bytes=%d released_reserved_bytes=%d "
-            "elapsed_s=%.6f",
+            "buffer_bytes=%d release_watermark_bytes=%d protocol=%d "
+            "transport=%s elapsed_s=%.6f",
             _LOAD_RUN_ID,
             os.getpid(),
             load_id,
@@ -1177,6 +1178,10 @@ class RoCETPModelLoader(DefaultModelLoader):
             release_count,
             max_pending_release_bytes,
             released_reserved_bytes,
+            self.buffer_size_bytes,
+            self.release_watermark_bytes,
+            _PROTOCOL_VERSION,
+            transport_mode,
             elapsed,
         )
         logger.info(
