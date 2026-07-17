@@ -37,6 +37,7 @@ PORT = int(os.environ.get("DASHBOARD_PORT", "11001"))
 POLL_CACHE_SECONDS = float(os.environ.get("DASHBOARD_POLL_CACHE_SECONDS", "0.45"))
 HARDWARE_CACHE_SECONDS = float(os.environ.get("DASHBOARD_HARDWARE_CACHE_SECONDS", "2"))
 LOAD_CACHE_SECONDS = 2.0
+LOAD_LOG_TAIL = int(os.environ.get("DASHBOARD_LOAD_LOG_TAIL", "160"))
 VERSION_CACHE_SECONDS = 10.0
 HEAD_NODE_LABEL = os.environ.get("DASHBOARD_HEAD_LABEL", "SPARK-head")
 WORKER_NODE_LABEL = os.environ.get("DASHBOARD_WORKER_LABEL", "SPARK-worker")
@@ -350,58 +351,552 @@ class VersionSampler:
 VERSION_SAMPLER = VersionSampler()
 
 class LoadSampler:
-    """Reads vLLM startup state from each container's recent log lines."""
-    _shards = re.compile(r"Loading safetensors checkpoint shards:\s*(\d+)% Completed \| (\d+)/(\d+)")
+    """Read startup state and weight-ingress diagnostics from container logs."""
+
+    _shards = re.compile(
+        r"Loading safetensors checkpoint shards:\s*(\d+)% Completed \| (\d+)/(\d+)"
+    )
+    _direct_load = re.compile(r"Loading weights took ([0-9]+(?:\.[0-9]+)?) seconds")
+    _diagnostic_line = re.compile(r"DSPARK_WEIGHT_LOAD\s+([^\r\n]+)")
+    _draft_markers = ("Loading drafter model", "DSpark draft model loaded")
+
     def __init__(self) -> None:
-        self._latest: dict[str, Any] | None = None; self._at = 0.0; self._lock = threading.Lock()
+        self._latest: dict[str, Any] | None = None
+        self._weight_load_latest: dict[str, dict[str, Any]] = {}
+        self._completed_by_mode: dict[str, dict[str, Any]] = {}
+        self._at = 0.0
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _fields(raw: str) -> dict[str, str]:
+        fields: dict[str, str] = {}
+        for item in raw.split():
+            if "=" in item:
+                key, value = item.split("=", 1)
+                fields[key] = value
+        return fields
+
+    @staticmethod
+    def _rollup_weight_load(diagnostic: dict[str, Any]) -> dict[str, Any]:
+        phases = diagnostic.get("phases", [])
+        completed = [phase for phase in phases if phase.get("state") == "complete"]
+        failed = [phase for phase in phases if phase.get("state") == "failed"]
+        active = [phase for phase in phases if phase.get("state") == "start"]
+        numeric_ids = sorted(
+            int(phase["id"])
+            for phase in phases
+            if isinstance(phase.get("id"), int)
+        )
+        phase_sequence_complete = bool(numeric_ids) and numeric_ids == list(
+            range(numeric_ids[-1] + 1)
+        )
+        diagnostic["phaseSequenceComplete"] = phase_sequence_complete
+        diagnostic["state"] = (
+            "failed"
+            if failed
+            else "loading"
+            if active
+            else "complete"
+            if phase_sequence_complete
+            else "partial"
+        )
+        diagnostic["phaseCount"] = len(completed)
+        elapsed = sum(float(phase.get("elapsedSeconds", 0.0)) for phase in completed)
+        diagnostic["elapsedSeconds"] = round(elapsed, 6)
+        if diagnostic.get("mode") == "roce_tp":
+            source = sum(int(phase.get("sourceBytes", 0)) for phase in completed)
+            traffic = sum(int(phase.get("trafficBytes", 0)) for phase in completed)
+            diagnostic["sourceBytes"] = source
+            diagnostic["trafficBytes"] = traffic
+            diagnostic["tensors"] = sum(
+                int(phase.get("tensors", 0)) for phase in completed
+            )
+            diagnostic["batches"] = sum(
+                int(phase.get("batches", 0)) for phase in completed
+            )
+            if source > 0:
+                diagnostic["payloadRatio"] = traffic / source
+            else:
+                diagnostic.pop("payloadRatio", None)
+            if elapsed > 0 and traffic > 0:
+                diagnostic["throughputBytesPerSecond"] = traffic / elapsed
+            else:
+                diagnostic.pop("throughputBytesPerSecond", None)
+        if failed:
+            diagnostic["error"] = failed[-1].get("error", "weight load failed")
+        else:
+            diagnostic.pop("error", None)
+        return diagnostic
+
+    @classmethod
+    def _parse_structured_weight_load(cls, text: str) -> dict[str, Any] | None:
+        events = [
+            cls._fields(match.group(1))
+            for match in cls._diagnostic_line.finditer(text)
+        ]
+        events = [
+            event for event in events if event.get("mode") in {"direct", "roce_tp"}
+        ]
+        if not events:
+            return None
+
+        mode = events[-1]["mode"]
+        events = [event for event in events if event.get("mode") == mode]
+        run_id = events[-1].get("run")
+        if run_id:
+            events = [event for event in events if event.get("run") == run_id]
+        process_id = events[-1].get("pid")
+        if process_id:
+            events = [event for event in events if event.get("pid") == process_id]
+
+        phases: dict[str, dict[str, Any]] = {}
+        rank: int | None = None
+        role: str | None = None
+        buffer_bytes: int | None = None
+        for event in events:
+            load_id = event.get("id", "0")
+            phase = phases.setdefault(
+                load_id,
+                {
+                    "id": int(load_id) if load_id.isdigit() else load_id,
+                    "name": event.get("phase", "model"),
+                    "state": "start",
+                },
+            )
+            phase["name"] = event.get("phase", phase["name"])
+            phase["state"] = event.get("event", phase["state"])
+            if event.get("rank", "").isdigit():
+                rank = int(event["rank"])
+            role = event.get("role", role)
+            if event.get("buffer_bytes", "").isdigit():
+                buffer_bytes = int(event["buffer_bytes"])
+            for source_key, result_key in (
+                ("tensors", "tensors"),
+                ("batches", "batches"),
+                ("source_bytes", "sourceBytes"),
+                ("traffic_bytes", "trafficBytes"),
+            ):
+                if event.get(source_key, "").isdigit():
+                    phase[result_key] = int(event[source_key])
+            try:
+                if "elapsed_s" in event:
+                    phase["elapsedSeconds"] = float(event["elapsed_s"])
+            except ValueError:
+                pass
+            if "error_type" in event:
+                phase["error"] = event["error_type"]
+
+        diagnostic: dict[str, Any] = {
+            "mode": mode,
+            "runId": run_id,
+            "processId": (
+                int(process_id)
+                if process_id and process_id.isdigit()
+                else process_id
+            ),
+            "rank": rank,
+            "role": role,
+            "phases": list(phases.values()),
+            "timingComparable": True,
+            "timerKind": "synchronized_ram",
+        }
+        if buffer_bytes is not None:
+            diagnostic["bufferBytes"] = buffer_bytes
+        return cls._rollup_weight_load(diagnostic)
+
+    @classmethod
+    def _parse_weight_load(cls, text: str) -> dict[str, Any] | None:
+        structured = cls._parse_structured_weight_load(text)
+        if structured:
+            return structured
+        matches = list(cls._direct_load.finditer(text))
+        if not matches:
+            return None
+        phases: list[dict[str, Any]] = []
+        for index, match in enumerate(matches):
+            after_drafter_start = any(
+                text.rfind(marker, 0, match.start()) >= 0
+                for marker in cls._draft_markers
+            )
+            phase_id = 1 if after_drafter_start else index
+            phase_name = (
+                "target"
+                if phase_id == 0
+                else "drafter"
+                if phase_id == 1
+                else f"model-{phase_id + 1}"
+            )
+            phases.append(
+                {
+                    "id": phase_id,
+                    "name": phase_name,
+                    "state": "complete",
+                    "elapsedSeconds": float(match.group(1)),
+                }
+            )
+        diagnostic = {
+            "mode": "direct",
+            "role": "local_reader",
+            "phases": phases,
+            "timingComparable": False,
+            "timerKind": "vllm_reported",
+        }
+        return cls._rollup_weight_load(diagnostic)
+
+    @classmethod
+    def _merge_weight_load(
+        cls, previous: dict[str, Any], current: dict[str, Any]
+    ) -> dict[str, Any]:
+        if previous.get("mode") != current.get("mode"):
+            return current
+        if current.get("runId") or previous.get("runId"):
+            if previous.get("runId") != current.get("runId"):
+                return current
+            if previous.get("processId") != current.get("processId"):
+                return current
+        elif current.get("mode") == "roce_tp" and previous.get(
+            "processId"
+        ) != current.get("processId"):
+            return current
+
+        current_ids = {str(phase.get("id")) for phase in current.get("phases", [])}
+        if (
+            current.get("mode") == "direct"
+            and current.get("timingComparable") is False
+            and current_ids == {"0"}
+            and int(previous.get("phaseCount", 0)) > 1
+        ):
+            return current
+
+        phases: dict[str, dict[str, Any]] = {}
+        for diagnostic in (previous, current):
+            for phase in diagnostic.get("phases", []):
+                phases[str(phase.get("id"))] = dict(phase)
+        merged = dict(current)
+        merged["phases"] = list(phases.values())
+        for key in ("bufferBytes", "runId", "processId"):
+            if merged.get(key) is None and previous.get(key) is not None:
+                merged[key] = previous[key]
+        return cls._rollup_weight_load(merged)
+
     def _parse(self, text: str) -> dict[str, Any]:
-        match = list(self._shards.finditer(text))
+        shard_matches = list(self._shards.finditer(text))
+        weight_load = self._parse_weight_load(text)
+        result: dict[str, Any]
         if "SafetensorError" in text or "Engine core initialization failed" in text:
-            return {"state": "failed", "detail": text.splitlines()[-1]}
-        if "Uvicorn running" in text or "Application startup complete" in text:
-            return {"state": "ready"}
-        if "Kernel JIT monitor activated" in text or "Graph capturing finished" in text:
-            return {"state": "active_tp_rank_1"}
-        if text.count("Loading weights took") >= 2:
-            return {"state": "initializing"}
-        if "Loading drafter model" in text:
-            return {"state": "drafter"}
-        if "Loading weights took" in text:
-            return {"state": "target_loaded"}
-        if match:
-            pct, done, total = match[-1].groups()
-            return {"state": "target_weights", "percent": int(pct), "done": int(done), "total": int(total)}
-        if "Filesystem type for checkpoints" in text:
-            return {"state": "target_weights"}
-        if "Starting to load model" in text: return {"state": "initializing"}
-        return {"state": "waiting"}
+            result = {"state": "failed", "detail": text.splitlines()[-1]}
+        elif "Uvicorn running" in text or "Application startup complete" in text:
+            result = {"state": "ready"}
+        elif "Kernel JIT monitor activated" in text or "Graph capturing finished" in text:
+            result = {"state": "active_tp_rank_1"}
+        elif text.count("Loading weights took") >= 2:
+            result = {"state": "initializing"}
+        elif any(marker in text for marker in self._draft_markers):
+            result = {"state": "drafter"}
+        elif "Loading weights took" in text:
+            result = {"state": "target_loaded"}
+        elif shard_matches:
+            pct, done, total = shard_matches[-1].groups()
+            result = {
+                "state": "target_weights",
+                "percent": int(pct),
+                "done": int(done),
+                "total": int(total),
+            }
+        elif "Filesystem type for checkpoints" in text:
+            result = {"state": "target_weights"}
+        elif "Starting to load model" in text:
+            result = {"state": "initializing"}
+        else:
+            result = {"state": "waiting"}
+        if weight_load:
+            result["weightLoad"] = weight_load
+        elif result["state"] == "failed":
+            result["weightLoad"] = {
+                "mode": "unknown",
+                "state": "failed",
+                "error": "engine initialization failed",
+                "timingComparable": False,
+            }
+        return result
+
+    @staticmethod
+    def _mark_ready(nodes: dict[str, Any]) -> dict[str, Any]:
+        ready: dict[str, Any] = {}
+        for label, rank in ((HEAD_NODE_LABEL, 0), (WORKER_NODE_LABEL, 1)):
+            record = dict(nodes.get(label, {}))
+            record.update({"state": "ready", "detail": f"TP rank {rank} · serving"})
+            ready[label] = record
+        return ready
+
+    @staticmethod
+    def _summarize(nodes: dict[str, Any]) -> dict[str, Any]:
+        diagnostics = [
+            (label, node["weightLoad"])
+            for label, node in nodes.items()
+            if isinstance(node.get("weightLoad"), dict)
+        ]
+        if not diagnostics:
+            return {"mode": "unknown", "state": "waiting", "nodes": {}}
+
+        modes = {item.get("mode", "unknown") for _, item in diagnostics}
+        if len(modes) != 1:
+            return {
+                "mode": "mixed",
+                "state": "inconsistent",
+                "nodes": {
+                    label: {
+                        "mode": item.get("mode"),
+                        "rank": item.get("rank"),
+                        "state": item.get("state"),
+                    }
+                    for label, item in diagnostics
+                },
+            }
+
+        mode = modes.pop()
+        states = {item.get("state") for _, item in diagnostics}
+        ranks = {item.get("rank") for _, item in diagnostics}
+        state = (
+            "failed"
+            if "failed" in states
+            else "loading"
+            if "loading" in states
+            else "partial"
+            if "partial" in states or len(diagnostics) < 2 or ranks != {0, 1}
+            else "complete"
+        )
+        keys = (
+            "rank",
+            "runId",
+            "role",
+            "state",
+            "phaseCount",
+            "elapsedSeconds",
+            "sourceBytes",
+            "trafficBytes",
+            "tensors",
+            "batches",
+            "throughputBytesPerSecond",
+            "payloadRatio",
+            "timingComparable",
+            "timerKind",
+            "phaseSequenceComplete",
+            "error",
+        )
+        node_summary = {
+            label: {key: item[key] for key in keys if item.get(key) is not None}
+            for label, item in diagnostics
+        }
+        elapsed_values = [
+            float(item["elapsedSeconds"])
+            for _, item in diagnostics
+            if item.get("elapsedSeconds") is not None
+        ]
+        phase_elapsed: dict[str, list[float]] = {}
+        for _, item in diagnostics:
+            for phase in item.get("phases", []):
+                if (
+                    phase.get("state") == "complete"
+                    and isinstance(phase.get("elapsedSeconds"), (int, float))
+                ):
+                    phase_elapsed.setdefault(str(phase.get("id")), []).append(
+                        float(phase["elapsedSeconds"])
+                    )
+        critical_elapsed = (
+            sum(max(values) for values in phase_elapsed.values())
+            if phase_elapsed
+            else max(elapsed_values)
+            if elapsed_values
+            else None
+        )
+        result: dict[str, Any] = {
+            "mode": mode,
+            "state": state,
+            "nodes": node_summary,
+            "criticalElapsedSeconds": critical_elapsed,
+            "phaseCount": max(
+                (int(item.get("phaseCount", 0)) for _, item in diagnostics),
+                default=0,
+            ),
+            "timingComparable": all(
+                item.get("timingComparable") is True for _, item in diagnostics
+            ),
+        }
+        complete = [
+            item for _, item in diagnostics if item.get("state") == "complete"
+        ]
+        if len(complete) == 2:
+            phase_maps = [
+                {str(phase.get("id")): phase for phase in item.get("phases", [])}
+                for item in complete
+            ]
+            if phase_maps[0] or phase_maps[1]:
+                ranks_agree = phase_maps[0].keys() == phase_maps[1].keys()
+                for phase_id in phase_maps[0].keys() & phase_maps[1].keys():
+                    left = phase_maps[0][phase_id]
+                    right = phase_maps[1][phase_id]
+                    ranks_agree = ranks_agree and (
+                        left.get("name") == right.get("name")
+                    )
+                    if mode == "roce_tp":
+                        ranks_agree = ranks_agree and all(
+                            left.get(key) == right.get(key)
+                            for key in (
+                                "sourceBytes",
+                                "trafficBytes",
+                                "tensors",
+                                "batches",
+                            )
+                        )
+                result["ranksAgree"] = ranks_agree
+            else:
+                agreement_keys = ["phaseCount"]
+                if mode == "roce_tp":
+                    agreement_keys.extend(
+                        ["sourceBytes", "trafficBytes", "tensors", "batches"]
+                    )
+                result["ranksAgree"] = all(
+                    complete[0].get(key) == complete[1].get(key)
+                    for key in agreement_keys
+                )
+        if mode == "roce_tp":
+            receiver = next(
+                (item for _, item in diagnostics if item.get("role") == "receiver"),
+                diagnostics[-1][1],
+            )
+            for key in (
+                "sourceBytes",
+                "trafficBytes",
+                "tensors",
+                "batches",
+                "throughputBytesPerSecond",
+                "payloadRatio",
+            ):
+                if receiver.get(key) is not None:
+                    result[key] = receiver[key]
+            traffic = result.get("trafficBytes")
+            critical = result.get("criticalElapsedSeconds")
+            if (
+                isinstance(traffic, (int, float))
+                and isinstance(critical, (int, float))
+                and traffic > 0
+                and critical > 0
+            ):
+                result["throughputBytesPerSecond"] = traffic / critical
+        errors = [item.get("error") for _, item in diagnostics if item.get("error")]
+        if errors:
+            result["error"] = errors[-1]
+        return result
+
+    def weight_summary(
+        self, nodes: dict[str, Any], *, api_ready: bool = False
+    ) -> dict[str, Any]:
+        with self._lock:
+            current = self._summarize(nodes)
+            mode = current.get("mode")
+            if (
+                api_ready
+                and mode in {"direct", "roce_tp"}
+                and current.get("state") == "complete"
+                and current.get("timingComparable") is True
+                and current.get("ranksAgree") is True
+            ):
+                self._completed_by_mode[str(mode)] = {
+                    key: value
+                    for key, value in current.items()
+                    if key not in {"nodes", "observed"}
+                }
+            current["observed"] = dict(self._completed_by_mode)
+            direct = self._completed_by_mode.get("direct")
+            roce = self._completed_by_mode.get("roce_tp")
+            if direct and roce:
+                direct_time = direct.get("criticalElapsedSeconds")
+                roce_time = roce.get("criticalElapsedSeconds")
+                if (
+                    isinstance(direct_time, (int, float))
+                    and isinstance(roce_time, (int, float))
+                    and roce_time > 0
+                ):
+                    current["directVsRoceSpeedup"] = direct_time / roce_time
+                    current["directVsRoceSavedSeconds"] = direct_time - roce_time
+            return current
+
     def snapshot(self, api_ready: bool = False) -> dict[str, Any]:
         with self._lock:
             if self._latest and time.monotonic() - self._at < LOAD_CACHE_SECONDS:
-                if not api_ready or all(node.get("state") == "ready" for node in self._latest.values()):
+                if not api_ready or all(
+                    node.get("state") == "ready" for node in self._latest.values()
+                ):
                     return self._latest
-            local = ["sudo", "-n", "/usr/bin/docker", "logs", "--tail", "160", CONTAINER_NAME]
+            local = [
+                "sudo",
+                "-n",
+                "/usr/bin/docker",
+                "logs",
+                "--tail",
+                str(LOAD_LOG_TAIL),
+                CONTAINER_NAME,
+            ]
             commands = {HEAD_NODE_LABEL: local}
             if WORKER_SSH:
-                commands[WORKER_NODE_LABEL] = [*_worker_ssh_prefix(), WORKER_SSH, *local]
-            def read(cmd: list[str]) -> str:
+                commands[WORKER_NODE_LABEL] = [
+                    *_worker_ssh_prefix(),
+                    WORKER_SSH,
+                    *local,
+                ]
+
+            def read(cmd: list[str]) -> tuple[bool, str]:
                 try:
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-                    return result.stdout + result.stderr
-                except Exception: return ""
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=5
+                    )
+                    return result.returncode == 0, result.stdout + result.stderr
+                except Exception:
+                    return False, ""
+
             with ThreadPoolExecutor(max_workers=len(commands)) as pool:
-                futures = {label: pool.submit(read, command) for label, command in commands.items()}
-                self._latest = {label: self._parse(future.result()) for label, future in futures.items()}
-            self._latest.setdefault(WORKER_NODE_LABEL, {"state": "unavailable"})
-            # A live metrics endpoint means EngineCore is serving with both TP
-            # ranks. Headless rank 1 never emits the API server's final ready
-            # line, and old ready lines eventually roll out of the log tail.
-            if api_ready:
-                self._latest = {
-                    HEAD_NODE_LABEL: {"state": "ready", "detail": "TP rank 0 · serving"},
-                    WORKER_NODE_LABEL: {"state": "ready", "detail": "TP rank 1 · serving"},
+                futures = {
+                    label: pool.submit(read, command)
+                    for label, command in commands.items()
                 }
-            self._at = time.monotonic(); return self._latest
+                outputs = {
+                    label: future.result() for label, future in futures.items()
+                }
+            parsed = {
+                label: self._parse(text)
+                if successful
+                else {"state": "unavailable", "detail": "container log unavailable"}
+                for label, (successful, text) in outputs.items()
+            }
+            parsed.setdefault(WORKER_NODE_LABEL, {"state": "unavailable"})
+            for label, rank in ((HEAD_NODE_LABEL, 0), (WORKER_NODE_LABEL, 1)):
+                diagnostic = parsed[label].get("weightLoad")
+                if isinstance(diagnostic, dict):
+                    diagnostic.setdefault("rank", rank)
+                    if label in self._weight_load_latest:
+                        diagnostic = self._merge_weight_load(
+                            self._weight_load_latest[label], diagnostic
+                        )
+                        parsed[label]["weightLoad"] = diagnostic
+                    self._weight_load_latest[label] = diagnostic
+                elif parsed[label].get("state") in {
+                    "initializing",
+                    "target_weights",
+                    "drafter",
+                }:
+                    self._weight_load_latest.pop(label, None)
+                elif (
+                    outputs.get(label, (False, ""))[0]
+                    and label in self._weight_load_latest
+                ):
+                    parsed[label]["weightLoad"] = self._weight_load_latest[label]
+
+            # API readiness implies both TP ranks serve, but it must not erase
+            # startup diagnostics collected from the headless worker.
+            self._latest = self._mark_ready(parsed) if api_ready else parsed
+            self._at = time.monotonic()
+            return self._latest
 
 LOAD_SAMPLER = LoadSampler()
 
@@ -452,6 +947,7 @@ class MetricsSampler:
             try:
                 current, scrape_ms = self._fetch()
             except Exception:
+                load = LOAD_SAMPLER.snapshot(api_ready=False)
                 unavailable = dict(self._latest or {})
                 unavailable.update(
                     {
@@ -459,7 +955,12 @@ class MetricsSampler:
                         "message": "vLLM metrics are temporarily unavailable",
                         "sampledAt": datetime.now(UTC).isoformat(),
                         "history": list(self._history),
-                        "load": LOAD_SAMPLER.snapshot(api_ready=False),
+                        "headNodeLabel": HEAD_NODE_LABEL,
+                        "workerNodeLabel": WORKER_NODE_LABEL,
+                        "load": load,
+                        "weightLoad": LOAD_SAMPLER.weight_summary(
+                            load, api_ready=False
+                        ),
                         "vllmVersion": VERSION_SAMPLER.snapshot(),
                     }
                 )
@@ -524,6 +1025,8 @@ class MetricsSampler:
                 "counterReset": counter_reset,
                 "model": current["model"],
                 "vllmVersion": VERSION_SAMPLER.snapshot(),
+                "headNodeLabel": HEAD_NODE_LABEL,
+                "workerNodeLabel": WORKER_NODE_LABEL,
                 "generationTps": generated_tps,
                 "prefillTps": prefill_tps,
                 "dsparkAcceptancePct": dspark_acceptance,
@@ -541,6 +1044,7 @@ class MetricsSampler:
                 "e2eMs": None if e2e_seconds is None else e2e_seconds * 1000.0,
                 "hardware": hardware,
                 "load": load,
+                "weightLoad": LOAD_SAMPLER.weight_summary(load, api_ready=True),
                 "history": list(self._history),
             }
             self._previous = (current, now)

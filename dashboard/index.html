@@ -97,7 +97,7 @@
       footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 16px; color: #708895; font-size: 10px; }
       code { color: #b9d4df; font-family: inherit; }
 
-      @media (max-width: 920px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.bottom-grid, .hardware-panel { grid-template-columns: 1fr; }.topbar { flex-direction: column; }.top-meta { justify-content: start; }.hero-side { text-align: left; } }
+      @media (max-width: 920px) { .metric-grid, .hardware-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.bottom-grid, .hardware-panel { grid-template-columns: 1fr; }.topbar { flex-direction: column; }.top-meta { justify-content: start; }.hero-side { text-align: left; } }
       @media (max-width: 560px) { .shell { width: min(100% - 20px, 1460px); padding-top: 16px; }.hero { grid-template-columns: 1fr; padding: 21px; }.metric-grid { grid-template-columns: 1fr 1fr; gap: 9px; }.card { min-height: 120px; padding: 14px; }.card .detail { left: 14px; bottom: 13px; }.hardware-panel { padding: 16px; }.hardware-grid { grid-template-columns: 1fr; }.chart-panel { padding: 16px; }.chart-wrap { height: 220px; }.big-rate strong { font-size: 62px; } }
     </style>
   </head>
@@ -107,7 +107,7 @@
         <div>
           <div class="eyebrow">vLLM <span id="vllmVersion">detecting…</span> · TP=2 · NVFP4 DS MLA</div>
           <h1>DSpark Live Monitor</h1>
-          <div class="subline"><span id="modelName">Connecting to vLLM…</span> · <code>GX10-30c1:8888</code></div>
+          <div class="subline"><span id="modelName">Connecting to vLLM…</span> · <code id="endpointLabel">head:8888</code></div>
         </div>
         <div class="top-meta">
           <span class="chip" id="refreshChip">refreshing…</span>
@@ -135,12 +135,26 @@
       </section>
 
       <section class="metric-grid">
-        <article class="card"><div class="metric-label">Model load · 30c1</div><div class="value cyan" id="headLoad">—</div><div class="detail" id="headLoadDetail">container log</div></article>
-        <article class="card"><div class="metric-label">Model load · 3fe8</div><div class="value blue" id="workerLoad">—</div><div class="detail" id="workerLoadDetail">container log</div></article>
+        <article class="card"><div class="metric-label" id="headLoadLabel">Model load · head</div><div class="value cyan" id="headLoad">—</div><div class="detail" id="headLoadDetail">container log</div></article>
+        <article class="card"><div class="metric-label" id="workerLoadLabel">Model load · worker</div><div class="value blue" id="workerLoad">—</div><div class="detail" id="workerLoadDetail">container log</div></article>
         <article class="card"><div class="metric-label">Requests</div><div class="value cyan" id="requests">—</div><div class="detail">running <span id="waiting">—</span> waiting</div></article>
         <article class="card"><div class="metric-label">KV cache</div><div class="value blue" id="kvCache">—</div><div class="detail">NVFP4 DS MLA cache utilization</div></article>
         <article class="card"><div class="metric-label">DSpark acceptance</div><div class="value yellow" id="acceptance">—</div><div class="detail">accepted DSpark drafts / proposed DSpark drafts</div></article>
         <article class="card"><div class="metric-label">Prefill rate</div><div class="value green" id="prefillTps">—</div><div class="detail">prompt tokens per second</div></article>
+      </section>
+
+      <section class="hardware-panel">
+        <div class="hardware-copy">
+          <div class="section-kicker">RAM weight ingress</div>
+          <div class="hardware-title">Direct disk vs RoCE</div>
+          <p id="weightStatus">Waiting for synchronized loader diagnostics…</p>
+        </div>
+        <div class="hardware-grid">
+          <article class="hardware-card"><div class="metric-label">Current path</div><div class="hardware-value cyan" id="weightMode">—</div><div class="hardware-detail" id="weightModeDetail">no completed load observed</div></article>
+          <article class="hardware-card"><div class="metric-label">Critical weight time</div><div class="hardware-value green" id="weightElapsed">—</div><div class="hardware-detail" id="weightElapsedDetail">per-phase slowest TP rank · target + drafter</div></article>
+          <article class="hardware-card"><div class="metric-label">Rank-1 payload traffic</div><div class="hardware-value blue" id="weightTraffic">—</div><div class="hardware-detail" id="weightTrafficDetail">application payload; excludes NCCL/link overhead</div></article>
+          <article class="hardware-card"><div class="metric-label">Observed direct / RoCE</div><div class="hardware-value yellow" id="weightCompare">—</div><div class="hardware-detail" id="weightCompareDetail">requires one ready two-rank run of each mode</div></article>
+        </div>
       </section>
 
       <section class="hardware-panel">
@@ -150,10 +164,10 @@
           <p id="hardwareStatus">Sampling both GB10 GPUs…</p>
         </div>
         <div class="hardware-grid">
-          <article class="hardware-card"><div class="metric-label">Peak GPU temperature</div><div class="hardware-value red" id="maxTemperature">—</div><div class="hardware-detail" id="temperatureDetail">GX10-30c1 — · GX10-3fe8 —</div></article>
+          <article class="hardware-card"><div class="metric-label">Peak GPU temperature</div><div class="hardware-value red" id="maxTemperature">—</div><div class="hardware-detail" id="temperatureDetail">head — · worker —</div></article>
           <article class="hardware-card"><div class="metric-label">XFlash NVMe temperature</div><div class="hardware-value green" id="xflashTemperature">—</div><div class="hardware-detail" id="xflashDetail">NVMe SMART composite temperature</div></article>
           <article class="hardware-card"><div class="metric-label">Combined GB10 power</div><div class="hardware-value yellow" id="combinedPower">—</div><div class="hardware-detail" id="powerDetail">GPU-board draw; not whole-system power</div></article>
-          <article class="hardware-card"><div class="metric-label">GPU compute</div><div class="hardware-node-grid"><div><span>GX10-30c1</span><b class="cyan" id="headCompute">—</b></div><div><span>GX10-3fe8</span><b class="cyan" id="workerCompute">—</b></div></div><div class="hardware-detail">GPU/SM active time · not memory use</div></article>
+          <article class="hardware-card"><div class="metric-label">GPU compute</div><div class="hardware-node-grid"><div><span id="headComputeLabel">head</span><b class="cyan" id="headCompute">—</b></div><div><span id="workerComputeLabel">worker</span><b class="cyan" id="workerCompute">—</b></div></div><div class="hardware-detail">GPU/SM active time · not memory use</div></article>
         </div>
       </section>
 
@@ -191,6 +205,64 @@
       const integer = (number) => number == null || !Number.isFinite(number) ? "—" : formatter.format(number);
       const latency = (number) => number == null || !Number.isFinite(number) ? "No new request" : number < 1 ? `${oneDecimal.format(number * 1000)} µs` : `${oneDecimal.format(number)} ms`;
       const nodeValue = (node, field, suffix) => node && node.available && Number.isFinite(node[field]) ? `${oneDecimal.format(node[field])}${suffix}` : "—";
+      const seconds = (number) => Number.isFinite(number) ? `${oneDecimal.format(number)} s` : "—";
+      const gibibytes = (number) => Number.isFinite(number) ? `${oneDecimal.format(number / (1024 ** 3))} GiB` : "—";
+
+      function renderWeightLoad(weight) {
+        weight = weight || {};
+        const mode = weight.mode || "unknown", state = weight.state || "waiting";
+        const modeName = mode === "roce_tp" ? "RoCE" : mode === "direct" ? "direct" : mode;
+        $("weightMode").textContent = modeName === "unknown" ? "—" : modeName;
+        $("weightElapsed").textContent = seconds(weight.criticalElapsedSeconds);
+        $("weightTraffic").textContent = mode === "roce_tp" ? gibibytes(weight.trafficBytes) : "—";
+
+        let status = `${modeName} · ${state}`;
+        let modeDetail = weight.timingComparable ? "synchronized RAM-resident boundary" : "not eligible for synchronized A/B";
+        if (state === "partial") {
+          status = `${modeName} diagnostics are partial`;
+          modeDetail = "only one TP rank reported; result is not benchmarked";
+        } else if (state === "inconsistent") {
+          status = "Mixed loader modes detected";
+          modeDetail = "head and worker must use the exact same image and load format";
+        } else if (weight.ranksAgree === false) {
+          status = `${modeName} rank diagnostics disagree`;
+          modeDetail = "phase or byte counters differ; result is not benchmarked";
+        } else if (state === "failed") {
+          status = `${modeName} weight load failed`;
+          modeDetail = weight.error || "inspect both container logs";
+        } else if (mode === "direct" && !weight.timingComparable) {
+          modeDetail = "vLLM-reported fallback; use direct_timed for a fair A/B";
+        }
+        $("weightStatus").textContent = status;
+        $("weightModeDetail").textContent = modeDetail;
+        $("weightElapsedDetail").textContent = Number.isFinite(weight.criticalElapsedSeconds)
+          ? `sum of each phase's slowest TP rank · ${integer(weight.phaseCount)} phase${weight.phaseCount === 1 ? "" : "s"}`
+          : "per-phase slowest TP rank · target + drafter";
+        if (mode === "roce_tp" && Number.isFinite(weight.trafficBytes)) {
+          const source = gibibytes(weight.sourceBytes);
+          const rate = Number.isFinite(weight.throughputBytesPerSecond) ? `${oneDecimal.format(weight.throughputBytesPerSecond / (1024 ** 3))} GiB/s effective` : "rate unavailable";
+          const ratio = Number.isFinite(weight.payloadRatio) ? `${oneDecimal.format(weight.payloadRatio * 100)}% of logical source bytes` : "source ratio unavailable";
+          $("weightTrafficDetail").textContent = `${source} logical source · ${ratio} · ${rate}`;
+        } else {
+          $("weightTrafficDetail").textContent = mode === "direct"
+            ? "local disk traffic is not inferred from logical tensor bytes"
+            : "application payload; excludes NCCL/link overhead";
+        }
+
+        const observed = weight.observed || {}, hasDirect = Boolean(observed.direct), hasRoce = Boolean(observed.roce_tp);
+        if (hasDirect && hasRoce && Number.isFinite(weight.directVsRoceSpeedup) && weight.directVsRoceSpeedup > 0) {
+          const speedup = weight.directVsRoceSpeedup;
+          $("weightCompare").textContent = speedup >= 1 ? `${oneDecimal.format(speedup)}× RoCE` : `${oneDecimal.format(1 / speedup)}× direct`;
+          const saved = weight.directVsRoceSavedSeconds;
+          $("weightCompareDetail").textContent = speedup >= 1
+            ? `RoCE faster by ${seconds(Math.abs(saved))}`
+            : `direct faster by ${seconds(Math.abs(saved))}`;
+        } else {
+          $("weightCompare").textContent = `${Number(hasDirect) + Number(hasRoce)} / 2`;
+          const present = [hasDirect ? "direct" : null, hasRoce ? "RoCE" : null].filter(Boolean).join(" + ");
+          $("weightCompareDetail").textContent = present ? `${present} ready sample observed; matched peer run still required` : "requires one ready two-rank run of each mode";
+        }
+      }
 
       function setHealth(ok, message) {
         const chip = $("healthChip");
@@ -202,8 +274,14 @@
       function render(data) {
         latest = data;
         const rate = data.generationTps;
+        const headLabel = data.headNodeLabel || "SPARK-head", workerLabel = data.workerNodeLabel || "SPARK-worker";
         $("modelName").textContent = data.model || "vLLM";
         $("vllmVersion").textContent = data.vllmVersion || "unavailable";
+        $("endpointLabel").textContent = `${headLabel}:8888`;
+        $("headLoadLabel").textContent = `Model load · ${headLabel}`;
+        $("workerLoadLabel").textContent = `Model load · ${workerLabel}`;
+        $("headComputeLabel").textContent = headLabel;
+        $("workerComputeLabel").textContent = workerLabel;
         $("generationTps").textContent = value(rate, "", "—");
         $("perRequest").textContent = data.running > 0 && rate != null ? `${oneDecimal.format(rate / data.running)} t/s` : "—";
         $("requests").textContent = integer(data.running);
@@ -223,22 +301,27 @@
         $("errors").textContent = integer(data.errors);
         const load = data.load || {}, showLoad = (node) => {
           if (!node) return ["—", "unavailable"];
-          if (node.state === "ready") return ["ready", node.detail || "model serving"];
+          const diagnostic = node.weightLoad || {};
+          const loadSuffix = diagnostic.mode
+            ? ` · ${diagnostic.mode === "roce_tp" ? "RoCE" : "direct"}${Number.isFinite(diagnostic.elapsedSeconds) ? ` ${seconds(diagnostic.elapsedSeconds)}` : ""}`
+            : "";
+          if (node.state === "ready") return ["ready", `${node.detail || "model serving"}${loadSuffix}`];
           if (node.state === "target_weights") return node.done == null ? ["active", "TP rank loading; vLLM hides shard count"] : [`${node.percent}%`, `${node.done}/${node.total} target shards`];
-          return [node.state.split("_").join(" "), node.detail || "container log"];
+          return [node.state.split("_").join(" "), `${node.detail || "container log"}${loadSuffix}`];
         };
-        let [headLoad, headDetail] = showLoad(load["GX10-30c1"]), [workerLoad, workerDetail] = showLoad(load["GX10-3fe8"]);
+        let [headLoad, headDetail] = showLoad(load[headLabel]), [workerLoad, workerDetail] = showLoad(load[workerLabel]);
         $("headLoad").textContent = headLoad; $("headLoadDetail").textContent = headDetail;
         $("workerLoad").textContent = workerLoad; $("workerLoadDetail").textContent = workerDetail;
+        renderWeightLoad(data.weightLoad);
         const hardware = data.hardware || {}, nodes = hardware.nodes || {};
-        const head = nodes["GX10-30c1"], worker = nodes["GX10-3fe8"];
+        const head = nodes[headLabel], worker = nodes[workerLabel];
         const xflash = hardware.xflash || {};
         $("maxTemperature").textContent = value(hardware.maxTemperatureC, "°C");
-        $("temperatureDetail").textContent = `30c1 ${nodeValue(head, "temperatureC", "°C")} · 3fe8 ${nodeValue(worker, "temperatureC", "°C")}`;
+        $("temperatureDetail").textContent = `${headLabel} ${nodeValue(head, "temperatureC", "°C")} · ${workerLabel} ${nodeValue(worker, "temperatureC", "°C")}`;
         $("xflashTemperature").textContent = xflash.available ? value(xflash.temperatureC, "°C") : "—";
         $("xflashDetail").textContent = xflash.available ? "XFlash NVMe SMART composite temperature" : "NVMe SMART unavailable";
         $("combinedPower").textContent = value(hardware.combinedGpuPowerW, " W");
-        $("powerDetail").textContent = `30c1 ${nodeValue(head, "powerW", " W")} · 3fe8 ${nodeValue(worker, "powerW", " W")} · GPU-board draw`;
+        $("powerDetail").textContent = `${headLabel} ${nodeValue(head, "powerW", " W")} · ${workerLabel} ${nodeValue(worker, "powerW", " W")} · GPU-board draw`;
         $("headCompute").textContent = nodeValue(head, "utilizationPct", "%");
         $("workerCompute").textContent = nodeValue(worker, "utilizationPct", "%");
         $("hardwareStatus").textContent = hardware.available ? `${hardware.reportedNodes}/${hardware.expectedNodes} GB10 GPUs reporting · XFlash ${xflash.available ? value(xflash.temperatureC, "°C") : "unavailable"} · combined GPU-board power, not wall power` : "Hardware telemetry temporarily unavailable";

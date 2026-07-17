@@ -33,19 +33,41 @@ post-processing can change the final representation.
 
 ## Build and enable
 
-Build a distinct image from the feature branch so the validated `0.1.1` image
-remains available:
+Build an immutable local candidate once on the head, based on the digest-pinned
+production image, so the validated `0.1.1` image remains preloaded for rollback:
 
 ```bash
-git switch wip/roce-ram-loader
-FINAL_IMAGE=ghcr.io/anemll/dspark-vllm-gx10:roce-ram-loader \
-  ./scripts/build-image.sh
+DEV_SHA='<full candidate commit>'
+git checkout --detach "$DEV_SHA"
+test "$(git rev-parse HEAD)" = "$DEV_SHA"
+test -z "$(git status --porcelain)"
+SHORT_SHA="$(git rev-parse --short=12 HEAD)"
+DEV_IMAGE="dspark-vllm-gx10:dev-$SHORT_SHA"
+PROD_REF='ghcr.io/anemll/dspark-vllm-gx10@sha256:a83948492cf13df455170fb42885f5ef4db54fefe0feff0f841ecbff464ac9d8'
+sudo docker build --network none \
+  --build-arg BASE_IMAGE="$PROD_REF" \
+  --build-arg SOURCE_REVISION="$DEV_SHA" \
+  --tag "$DEV_IMAGE" \
+  --file - . <<'DOCKERFILE'
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/
+DOCKERFILE
 ```
+
+Transfer that exact image over the dedicated fabric and verify the Docker image
+ID is identical on both nodes before launch. Do not build separately on the
+worker or publish an untested development image to GHCR. Save/compress the
+candidate on the head, copy its archive only over the fabric interface, load it
+on the worker, and compare `docker image inspect --format '{{.Id}}'` on both
+nodes. Keep the digest-pinned production image and its clean checkout intact.
 
 Set the following values in both `config/head.env` and `config/worker.env`:
 
 ```dotenv
-DSPARK_VLLM_IMAGE=ghcr.io/anemll/dspark-vllm-gx10:roce-ram-loader
+DSPARK_VLLM_IMAGE=dspark-vllm-gx10:dev-<12-char-commit>
 DSPARK_WEIGHT_LOAD_FORMAT=roce_tp
 DSPARK_ROCE_LOAD_BUFFER_MB=256
 ```
@@ -53,7 +75,40 @@ DSPARK_ROCE_LOAD_BUFFER_MB=256
 Start the worker first through the existing cluster launcher. Successful
 startup logs include `rank 0 is the sole checkpoint reader`, `rank 1 will not
 open checkpoint payload files`, the transferred GiB count, and the number of
-packed batches.
+packed batches. Each model phase also emits `DSPARK_WEIGHT_LOAD` start,
+complete, or failed records. A completion record is written only after the
+current CUDA stream is synchronized, so its elapsed time covers weights being
+resident in RAM rather than only the enqueue interval.
+
+The completion counters are exact within the loader's application boundary:
+
+- `source_bytes` is the logical size of checkpoint tensors consumed on rank 0,
+  not a physical-disk byte counter;
+- `traffic_bytes` is the tensor payload handed to NCCL for rank 1, excluding
+  NCCL/RoCE/Ethernet overhead;
+- `tensors` and `batches` count logical source tensors and packed sends.
+
+The dashboard sums the slower rank for each target/drafter phase as the
+cluster-critical elapsed time and labels payload/time as an effective
+application rate rather than wire throughput.
+
+## Matched direct/RoCE timing
+
+For the direct baseline, set `DSPARK_WEIGHT_LOAD_FORMAT=direct_timed` on both
+nodes. This selects the unchanged default checkpoint loader with the same outer
+timer and final CUDA-stream synchronization as `roce_tp`. Run `direct_timed`
+and `roce_tp` with the exact same model, image digest, vLLM settings, node
+roles, and declared cache policy. Start the worker first in both cases. The
+dashboard only compares samples that completed on both ranks and reached API
+readiness; ordinary `auto` timings remain visible but are not comparison
+eligible.
+
+Cache state can dominate a startup benchmark. Either declare a warm-cache
+comparison and warm both nodes consistently, or declare a cold-cache run and
+evict the relevant model pages on both nodes before each mode. Do not present a
+direct cold run against a RoCE warm run as a loader speedup. Rank-1 payload is
+expected to be near its resident weight size, not necessarily exactly half of
+the checkpoint.
 
 ## Guardrails
 
@@ -63,6 +118,11 @@ The loader fails early unless all of these are true:
 - pipeline parallel size is exactly 1;
 - model parameters are on CUDA and the TP NCCL communicator is initialized;
 - the underlying checkpoint format is `auto`, `hf`, `safetensors`, or `pt`.
+
+Use an external startup timeout and a complete head-then-worker stop barrier
+during testing. The startup control protocol uses blocking point-to-point
+operations; a process, storage, or transport failure can otherwise wait for the
+distributed runtime's own timeout before the peer is torn down.
 
 The loader deliberately does not use vLLM's RL weight-transfer engine. That
 engine is initialized only after startup model loading and broadcasts
@@ -75,8 +135,10 @@ original behavior while keeping the feature image. For a complete image
 rollback, also restore:
 
 ```dotenv
-DSPARK_VLLM_IMAGE=ghcr.io/anemll/dspark-vllm-gx10:0.1.1
+DSPARK_VLLM_IMAGE=dspark-vllm-gx10:prod-0.1.1
 ```
 
-No checkpoint files or formats are modified, so rollback requires no data
-conversion or cleanup.
+This local tag should already point at the verified digest-pinned `0.1.1`
+image on both nodes. No checkpoint files or formats are modified, so rollback
+requires no data conversion or cleanup. Stop the candidate head and worker
+completely, then start the production worker before the production head.

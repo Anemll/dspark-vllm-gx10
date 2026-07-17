@@ -18,8 +18,10 @@ it does not open checkpoint payload files while loading model weights.
 from __future__ import annotations
 
 import contextlib
+import itertools
 import os
 import time
+import uuid
 from collections.abc import Generator, Iterable
 from dataclasses import dataclass
 from typing import Any
@@ -41,6 +43,8 @@ _READER_RANK = 0
 _RECEIVER_RANK = 1
 _REMOTE_EXPR_TAG = "__vllm_roce_remote_expr__"
 _SUPPORTED_SOURCE_FORMATS = {"auto", "hf", "pt", "safetensors"}
+_LOAD_SEQUENCE = itertools.count()
+_LOAD_RUN_ID = uuid.uuid4().hex
 
 
 def _dtype_name(dtype: torch.dtype) -> str:
@@ -314,6 +318,7 @@ class _RoCEWeightSender:
         self.buffer_size_bytes = buffer_size_bytes
         self.pending: list[torch.Tensor] = []
         self.pending_bytes = 0
+        self.source_bytes = 0
         self.sent_bytes = 0
         self.batch_count = 0
         self.tensor_count = 0
@@ -323,8 +328,6 @@ class _RoCEWeightSender:
             return
         count = len(self.pending)
         total_bytes = self.pending_bytes
-        self.group.send_object(("flush", count, total_bytes), dst=_RECEIVER_RANK)
-
         packed = torch.empty(total_bytes, dtype=torch.uint8, device=self.device)
         offset = 0
         for payload in self.pending:
@@ -337,6 +340,10 @@ class _RoCEWeightSender:
                 f"RoCE packed-byte mismatch: packed={offset}, expected={total_bytes}"
             )
 
+        # Pack before announcing the receive. If allocation or copy fails, the
+        # peer is still waiting for a control object instead of a tensor that
+        # will never be sent.
+        self.group.send_object(("flush", count, total_bytes), dst=_RECEIVER_RANK)
         self.group.send(packed, dst=_RECEIVER_RANK)
         self.sent_bytes += total_bytes
         self.batch_count += 1
@@ -390,6 +397,7 @@ class _RoCEWeightSender:
         weights: Iterable[tuple[str, torch.Tensor]],
     ) -> Generator[tuple[str, torch.Tensor], None, None]:
         for name, source in weights:
+            self.source_bytes += _tensor_nbytes(source)
             self.group.send_object(
                 (
                     "tensor",
@@ -413,13 +421,14 @@ class _RoCEWeightSender:
             self.tensor_count += 1
 
         self._flush()
-        self.group.send_object(("end",), dst=_RECEIVER_RANK)
+        self.group.send_object(("end", self.source_bytes), dst=_RECEIVER_RANK)
 
 
 class _RoCEWeightReceiver:
     def __init__(self) -> None:
         self.group = get_tp_group()
         self.pending: list[_CapturedWrite] = []
+        self.source_bytes = 0
         self.received_bytes = 0
         self.batch_count = 0
         self.tensor_count = 0
@@ -490,6 +499,18 @@ class _RoCEWeightReceiver:
                     raise RuntimeError(
                         f"RoCE sender ended with {len(self.pending)} unapplied writes"
                     )
+                if len(message) == 1:
+                    # Accept the original protocol during reversible image
+                    # transitions; exact source-byte telemetry is unavailable.
+                    self.source_bytes = 0
+                    return
+                if len(message) != 2 or (
+                    isinstance(message[1], bool)
+                    or not isinstance(message[1], int)
+                    or message[1] < 0
+                ):
+                    raise RuntimeError(f"Invalid RoCE end message: {message!r}")
+                self.source_bytes = message[1]
                 return
             elif kind == "abort":
                 raise RuntimeError(f"RoCE sender aborted weight loading: {message[1]}")
@@ -621,18 +642,49 @@ class RoCETPModelLoader(DefaultModelLoader):
             raise ValueError("RoCE TP startup loading does not support torchao loading")
 
         tp_rank = self._validate_topology()
+        get_tp_group().barrier()
         started = time.perf_counter()
+        load_id = next(_LOAD_SEQUENCE)
+        phase = type(model).__name__
+        role = "reader" if tp_rank == _READER_RANK else "receiver"
+        logger.info(
+            "DSPARK_WEIGHT_LOAD mode=roce_tp event=start run=%s pid=%d id=%d "
+            "rank=%d role=%s phase=%s buffer_bytes=%d",
+            _LOAD_RUN_ID,
+            os.getpid(),
+            load_id,
+            tp_rank,
+            role,
+            phase,
+            self.buffer_size_bytes,
+        )
         if tp_rank == _READER_RANK:
             logger.info(
                 "RoCE TP loader enabled: rank 0 is the sole checkpoint reader; "
-                "rank-1 writes are packed in batches up to %d MiB",
+                "rank-1 writes target %d MiB packed batches (one source "
+                "tensor's writes may exceed the target)",
                 self.buffer_size_bytes // (1024 * 1024),
             )
-            sender = _RoCEWeightSender(model, self.buffer_size_bytes)
-            loaded_weights = model.load_weights(
-                sender.iter_weights(self.get_all_weights(model_config, model))
-            )
+            try:
+                sender = _RoCEWeightSender(model, self.buffer_size_bytes)
+                loaded_weights = model.load_weights(
+                    sender.iter_weights(self.get_all_weights(model_config, model))
+                )
+            except Exception as exc:
+                logger.error(
+                    "DSPARK_WEIGHT_LOAD mode=roce_tp event=failed run=%s "
+                    "pid=%d id=%d rank=%d role=%s phase=%s error_type=%s",
+                    _LOAD_RUN_ID,
+                    os.getpid(),
+                    load_id,
+                    tp_rank,
+                    role,
+                    phase,
+                    type(exc).__name__,
+                )
+                raise
             transferred_bytes = sender.sent_bytes
+            source_bytes = sender.source_bytes
             batch_count = sender.batch_count
             tensor_count = sender.tensor_count
         else:
@@ -643,15 +695,72 @@ class RoCETPModelLoader(DefaultModelLoader):
             try:
                 loaded_weights = model.load_weights(receiver.iter_weights())
             except Exception as exc:
+                logger.error(
+                    "DSPARK_WEIGHT_LOAD mode=roce_tp event=failed run=%s "
+                    "pid=%d id=%d rank=%d role=%s phase=%s error_type=%s",
+                    _LOAD_RUN_ID,
+                    os.getpid(),
+                    load_id,
+                    tp_rank,
+                    role,
+                    phase,
+                    type(exc).__name__,
+                )
                 # Let rank 0 fail with the receiver's original error instead of
                 # waiting forever for a writes message.
                 get_tp_group().send_object(("error", repr(exc)), dst=_READER_RANK)
                 raise
             transferred_bytes = receiver.received_bytes
+            source_bytes = receiver.source_bytes
             batch_count = receiver.batch_count
             tensor_count = receiver.tensor_count
 
+        default_enable_weights_track = (
+            model_config.quantization is None and loaded_weights is not None
+        )
+        enable_weights_track = (
+            self.enable_weights_track
+            if self.enable_weights_track is not None
+            else default_enable_weights_track
+        )
+
+        # PyNccl enqueues send/receive and destination copies on the current
+        # CUDA stream. Synchronize once per model phase so completion covers
+        # tracking and actual RAM residency without serializing batches.
+        try:
+            if enable_weights_track:
+                self.track_weights_loading(model, loaded_weights)
+            torch.cuda.current_stream().synchronize()
+        except Exception as exc:
+            logger.error(
+                "DSPARK_WEIGHT_LOAD mode=roce_tp event=failed run=%s pid=%d id=%d "
+                "rank=%d role=%s phase=%s error_type=%s",
+                _LOAD_RUN_ID,
+                os.getpid(),
+                load_id,
+                tp_rank,
+                role,
+                phase,
+                type(exc).__name__,
+            )
+            raise
         elapsed = time.perf_counter() - started
+        logger.info(
+            "DSPARK_WEIGHT_LOAD mode=roce_tp event=complete run=%s pid=%d id=%d "
+            "rank=%d role=%s phase=%s tensors=%d batches=%d "
+            "source_bytes=%d traffic_bytes=%d elapsed_s=%.6f",
+            _LOAD_RUN_ID,
+            os.getpid(),
+            load_id,
+            tp_rank,
+            role,
+            phase,
+            tensor_count,
+            batch_count,
+            source_bytes,
+            transferred_bytes,
+            elapsed,
+        )
         logger.info(
             "RoCE TP RAM weight load rank=%d complete: tensors=%d, batches=%d, "
             "traffic=%.2f GiB, elapsed=%.2f seconds",
@@ -662,16 +771,76 @@ class RoCETPModelLoader(DefaultModelLoader):
             elapsed,
         )
 
-        default_enable_weights_track = (
-            model_config.quantization is None and loaded_weights is not None
-        )
-        enable_weights_track = (
-            self.enable_weights_track
-            if self.enable_weights_track is not None
-            else default_enable_weights_track
-        )
-        if enable_weights_track:
-            self.track_weights_loading(model, loaded_weights)
 
 
-__all__ = ["RoCETPModelLoader"]
+class TimedDefaultModelLoader(DefaultModelLoader):
+    """Default local checkpoint loader with A/B-comparable RAM timing."""
+
+    @contextlib.contextmanager
+    def _using_default_source_format(self):
+        # `direct_timed` is a wrapper format, not a checkpoint format understood
+        # by DefaultModelLoader._prepare_weights(). Present the normal `auto`
+        # source format only while the unchanged default loader runs.
+        original = self.load_config.load_format
+        self.load_config.load_format = "auto"
+        try:
+            yield
+        finally:
+            self.load_config.load_format = original
+
+    def download_model(self, model_config: ModelConfig) -> None:
+        with self._using_default_source_format():
+            super().download_model(model_config)
+
+    @instrument(span_name="Load weights locally with synchronized timing")
+    def load_weights(self, model: nn.Module, model_config: ModelConfig) -> None:
+        tp_group = get_tp_group()
+        tp_rank = int(tp_group.rank_in_group)
+        load_id = next(_LOAD_SEQUENCE)
+        phase = type(model).__name__
+        tp_group.barrier()
+        started = time.perf_counter()
+        logger.info(
+            "DSPARK_WEIGHT_LOAD mode=direct event=start run=%s pid=%d id=%d "
+            "rank=%d role=local_reader phase=%s",
+            _LOAD_RUN_ID,
+            os.getpid(),
+            load_id,
+            tp_rank,
+            phase,
+        )
+        try:
+            with self._using_default_source_format():
+                super().load_weights(model, model_config)
+            torch.cuda.current_stream().synchronize()
+        except Exception as exc:
+            logger.error(
+                "DSPARK_WEIGHT_LOAD mode=direct event=failed run=%s pid=%d id=%d "
+                "rank=%d role=local_reader phase=%s error_type=%s",
+                _LOAD_RUN_ID,
+                os.getpid(),
+                load_id,
+                tp_rank,
+                phase,
+                type(exc).__name__,
+            )
+            raise
+        elapsed = time.perf_counter() - started
+        logger.info(
+            "DSPARK_WEIGHT_LOAD mode=direct event=complete run=%s pid=%d id=%d "
+            "rank=%d role=local_reader phase=%s elapsed_s=%.6f",
+            _LOAD_RUN_ID,
+            os.getpid(),
+            load_id,
+            tp_rank,
+            phase,
+            elapsed,
+        )
+        logger.info(
+            "Synchronized direct RAM weight load rank=%d complete: elapsed=%.2f seconds",
+            tp_rank,
+            elapsed,
+        )
+
+
+__all__ = ["RoCETPModelLoader", "TimedDefaultModelLoader"]

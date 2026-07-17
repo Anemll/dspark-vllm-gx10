@@ -16,7 +16,10 @@ from vllm.model_executor.model_loader.dummy_loader import DummyModelLoader
 from vllm.model_executor.model_loader.modelexpress_loader import (
     ModelExpressModelLoader,
 )
-from vllm.model_executor.model_loader.roce_tp_loader import RoCETPModelLoader
+from vllm.model_executor.model_loader.roce_tp_loader import (
+    RoCETPModelLoader,
+    TimedDefaultModelLoader,
+)
 from vllm.model_executor.model_loader.runai_streamer_loader import (
     RunaiModelStreamerLoader,
 )
@@ -36,6 +39,7 @@ LoadFormats = Literal[
     "auto",
     "hf",
     "bitsandbytes",
+    "direct_timed",
     "dummy",
     "fastsafetensors",
     "instanttensor",
@@ -54,6 +58,7 @@ _LOAD_FORMAT_TO_MODEL_LOADER: dict[str, type[BaseModelLoader]] = {
     "auto": DefaultModelLoader,
     "hf": DefaultModelLoader,
     "bitsandbytes": BitsAndBytesModelLoader,
+    "direct_timed": TimedDefaultModelLoader,
     "dummy": DummyModelLoader,
     "fastsafetensors": DefaultModelLoader,
     "instanttensor": DefaultModelLoader,
@@ -157,6 +162,7 @@ __all__ = [
     "BitsAndBytesModelLoader",
     "ModelExpressModelLoader",
     "RoCETPModelLoader",
+    "TimedDefaultModelLoader",
     "DefaultModelLoader",
     "DummyModelLoader",
     "RunaiModelStreamerLoader",
