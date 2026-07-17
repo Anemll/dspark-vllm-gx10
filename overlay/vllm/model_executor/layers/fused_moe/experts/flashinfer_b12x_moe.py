@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 
+from threading import Lock
 from typing import Any
+from weakref import WeakValueDictionary
 
 import torch
 
@@ -25,6 +27,19 @@ from vllm.utils.flashinfer import (
     flashinfer_convert_sf_to_mma_layout,
     has_flashinfer_b12x_moe,
 )
+
+
+# A graph-enabled B12xMoEWrapper owns large static and dynamic routing arenas
+# plus a max-token output buffer. DeepSeek V4 has 43 identical target MoE
+# layers, so constructing one wrapper per layer would reserve roughly 25 GiB
+# per TP rank outside vLLM's workspace planner. The quantization adapter marks
+# those layers with a model-scoped opaque token; this weak cache then shares
+# exactly one non-reentrant wrapper for that model/device/shape. Models without
+# an explicit scope retain upstream's per-layer behavior.
+_B12X_WRAPPER_CACHE: WeakValueDictionary[tuple[Any, ...], Any] = (
+    WeakValueDictionary()
+)
+_B12X_WRAPPER_CACHE_LOCK = Lock()
 
 
 def _resolve_b12x_activation(
@@ -101,6 +116,17 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
         )
         self.max_num_tokens = moe_config.max_num_tokens
         self.local_expert_offset = self.ep_rank * self.num_local_experts
+        wrapper_scope = getattr(moe_config, "_b12x_wrapper_scope", None)
+        self._b12x_wrapper_scope = (
+            wrapper_scope if wrapper_scope is not None else object()
+        )
+        if wrapper_scope is not None and getattr(
+            moe_config, "_b12x_wrapper_concurrent_execution", False
+        ):
+            raise ValueError(
+                "FlashInfer B12X shared graph workspaces are non-reentrant; "
+                "disable DBO/concurrent ubatching for DeepSeek V4 NVFP4."
+            )
 
         activation = moe_config.activation
         if activation not in self._ACTIVATION_MAP:
@@ -131,7 +157,7 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             swiglu_limit,
         )
 
-        # Lazily created on first apply() call.
+        # Lazily acquired from the model-scoped cache on first apply() call.
         self._wrapper: Any | None = None
         self.w1_sf_mma: torch.Tensor | None = None
         self.w2_sf_mma: torch.Tensor | None = None
@@ -273,26 +299,66 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
         # from pre-quantizing activations.
         return True
 
-    def _ensure_wrapper(self) -> None:
-        """Lazily create B12xMoEWrapper on first use."""
+    def _ensure_wrapper(self) -> Any:
+        """Acquire one graph workspace per model/rank/device/shape.
+
+        The wrapper is deliberately shared across sequential target layers:
+        weights and scales are call arguments, and each layer copies the
+        wrapper output before the next layer reuses the arena. The cache is
+        model-scoped rather than shape-global so independent replicas cannot
+        race on mutable barriers/output. DBO is rejected in ``__init__``.
+        """
+
+        # Shape and device are immutable after this expert is constructed.
+        # Keep the steady eager/capture path free of Python cache-key work and
+        # CUDA runtime device queries once this layer has acquired the arena.
         if self._wrapper is not None:
-            return
+            return self._wrapper
 
         from flashinfer.fused_moe import B12xMoEWrapper
 
-        self._wrapper = B12xMoEWrapper(
-            num_experts=self.global_num_experts,
-            top_k=self.topk,
-            hidden_size=self.hidden_dim,
-            intermediate_size=self.intermediate_size_per_partition,
-            use_cuda_graph=True,
-            max_num_tokens=self.max_num_tokens,
-            num_local_experts=self.num_local_experts,
-            activation=self._activation_str,
-            swiglu_alpha=self._swiglu_alpha,
-            swiglu_beta=self._swiglu_beta,
-            swiglu_limit=self._swiglu_limit,
+        device_index = torch.cuda.current_device()
+        cache_key = (
+            self._b12x_wrapper_scope,
+            device_index,
+            self.global_num_experts,
+            self.num_local_experts,
+            self.topk,
+            self.hidden_dim,
+            self.intermediate_size_per_partition,
+            self.max_num_tokens,
+            self.out_dtype,
+            self._activation_str,
+            self._swiglu_alpha,
+            self._swiglu_beta,
+            self._swiglu_limit,
+            "nvfp4",
+            "modelopt",
         )
+        with _B12X_WRAPPER_CACHE_LOCK:
+            wrapper = _B12X_WRAPPER_CACHE.get(cache_key)
+            if wrapper is None:
+                wrapper = B12xMoEWrapper(
+                    num_experts=self.global_num_experts,
+                    top_k=self.topk,
+                    hidden_size=self.hidden_dim,
+                    intermediate_size=self.intermediate_size_per_partition,
+                    use_cuda_graph=True,
+                    max_num_tokens=self.max_num_tokens,
+                    num_local_experts=self.num_local_experts,
+                    output_dtype=self.out_dtype,
+                    device=f"cuda:{device_index}",
+                    activation=self._activation_str,
+                    swiglu_alpha=self._swiglu_alpha,
+                    swiglu_beta=self._swiglu_beta,
+                    swiglu_limit=self._swiglu_limit,
+                    quant_mode="nvfp4",
+                    source_format="modelopt",
+                )
+                _B12X_WRAPPER_CACHE[cache_key] = wrapper
+
+        self._wrapper = wrapper
+        return wrapper
 
     def apply(
         self,
@@ -325,9 +391,7 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             "process_weights_after_loading must run before FlashInferB12xExperts.apply"
         )
 
-        self._ensure_wrapper()
-        wrapper = self._wrapper
-        assert wrapper is not None
+        wrapper = self._ensure_wrapper()
 
         wrapper_output = wrapper.run(
             x=hidden_states,

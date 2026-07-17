@@ -40,6 +40,7 @@ from typing import Any
 
 
 SCHEMA_VERSION = 1
+INPUT_RMS_RELATIVE_TOLERANCE = 0.01
 B12X_W13_LAYOUT = "w13"
 DEFAULT_M_VALUES = (
     1,
@@ -264,6 +265,46 @@ def phase_for_m(m: int) -> str:
     return "decode" if m < 128 else "prefill"
 
 
+def evaluate_input_rms_contract(
+    *,
+    requested: float,
+    observed_mean: float,
+    observed_min: float,
+    observed_max: float,
+    relative_tolerance: float = INPUT_RMS_RELATIVE_TOLERANCE,
+) -> dict[str, float | bool | None]:
+    """Gate post-cast per-token RMS without requiring a CUDA test host."""
+
+    finite = all(
+        math.isfinite(value)
+        for value in (requested, observed_mean, observed_min, observed_max)
+    )
+    ordered = observed_min <= observed_mean <= observed_max
+    if not finite or requested <= 0 or not ordered:
+        maximum_relative_error = None
+    else:
+        maximum_relative_error = max(
+            abs(observed_min - requested),
+            abs(observed_max - requested),
+        ) / requested
+    return {
+        "requested": requested,
+        "observed_mean": observed_mean if math.isfinite(observed_mean) else None,
+        "observed_min": observed_min if math.isfinite(observed_min) else None,
+        "observed_max": observed_max if math.isfinite(observed_max) else None,
+        "relative_tolerance": relative_tolerance,
+        "maximum_relative_error": maximum_relative_error,
+        "finite": finite,
+        "passed": bool(
+            finite
+            and ordered
+            and relative_tolerance >= 0
+            and maximum_relative_error is not None
+            and maximum_relative_error <= relative_tolerance
+        ),
+    }
+
+
 def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dict[str, Any]:
     if args.synthetic:
         shape = Dsv4Shape(
@@ -301,6 +342,8 @@ def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dic
             for m in args.m
         ],
         "activation_contract": {
+            "input_rms": args.input_rms,
+            "input_rms_relative_tolerance": INPUT_RMS_RELATIVE_TOLERANCE,
             "w4a4": {
                 "name": "swigluoai_uninterleave",
                 "alpha": args.swiglu_alpha,
@@ -659,15 +702,22 @@ def make_routes(
     *,
     routing: str,
     seed: int,
+    input_rms: float,
 ) -> tuple[Any, Any, Any]:
     generator = torch.Generator(device="cuda")
     generator.manual_seed(seed)
-    x = torch.randn(
+    x_fp32 = torch.randn(
         (m, shape.hidden_size),
         generator=generator,
         device="cuda",
-        dtype=torch.bfloat16,
-    ) / math.sqrt(shape.hidden_size)
+        dtype=torch.float32,
+    )
+    # A routed expert consumes post-RMSNorm activations, whose per-token RMS
+    # is near one. Normalizing every row keeps M=1 and large-M correctness
+    # cases equally representative and exercises the calibrated A4/clamp path
+    # rather than the old 1/sqrt(K) (~0.0156) smoke-test distribution.
+    row_rms = x_fp32.square().mean(dim=-1, keepdim=True).sqrt()
+    x = (x_fp32 / row_rms * input_rms).to(torch.bfloat16)
     if routing == "balanced":
         token = torch.arange(m, device="cuda", dtype=torch.int64).unsqueeze(1)
         lane = torch.arange(shape.top_k, device="cuda", dtype=torch.int64).unsqueeze(0)
@@ -1010,6 +1060,8 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             "correctness_m": list(args.correctness_m),
             "routing": args.routing,
             "seed": args.seed,
+            "input_rms": args.input_rms,
+            "input_rms_relative_tolerance": INPUT_RMS_RELATIVE_TOLERANCE,
             "warmup": args.warmup,
             "iters": args.iters,
             "repeats": args.repeats,
@@ -1030,13 +1082,30 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             m,
             routing=args.routing,
             seed=args.seed + m,
+            input_rms=args.input_rms,
+        )
+        per_token_rms = x.float().square().mean(dim=-1).sqrt()
+        input_rms_contract = evaluate_input_rms_contract(
+            requested=args.input_rms,
+            observed_mean=float(per_token_rms.mean().item()),
+            observed_min=float(per_token_rms.min().item()),
+            observed_max=float(per_token_rms.max().item()),
         )
         row: dict[str, Any] = {
             "m": m,
             "phase": phase_for_m(m),
             "routed_rows": m * shape.top_k,
+            "input_rms_contract": input_rms_contract,
             "modes": {},
         }
+        if not input_rms_contract["passed"]:
+            report["failures"].append(
+                {
+                    "kind": "input_rms",
+                    "m": m,
+                    "contract": input_rms_contract,
+                }
+            )
         launches: dict[str, Callable[[], Any]] = {}
         keepalive: list[Any] = []
         if w4a4_wrapper is not None:
@@ -1255,6 +1324,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--routing", choices=("balanced", "random", "hot"), default="balanced")
     parser.add_argument("--seed", type=int, default=4104)
+    parser.add_argument(
+        "--input-rms",
+        type=float,
+        default=1.0,
+        help="Per-token RMS of synthetic hidden states (post-RMSNorm default: 1.0)",
+    )
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--iters", type=int, default=20)
     parser.add_argument("--repeats", type=int, default=5)
@@ -1297,6 +1372,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("warmup must be non-negative; iters/repeats must be positive")
     if args.l2_flush_mib < 0:
         raise ValueError("--l2-flush-mib must be non-negative")
+    if not math.isfinite(args.input_rms) or args.input_rms <= 0:
+        raise ValueError("--input-rms must be positive and finite")
     if not math.isfinite(args.swiglu_limit) or args.swiglu_limit <= 0:
         raise ValueError("--swiglu-limit must be positive and finite")
     if args.backend in {"both", "w4a16"} and (

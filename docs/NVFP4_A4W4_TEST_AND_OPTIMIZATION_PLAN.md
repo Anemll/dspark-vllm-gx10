@@ -63,6 +63,18 @@ single-layer result is never an end-to-end serving result.
   - W4A4: FlashInfer B12X, FP4 weights and FP4 activations.
   - W4A16: B12X native ModelOpt path, the same FP4 weights and BF16
     activations.
+- The pinned graph-enabled B12X wrapper reserves 635,143,016 bytes at the
+  TP=2, M=8,192 target shape (static workspace, dynamic workspace, and BF16
+  output). Constructing one wrapper for every target layer would reserve about
+  25.44 GiB per rank outside vLLM's planner. The overlay therefore shares one
+  wrapper per model/rank/device/shape across all 43 sequential target layers.
+  Independent model instances receive different scopes, and concurrent
+  ubatching/DBO is rejected because the wrapper workspace and output are
+  mutable and non-reentrant.
+- Harness hidden states have per-token RMS 1.0 by default, approximating the
+  post-RMSNorm input scale. The former `1/sqrt(4096)` distribution had RMS
+  about 0.0156 and was too small to validate A4 activation scaling or clamp-10
+  behavior.
 - The existing abliterated deployment is a separate checkpoint lineage and is
   not proof that NVIDIA ModelOpt NVFP4 target experts are in use. It must not
   be relabeled as the W4A4 control without independently passing the NVIDIA
@@ -70,6 +82,13 @@ single-layer result is never an end-to-end serving result.
 - `roce_tp` changes startup weight transport only. It does not make steady
   inference kernels faster. Rank 0 reads payloads; rank 1 still needs model
   config, tokenizer, index, and other construction metadata locally.
+- The first independent `roce_tp` hardware trial on the existing production
+  checkpoint proved that NCCL selected `NET/IB`, but rank 0 was OOM-killed
+  around shard 22 because the original sender accumulated an unbounded packing
+  backlog. That failed run is not NVFP4 performance evidence. It establishes a
+  hard prerequisite for this plan: use the reviewed bounded-frame/direct-receive
+  loader, begin with its 64 MiB safety setting, and reject any run with growing
+  staging memory or an incomplete rank.
 
 ### Hypotheses to test
 
@@ -81,6 +100,35 @@ single-layer result is never an end-to-end serving result.
 | H4 | The hybrid DSpark draft can preserve most of the target-only gain. | Same-target hybrid improves total accepted-token throughput without a quality or acceptance collapse. |
 | H5 | A weak large-M result indicates route packing, activation quantization, tactic selection, or memory traffic is hiding tensor-core gains. | Profiles identify one of those costs and a one-variable change improves the matched matrix. |
 | H6 | Head-only weights plus `roce_tp` can avoid a second full SSD copy. | Both ranks become ready, rank 1 opens no payload shards, checksums/config agree, and startup finishes without memory pressure or transport failure. |
+
+### Why a large kernel win need not become a 2.5x server win
+
+The checkpoint geometry gives a useful, deliberately rough Amdahl bound. The
+selected routed experts account for about 6.49 billion active weight values per
+token:
+
+```text
+6 experts/token * 3 projections * 4096 * 2048 * 43 layers = 6.49B
+```
+
+Against the model card's approximately 13B active parameters, the routed
+experts quantized by NVIDIA are therefore around half of active parameter work.
+If their measured share of prefill time were exactly 50%, the idealized
+end-to-end bound would be:
+
+| Routed-expert kernel speedup | Amdahl end-to-end bound at 50% share |
+|---:|---:|
+| 1.2x | 1.09x |
+| 1.5x | 1.20x |
+| 2.0x | 1.33x |
+| 4.0x | 1.60x |
+
+This is an inference, not a benchmark prediction. The actual fraction must be
+measured and can be lower at long prefill because attention/indexer work grows,
+while routing, the shared expert, sparse MLA, KV work, TP collectives, and the
+scheduler are outside the experts-only W4A4 conversion. A strong M>=128 kernel
+gain is still the right hypothesis; a 2.5x API claim is not the default
+expectation for this experts-only checkpoint.
 
 ### Unknowns that require hardware evidence
 
@@ -233,7 +281,8 @@ python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
 ```
 
 Gate: K=4,096, I/rank=1,024, E=256, top-k=6, NVFP4 group size 16, and the
-expected upstream pins appear in the plan.
+expected upstream pins appear in the plan. The activation contract reports
+`input_rms=1.0`.
 
 ## Phase 1: single-head SM121 kernel validation
 
@@ -251,6 +300,8 @@ stopped and checkpoint reads/GPU work must not overlap another test.
 - Stop the serving head and worker through the clean stop barrier. A stopped
   head with a live old worker is not a safe test state.
 - Run from the exact candidate image built once from the candidate commit.
+- Confirm DBO and concurrent ubatching are disabled. Shared B12X graph arenas
+  are intentionally non-reentrant; startup must fail closed if either is on.
 - Mount the NVIDIA checkpoint read-only and a persistent results directory
   read-write.
 
@@ -313,6 +364,7 @@ Correctness gates are initially the harness defaults:
 - no graph/eager corruption or non-finite result;
 - no unexpected `w31` layout or unclamped-SiLU path;
 - all requested graphs captured when `--require-graphs` is used.
+- every post-BF16 per-token RMS is finite and within 1% of 1.0 for every M.
 
 These are integration tripwires, not a substitute for model-quality tests.
 Do not weaken them until at least one known-good hardware report is archived.
@@ -389,7 +441,7 @@ the new test owner receives an explicit ACK for a fresh GX10 window.
   over the worker env.
 - Render Compose configuration on both nodes and verify image, rank, master,
   model mount, cache mount, `--moe-backend flashinfer_b12x`, MTP length,
-  scheduler limits, and loader mode.
+  scheduler limits, loader mode, and disabled DBO/concurrent ubatching.
 - Use `JIT_MONITOR_MODE=warn` for normal validation. Reserve `error` for a
   specifically scheduled cold zero-JIT diagnostic after warning-mode success.
 
@@ -409,8 +461,12 @@ For the head-only checkpoint experiment, set on both ranks:
 
 ```dotenv
 DSPARK_WEIGHT_LOAD_FORMAT=roce_tp
-DSPARK_ROCE_LOAD_BUFFER_MB=256
+DSPARK_ROCE_LOAD_BUFFER_MB=64
 ```
+
+The 64 MiB value is the safety baseline for the current bounded protocol, not
+a performance conclusion. At lock handoff, use the exact reviewed value from
+the RoCE task if it changed after hardware validation.
 
 Required loader evidence includes:
 
@@ -461,7 +517,11 @@ layers 43-45 on native MXFP4. Run:
 
 Gate: all three draft stages load, output is sane, tool calls and streaming are
 well formed, DSpark acceptance is nonzero and stable, and no mixed-quant
-dispatch or clamp error occurs.
+dispatch or clamp error occurs. The first full-model profile must show only one
+B12X arena allocation across the 43 target layers, at most 635,143,016 unique
+internal tensor bytes for M=8,192, and no allocator growth across repeated
+full forwards. Compare eager and captured outputs at M=1, 128, and 8,192 and
+require the same numerical envelope as the kernel gate.
 
 ## Phase 4: end-to-end API quality and performance
 
@@ -570,38 +630,44 @@ hypothesis before moving to the next layer.
    `w13` layout, ModelOpt scales, group size, clamped SwiGLU, and explicit
    backend selection. A wrong contract can look fast while producing invalid
    output.
-2. **W4A4 graph and tactic selection.** Use the matched kernel matrix to tune
+2. **Shared B12X workspace safety.** Prove exactly one arena is owned per
+   model/rank/device/shape, DBO/concurrent ubatching is off, graph/eager parity
+   holds at M=1/128/8,192, and repeated full forwards do not grow the allocator.
+   Do not trade correctness for per-layer workspaces; one arena is the memory
+   prerequisite for the full model.
+3. **W4A4 graph and tactic selection.** Use the matched kernel matrix to tune
    micro/static/dynamic thresholds only if the returned tactic or latency has
    a discontinuity. Keep eager and graph results separate.
-3. **Activation quantization and scale generation.** Profile large M when
+4. **Activation quantization and scale generation.** Profile large M when
    W4A4 is unexpectedly close to W4A16. Look for quantize/scale kernels,
    extra layout transforms, or intermediate traffic outside the fused path.
-4. **Route packing and imbalance.** The isolated harness holds routes fixed;
+5. **Route packing and imbalance.** The isolated harness holds routes fixed;
    the API does not. Measure pack time, expert occupancy, hot-expert skew, and
    route capacity. Retain the existing startup prewarm across aligned and
    unaligned capacities.
-5. **DSpark native-MXFP4 draft cost.** H uses W4A16 draft activations. Measure
+6. **DSpark native-MXFP4 draft cost.** H uses W4A16 draft activations. Measure
    T versus H, acceptance, draft time, and rejected work. Tune MTP length and
    DSpark scheduler only after target correctness. Treat NVFP4-quantizing the
    draft as a separate checkpoint/quality project, not a flag flip.
-6. **Chunked-prefill scheduling.** Test `MAX_NUM_BATCHED_TOKENS` one value at a
+7. **Chunked-prefill scheduling.** Test `MAX_NUM_BATCHED_TOKENS` one value at a
    time around the current 8,192 setting. Keep prompt size, max sequences, MTP,
    graph settings, and seed fixed. Watch TTFT, throughput, memory, and graph
    recapture.
-7. **Sparse MLA/indexer and KV path.** If routed-MoE kernels are fast but API
+8. **Sparse MLA/indexer and KV path.** If routed-MoE kernels are fast but API
    prefill is flat, profile index construction, attention, cache writes, and
    compressed-MLA options. These are separate from W4A4 expert compute.
-8. **TP=2 collectives and rank imbalance.** Compare rank timings, NCCL time,
+9. **TP=2 collectives and rank imbalance.** Compare rank timings, NCCL time,
    expert ownership, and synchronization. A faster local kernel can expose
    all-reduce or the slower rank as the new critical path.
-9. **CUDA graph coverage and warmup.** Tune capture sizes and existing target
+10. **CUDA graph coverage and warmup.** Tune capture sizes and existing target
    capture/defer switches only from logged graph/JIT evidence. Do not expand
    graph pools until memory headroom is measured.
-10. **RoCE startup transport.** After serving passes, tune loader buffer size
-    and packing/copy count using 128/256/512 MiB trials. This improves startup,
-    not tokens/s. Gate every trial on peak head memory and complete both-rank
-    phase records.
-11. **Kernel-source changes.** If profiling proves a FlashInfer/B12X issue,
+11. **RoCE startup transport.** After serving passes, tune loader buffer size
+    and packing/copy count using 32/64/128 MiB trials, beginning from the
+    reviewed 64 MiB bounded baseline. This improves startup, not tokens/s. Gate
+    every trial on peak head memory and complete both-rank phase records. Do
+    not test larger frames until measured headroom makes them safe.
+12. **Kernel-source changes.** If profiling proves a FlashInfer/B12X issue,
     implement it as a durable overlay-compatible patch or pinned fork and
     update build provenance. Never leave the only fix in a disposable
     `.build/*-upstream` checkout.
@@ -611,6 +677,7 @@ hypothesis before moving to the next layer.
 | Priority | Work item | First experiment | Promotion condition |
 |---|---|---|---|
 | P0 | Archive real SM121 balanced K matrix for both TP slices. | Phase 1.3 unchanged defaults. | Correctness/graphs pass and tactic proof is present. |
+| P0 | Prove one shared B12X arena in the full model. | M=1/128/8,192 eager/captured profile with allocator counters. | One wrapper, <=635,143,016 unique bytes, parity passes, no repeated-forward growth. |
 | P0 | Boot target-only T through `roce_tp`. | Minimal API smoke, no speculation. | Both ranks ready; rank 1 opens no payloads; output sane. |
 | P0 | Boot hybrid H with mixed quant dispatch. | Same settings as T plus three-stage DSpark. | Three stages load; acceptance and quality smoke pass. |
 | P1 | Confirm large-M prefill advantage. | Balanced then random M=128-8,192. | Repeatable material gain with stable p95. |
@@ -621,7 +688,7 @@ hypothesis before moving to the next layer.
 | P2 | Tune chunk size and graph capture. | 4K/8K/16K batching, one knob at a time. | API prefill improves with memory and decode neutral. |
 | P2 | Tune DSpark MTP/scheduler. | T/H and multiple fixed MTP lengths. | Net throughput/latency improves and acceptance stays healthy. |
 | P2 | Reduce route-pack/quantization traffic. | Profile-backed fusion/layout experiment. | Kernel/API gain survives random and hot routing. |
-| P2 | Tune RoCE loader memory/packing. | 128/256/512 MiB matched warm-cache starts. | Complete startup with lower critical time and safe memory. |
+| P2 | Tune RoCE loader memory/packing. | 32/64/128 MiB matched warm-cache starts after the bounded baseline passes. | Complete startup with lower critical time and safe memory. |
 | P3 | Quantize the three-stage draft to NVFP4. | Separate conversion plus quality calibration. | Exact checkpoint contract and full quality suite pass. |
 | P3 | Produce an abliterated-lineage NVFP4 hybrid. | Closed-form native MXFP4-to-NVFP4 expert conversion plus activation-scale calibration, never metadata relabeling. | Same-lineage provenance and quality plus all K/H gates pass. |
 

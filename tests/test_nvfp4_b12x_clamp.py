@@ -64,6 +64,7 @@ _TORCH.bfloat16 = object()
 _TORCH.float32 = object()
 _TORCH.int32 = object()
 _TORCH.ones = lambda *args, **kwargs: None
+_TORCH.cuda = SimpleNamespace(current_device=lambda: 0)
 
 
 def _package(name: str) -> ModuleType:
@@ -171,6 +172,12 @@ class B12xClampAdapterTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.module, cls.platform, cls.quant_keys = _load_expert_module()
 
+    def setUp(self) -> None:
+        self.module._B12X_WRAPPER_CACHE.clear()
+
+    def tearDown(self) -> None:
+        self.module._B12X_WRAPPER_CACHE.clear()
+
     def test_deepseek_clamp_maps_to_b12x_oai_parameters(self) -> None:
         experts = self.module.FlashInferB12xExperts(
             _moe_config(limit=None),
@@ -202,6 +209,119 @@ class B12xClampAdapterTest(unittest.TestCase):
         self.assertEqual(recorded["swiglu_alpha"], 1.0)
         self.assertEqual(recorded["swiglu_beta"], 0.0)
         self.assertEqual(recorded["swiglu_limit"], 10.0)
+        self.assertEqual(recorded["quant_mode"], "nvfp4")
+        self.assertEqual(recorded["source_format"], "modelopt")
+        self.assertEqual(recorded["device"], "cuda:0")
+
+    def test_43_target_layers_share_exactly_one_wrapper(self) -> None:
+        scope = object()
+        configs = []
+        for _ in range(43):
+            config = _moe_config(limit=None)
+            config._b12x_wrapper_scope = scope
+            config._b12x_wrapper_concurrent_execution = False
+            configs.append(config)
+        experts = [
+            self.module.FlashInferB12xExperts(
+                config,
+                _quant_config(limit=10.0),
+            )
+            for config in configs
+        ]
+        constructed = []
+
+        class _Wrapper:
+            def __init__(self, **kwargs) -> None:
+                constructed.append(kwargs)
+
+        flashinfer = _package("flashinfer")
+        fused_moe = ModuleType("flashinfer.fused_moe")
+        fused_moe.B12xMoEWrapper = _Wrapper
+        flashinfer.fused_moe = fused_moe
+        with patch.dict(
+            sys.modules,
+            {"flashinfer": flashinfer, "flashinfer.fused_moe": fused_moe},
+        ):
+            wrappers = [expert._ensure_wrapper() for expert in experts]
+
+        self.assertEqual(len(constructed), 1)
+        self.assertTrue(all(wrapper is wrappers[0] for wrapper in wrappers))
+
+    def test_independent_model_scopes_do_not_share_wrapper(self) -> None:
+        experts = []
+        for _ in range(2):
+            config = _moe_config(limit=None)
+            config._b12x_wrapper_scope = object()
+            experts.append(
+                self.module.FlashInferB12xExperts(
+                    config,
+                    _quant_config(limit=10.0),
+                )
+            )
+        constructed = []
+
+        class _Wrapper:
+            def __init__(self, **kwargs) -> None:
+                constructed.append(kwargs)
+
+        flashinfer = _package("flashinfer")
+        fused_moe = ModuleType("flashinfer.fused_moe")
+        fused_moe.B12xMoEWrapper = _Wrapper
+        flashinfer.fused_moe = fused_moe
+        with patch.dict(
+            sys.modules,
+            {"flashinfer": flashinfer, "flashinfer.fused_moe": fused_moe},
+        ):
+            wrappers = [expert._ensure_wrapper() for expert in experts]
+
+        self.assertEqual(len(constructed), 2)
+        self.assertIsNot(wrappers[0], wrappers[1])
+
+    def test_bound_wrapper_fast_path_skips_device_and_cache_work(self) -> None:
+        experts = self.module.FlashInferB12xExperts(
+            _moe_config(limit=None),
+            _quant_config(limit=10.0),
+        )
+        constructed = []
+        device_queries = []
+
+        class _Wrapper:
+            def __init__(self, **kwargs) -> None:
+                constructed.append(kwargs)
+
+        flashinfer = _package("flashinfer")
+        fused_moe = ModuleType("flashinfer.fused_moe")
+        fused_moe.B12xMoEWrapper = _Wrapper
+        flashinfer.fused_moe = fused_moe
+        original_current_device = _TORCH.cuda.current_device
+        _TORCH.cuda.current_device = lambda: device_queries.append(True) or 0
+        self.addCleanup(
+            setattr,
+            _TORCH.cuda,
+            "current_device",
+            original_current_device,
+        )
+        with patch.dict(
+            sys.modules,
+            {"flashinfer": flashinfer, "flashinfer.fused_moe": fused_moe},
+        ):
+            first = experts._ensure_wrapper()
+            second = experts._ensure_wrapper()
+
+        self.assertIs(first, second)
+        self.assertEqual(len(constructed), 1)
+        self.assertEqual(len(device_queries), 1)
+
+    def test_shared_wrapper_rejects_concurrent_ubatching(self) -> None:
+        config = _moe_config(limit=None)
+        config._b12x_wrapper_scope = object()
+        config._b12x_wrapper_concurrent_execution = True
+
+        with self.assertRaisesRegex(ValueError, "non-reentrant"):
+            self.module.FlashInferB12xExperts(
+                config,
+                _quant_config(limit=10.0),
+            )
 
     def test_unclamped_silu_retains_plain_mapping(self) -> None:
         experts = self.module.FlashInferB12xExperts(

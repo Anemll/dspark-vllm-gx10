@@ -65,6 +65,10 @@ class DeepseekV4FP8Config(Fp8Config):
         self._resolved_moe_quant_algo: str | None = None
         self._resolved_target_num_hidden_layers: int | None = None
         self._nvfp4_config: ModelOptNvFp4Config | None = None
+        # All target-layer B12X expert objects belonging to this model share
+        # one graph workspace. The opaque token prevents accidental sharing
+        # with another model replica in the same process.
+        self._nvfp4_b12x_wrapper_scope = object()
         # ``is_scale_e8m0`` is a property that resolves on first read,
         # by which time the current vllm_config has been set.
 
@@ -184,6 +188,20 @@ class DeepseekV4FP8Config(Fp8Config):
                         ModelOptNvFp4FusedMoE,
                     )
 
+                    # The pinned FlashInfer wrapper owns roughly 0.6 GiB of
+                    # graph workspace at the DSv4 8K shape. A wrapper per one
+                    # of 43 layers would hide about 25 GiB from vLLM's memory
+                    # planner. Mark this model's otherwise-identical target
+                    # layers with a shared, model-scoped workspace token.
+                    layer.moe_config._b12x_wrapper_scope = (
+                        self._nvfp4_b12x_wrapper_scope
+                    )
+                    uses_concurrent_ubatches = bool(
+                        get_current_vllm_config().parallel_config.use_ubatching
+                    )
+                    layer.moe_config._b12x_wrapper_concurrent_execution = (
+                        uses_concurrent_ubatches
+                    )
                     return ModelOptNvFp4FusedMoE(
                         quant_config=self._get_nvfp4_config(),
                         moe_config=layer.moe_config,

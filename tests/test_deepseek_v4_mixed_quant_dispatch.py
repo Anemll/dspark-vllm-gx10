@@ -17,7 +17,7 @@ QUANT_CONFIG_PATH = ROOT / "overlay/vllm/models/deepseek_v4/quant_config.py"
 
 class _RoutedExperts:
     def __init__(self) -> None:
-        self.moe_config = object()
+        self.moe_config = SimpleNamespace()
 
 
 class _UnquantizedFusedMoEMethod:
@@ -81,8 +81,13 @@ class DeepseekV4MixedQuantDispatchTest(unittest.TestCase):
             num_hidden_layers=43,
             quantization_config={"moe_quant_algo": "NVFP4"},
         )
-        current_config = SimpleNamespace(
-            model_config=SimpleNamespace(hf_config=self.hf_config)
+        self.current_config = SimpleNamespace(
+            model_config=SimpleNamespace(hf_config=self.hf_config),
+            parallel_config=SimpleNamespace(
+                enable_dbo=False,
+                ubatch_size=0,
+                use_ubatching=False,
+            ),
         )
 
         modules = {
@@ -99,7 +104,7 @@ class DeepseekV4MixedQuantDispatchTest(unittest.TestCase):
             {
                 "vllm.config": _module(
                     "vllm.config",
-                    get_current_vllm_config=lambda: current_config,
+                    get_current_vllm_config=lambda: self.current_config,
                 ),
                 "vllm.logger": _module(
                     "vllm.logger",
@@ -161,6 +166,45 @@ class DeepseekV4MixedQuantDispatchTest(unittest.TestCase):
 
                 self.assertIsInstance(method, _ModelOptNvFp4FusedMoE)
                 self.assertFalse(config.is_mxfp4_quant(prefix, _RoutedExperts()))
+
+    def test_target_layers_share_one_model_scoped_b12x_wrapper_token(self) -> None:
+        config = self._new_config()
+        first = config.get_quant_method(
+            _RoutedExperts(), "model.layers.0.ffn.experts"
+        )
+        last = config.get_quant_method(
+            _RoutedExperts(), "model.layers.42.ffn.experts"
+        )
+        another_model = self._new_config().get_quant_method(
+            _RoutedExperts(), "model.layers.0.ffn.experts"
+        )
+
+        self.assertIs(
+            first.moe_config._b12x_wrapper_scope,
+            last.moe_config._b12x_wrapper_scope,
+        )
+        self.assertIsNot(
+            first.moe_config._b12x_wrapper_scope,
+            another_model.moe_config._b12x_wrapper_scope,
+        )
+        self.assertFalse(first.moe_config._b12x_wrapper_concurrent_execution)
+
+    def test_ubatching_is_propagated_as_unsafe_for_shared_wrapper(self) -> None:
+        self.current_config.parallel_config.use_ubatching = True
+
+        method = self._new_config().get_quant_method(
+            _RoutedExperts(), "model.layers.0.ffn.experts"
+        )
+
+        self.assertTrue(method.moe_config._b12x_wrapper_concurrent_execution)
+
+    def test_missing_ubatching_state_fails_closed(self) -> None:
+        del self.current_config.parallel_config.use_ubatching
+
+        with self.assertRaises(AttributeError):
+            self._new_config().get_quant_method(
+                _RoutedExperts(), "model.layers.0.ffn.experts"
+            )
 
     def test_production_dspark_draft_prefixes_use_native_mxfp4(self) -> None:
         for prefix in (

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 import subprocess
 import sys
@@ -66,6 +67,32 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         for m, expected in cases:
             with self.subTest(m=m):
                 self.assertEqual(bench.tactic_for_shape("w4a4", m, top_k=6), expected)
+
+    def test_input_rms_contract_gates_per_token_extremes(self) -> None:
+        passing = bench.evaluate_input_rms_contract(
+            requested=1.0,
+            observed_mean=1.0,
+            observed_min=0.999,
+            observed_max=1.001,
+        )
+        too_small = bench.evaluate_input_rms_contract(
+            requested=1.0,
+            observed_mean=0.50,
+            observed_min=0.49,
+            observed_max=0.51,
+        )
+        nonfinite = bench.evaluate_input_rms_contract(
+            requested=1.0,
+            observed_mean=math.inf,
+            observed_min=1.0,
+            observed_max=math.inf,
+        )
+
+        self.assertTrue(passing["passed"])
+        self.assertFalse(too_small["passed"])
+        self.assertFalse(nonfinite["passed"])
+        self.assertAlmostEqual(passing["maximum_relative_error"], 0.001)
+        json.dumps(nonfinite, allow_nan=False)
 
     def test_default_matrix_and_phase_boundary(self) -> None:
         self.assertEqual(bench.B12X_W13_LAYOUT, "w13")
@@ -146,6 +173,21 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertEqual(report["matrix"][1]["tactics"]["w4a4"], "dynamic")
         self.assertEqual(report["matrix"][0]["phase"], "decode")
         self.assertEqual(report["matrix"][1]["phase"], "prefill")
+        self.assertEqual(report["activation_contract"]["input_rms"], 1.0)
+        self.assertEqual(
+            report["activation_contract"]["input_rms_relative_tolerance"],
+            bench.INPUT_RMS_RELATIVE_TOLERANCE,
+        )
+
+    def test_input_rms_must_be_positive_and_finite(self) -> None:
+        parser = bench.build_parser()
+        for value in ("0", "-1", "nan", "inf"):
+            with self.subTest(value=value):
+                args = parser.parse_args(
+                    ["--dry-run", "--synthetic", "--input-rms", value]
+                )
+                with self.assertRaisesRegex(ValueError, "input-rms"):
+                    bench.validate_args(args)
 
 
 if __name__ == "__main__":

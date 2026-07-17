@@ -20,6 +20,14 @@ exercise NCCL/RoCE.
 Both paths consume the exact same resident ModelOpt NVFP4 packed weights and
 the same routes:
 
+- Hidden states are generated with per-token RMS 1.0 by default, matching the
+  scale expected after RMSNorm. The previous `1/sqrt(hidden_size)` distribution
+  would have had RMS about 0.0156 and would not meaningfully exercise A4
+  activation scaling or the clamp. Use `--input-rms` only as an explicit
+  sensitivity experiment, and keep it identical for both paths. Every row
+  records the mean/min/max per-token RMS after BF16 conversion and fails if
+  either extreme differs from the requested value by more than 1%.
+
 - The shared FC1 tensor is physically `[up/w3, gate/w1]`. B12X names that
   layout `w13`/`up_gate`; `w31` would mean `[gate, up]` and is intentionally
   rejected by the harness contract.
