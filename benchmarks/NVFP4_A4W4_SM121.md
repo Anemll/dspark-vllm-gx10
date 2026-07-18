@@ -101,8 +101,16 @@ python3 benchmarks/benchmark_nvfp4_a4w4_sm121.py \
   --output /results/nvfp4-a4w4-smoke.json
 ```
 
-The synthetic mode preserves K=4,096, I/rank=1,024, and top-k=6. Reducing E is
+The synthetic mode preserves K=4,096, I/rank=1,024, and top-k=6. By default it
+streams one signed BF16 expert projection at a time through pinned vLLM's
+`scaled_fp4_quant`, using vLLM's upstream `randn / 15` test distribution and
+per-expert `448 * 6 / amax` global scale. This avoids both a full BF16 copy of
+all experts and the old uniform, rank-1 packed-weight fixture. Reducing E is
 only for a fast compile/API smoke test; it is not a performance result.
+
+`--legacy-degenerate-synthetic` preserves the old uniform `0x11` weights and
+`2^-7` block scales for reproducing its all-zero-output failure. It is a
+diagnostic mode, not a correctness or performance baseline.
 
 ## Full checkpoint run
 

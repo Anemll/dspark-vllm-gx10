@@ -148,6 +148,49 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertEqual(g_alpha, 4.0)
         self.assertEqual(a_gscale * g_alpha, 0.125)
 
+    def test_synthetic_projection_seeds_are_stable_per_expert_and_projection(self) -> None:
+        self.assertEqual(bench.synthetic_projection_seed(4104, 0, 0), 4104)
+        self.assertEqual(bench.synthetic_projection_seed(4104, 0, 1), 4105)
+        self.assertEqual(bench.synthetic_projection_seed(4104, 7, 0), 4118)
+        self.assertEqual(bench.synthetic_projection_seed(4104, 7, 1), 4119)
+        with self.assertRaisesRegex(ValueError, "expert id"):
+            bench.synthetic_projection_seed(4104, -1, 0)
+        with self.assertRaisesRegex(ValueError, "projection lane"):
+            bench.synthetic_projection_seed(4104, 0, 2)
+
+    def test_synthetic_fixture_metadata_distinguishes_default_and_legacy(self) -> None:
+        default = bench.synthetic_fixture_metadata(
+            seed=4104,
+            legacy_degenerate=False,
+        )
+        legacy = bench.synthetic_fixture_metadata(
+            seed=4104,
+            legacy_degenerate=True,
+        )
+
+        self.assertEqual(default["synthetic_fixture"], bench.SYNTHETIC_RANDOM_FIXTURE)
+        self.assertEqual(default["weight_seed"], 4104)
+        self.assertEqual(default["source_distribution"], "torch.randn / 15")
+        self.assertEqual(
+            default["quantizer"], "vllm._custom_ops.scaled_fp4_quant"
+        )
+        self.assertEqual(default["scale_layout_before_preparation"], "linear")
+        self.assertNotIn("packed_fill", default)
+
+        self.assertEqual(legacy["synthetic_fixture"], bench.SYNTHETIC_LEGACY_FIXTURE)
+        self.assertEqual(legacy["packed_fill"], "0x11")
+        self.assertEqual(legacy["logical_scale"], 2.0**-7)
+        self.assertNotIn("weight_seed", legacy)
+
+    def test_default_synthetic_fixture_uses_upstream_quantizer_contract(self) -> None:
+        source = inspect.getsource(bench.make_synthetic_weights)
+        self.assertIn("from vllm import _custom_ops as ops", source)
+        self.assertIn("ops.scaled_fp4_quant(", source)
+        self.assertIn("is_sf_swizzled_layout=False", source)
+        self.assertIn("/ 15.0", source)
+        self.assertIn("for expert_id in range(experts)", source)
+        self.assertIn("legacy_degenerate", source)
+
     def test_input_rms_contract_gates_per_token_extremes(self) -> None:
         passing = bench.evaluate_input_rms_contract(
             requested=1.0,
@@ -436,6 +479,15 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertEqual(report["matrix"][1]["tactics"]["w4a4"], "dynamic")
         self.assertEqual(report["matrix"][0]["phase"], "decode")
         self.assertEqual(report["matrix"][1]["phase"], "prefill")
+        self.assertEqual(
+            report["checkpoint"]["synthetic_fixture"],
+            bench.SYNTHETIC_RANDOM_FIXTURE,
+        )
+        self.assertEqual(report["checkpoint"]["weight_seed"], 4104)
+        self.assertEqual(
+            report["checkpoint"]["quantizer"],
+            "vllm._custom_ops.scaled_fp4_quant",
+        )
         self.assertEqual(report["activation_contract"]["input_rms"], 1.0)
         self.assertEqual(
             report["activation_contract"]["input_rms_relative_tolerance"],
@@ -483,10 +535,30 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                 "weight_layout": "up_gate",
                 "limit": 10.0,
                 "activation_scale": (
-                    "checkpoint input_scale max-reduced and expanded to E"
+                    "unit synthetic input_scale (upstream kernel-test contract)"
                 ),
             },
         )
+
+    def test_legacy_synthetic_dry_run_preserves_degenerate_fixture_contract(self) -> None:
+        parser = bench.build_parser()
+        args = parser.parse_args(
+            ["--dry-run", "--synthetic", "--legacy-degenerate-synthetic"]
+        )
+        bench.validate_args(args)
+        report = bench.build_dry_run_plan(args, ROOT)
+        self.assertEqual(
+            report["checkpoint"]["synthetic_fixture"],
+            bench.SYNTHETIC_LEGACY_FIXTURE,
+        )
+        self.assertEqual(report["checkpoint"]["packed_fill"], "0x11")
+        self.assertEqual(report["checkpoint"]["logical_scale"], 2.0**-7)
+
+    def test_legacy_synthetic_flag_requires_synthetic_source(self) -> None:
+        parser = bench.build_parser()
+        args = parser.parse_args(["--dry-run", "--legacy-degenerate-synthetic"])
+        with self.assertRaisesRegex(ValueError, "requires --synthetic"):
+            bench.validate_args(args)
 
     def test_input_rms_must_be_positive_and_finite(self) -> None:
         parser = bench.build_parser()

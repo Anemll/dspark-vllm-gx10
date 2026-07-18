@@ -72,6 +72,8 @@ DEFAULT_M_VALUES = (
     8192,
 )
 DEFAULT_CORRECTNESS_M = (1, 24, 64, 128, 2048)
+SYNTHETIC_RANDOM_FIXTURE = "upstream-random-quantized"
+SYNTHETIC_LEGACY_FIXTURE = "legacy-uniform-0x11"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -233,6 +235,51 @@ def modelopt_cutlass_scale_contract(
     """Return ``(a_gscale, g_alpha)`` used by vLLM FlashInfer CUTLASS."""
 
     return 1.0 / input_scale, weight_scale_2 * input_scale
+
+
+def synthetic_projection_seed(seed: int, expert_id: int, projection_lane: int) -> int:
+    """Return a stable per-expert/projection seed for streamed weight creation."""
+
+    if expert_id < 0:
+        raise ValueError("synthetic expert id must be non-negative")
+    if projection_lane not in (0, 1):
+        raise ValueError("synthetic projection lane must be 0 (W13) or 1 (W2)")
+    return (int(seed) + 2 * expert_id + projection_lane) & ((1 << 63) - 1)
+
+
+def synthetic_fixture_metadata(
+    *,
+    seed: int,
+    legacy_degenerate: bool,
+) -> dict[str, Any]:
+    """Describe the synthetic source without importing CUDA libraries."""
+
+    common = {
+        "source": "synthetic-shape-only",
+        "synthetic_fixture": (
+            SYNTHETIC_LEGACY_FIXTURE
+            if legacy_degenerate
+            else SYNTHETIC_RANDOM_FIXTURE
+        ),
+        "synthetic_input_scale": 1.0,
+        "w13_layout": "w13 (up/w3, gate/w1; B12X up_gate)",
+    }
+    if legacy_degenerate:
+        return common | {
+            "packed_fill": "0x11",
+            "logical_scale": 2.0**-7,
+        }
+    return common | {
+        "weight_seed": int(seed),
+        "weight_seed_scheme": "base + 2 * expert + projection_lane (mod 2**63)",
+        "source_dtype": "bfloat16",
+        "source_distribution": "torch.randn / 15",
+        "quantizer": "vllm._custom_ops.scaled_fp4_quant",
+        "block_size": 16,
+        "weight_global_scale_formula": "448 * 6 / abs(weight).amax()",
+        "weight_scale_2_formula": "1 / weight_global_scale",
+        "scale_layout_before_preparation": "linear",
+    }
 
 
 def parse_positive_int_csv(value: str) -> tuple[int, ...]:
@@ -565,7 +612,10 @@ def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dic
             tp_rank=args.tp_rank,
         )
         shape.validate()
-        checkpoint = {"source": "synthetic-shape-only"}
+        checkpoint = synthetic_fixture_metadata(
+            seed=args.seed,
+            legacy_degenerate=args.legacy_degenerate_synthetic,
+        )
     else:
         if args.model_path is None:
             raise ValueError("--model-path is required unless --synthetic is used")
@@ -610,7 +660,9 @@ def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dic
                 "weight_layout": "up_gate",
                 "limit": args.swiglu_limit,
                 "activation_scale": (
-                    "checkpoint input_scale max-reduced and expanded to E"
+                    "unit synthetic input_scale (upstream kernel-test contract)"
+                    if args.synthetic
+                    else "checkpoint input_scale max-reduced and expanded to E"
                 ),
             },
             "w4a16": {"name": "silu", "limit": args.swiglu_limit},
@@ -1006,55 +1058,165 @@ def make_synthetic_weights(
     torch: Any,
     shape: Dsv4Shape,
     *,
+    seed: int = 4104,
+    legacy_degenerate: bool = False,
     prepare_cutlass: bool = False,
 ) -> PreparedWeights:
     device = torch.device("cuda")
     experts = shape.num_experts
     hidden = shape.hidden_size
     intermediate = shape.intermediate_size_per_rank
-    w13 = torch.full(
-        (experts, 2 * intermediate, hidden // 2),
-        0x11,
-        dtype=torch.uint8,
-        device=device,
+    metadata = synthetic_fixture_metadata(
+        seed=seed,
+        legacy_degenerate=legacy_degenerate,
     )
-    w2 = torch.full(
-        (experts, hidden, intermediate // 2),
-        0x11,
-        dtype=torch.uint8,
-        device=device,
-    )
-    scale_value = 2.0**-7
-    w13_scale = torch.full(
-        (experts, 2 * intermediate, hidden // 16),
-        scale_value,
-        dtype=torch.float8_e4m3fn,
-        device=device,
-    )
-    w2_scale = torch.full(
-        (experts, hidden, intermediate // 16),
-        scale_value,
-        dtype=torch.float8_e4m3fn,
-        device=device,
-    )
+
+    if legacy_degenerate:
+        w13 = torch.full(
+            (experts, 2 * intermediate, hidden // 2),
+            0x11,
+            dtype=torch.uint8,
+            device=device,
+        )
+        w2 = torch.full(
+            (experts, hidden, intermediate // 2),
+            0x11,
+            dtype=torch.uint8,
+            device=device,
+        )
+        scale_value = 2.0**-7
+        w13_scale = torch.full(
+            (experts, 2 * intermediate, hidden // 16),
+            scale_value,
+            dtype=torch.float8_e4m3fn,
+            device=device,
+        )
+        w2_scale = torch.full(
+            (experts, hidden, intermediate // 16),
+            scale_value,
+            dtype=torch.float8_e4m3fn,
+            device=device,
+        )
+        w13_scale_2 = torch.ones(experts, dtype=torch.float32, device=device)
+        w2_scale_2 = torch.ones_like(w13_scale_2)
+    else:
+        from vllm import _custom_ops as ops
+
+        w13 = torch.empty(
+            (experts, 2 * intermediate, hidden // 2),
+            dtype=torch.uint8,
+            device=device,
+        )
+        w2 = torch.empty(
+            (experts, hidden, intermediate // 2),
+            dtype=torch.uint8,
+            device=device,
+        )
+        w13_scale = torch.empty(
+            (experts, 2 * intermediate, hidden // 16),
+            dtype=torch.float8_e4m3fn,
+            device=device,
+        )
+        w2_scale = torch.empty(
+            (experts, hidden, intermediate // 16),
+            dtype=torch.float8_e4m3fn,
+            device=device,
+        )
+        w13_scale_2 = torch.empty(experts, dtype=torch.float32, device=device)
+        w2_scale_2 = torch.empty_like(w13_scale_2)
+        fp8_max = float(torch.finfo(torch.float8_e4m3fn).max)
+        fp4_max = 6.0
+
+        # Match pinned vLLM's NVFP4 MoE test-weight recipe while retaining only
+        # one BF16 expert projection at a time. Materializing every source
+        # expert together would add about 6.4 GiB at the full DSV4 E=256 shape.
+        for expert_id in range(experts):
+            projections = (
+                (
+                    0,
+                    2 * intermediate,
+                    hidden,
+                    w13[expert_id],
+                    w13_scale[expert_id],
+                    w13_scale_2,
+                ),
+                (
+                    1,
+                    hidden,
+                    intermediate,
+                    w2[expert_id],
+                    w2_scale[expert_id],
+                    w2_scale_2,
+                ),
+            )
+            for lane, rows, cols, packed_dst, scale_dst, scale_2_dst in projections:
+                generator = torch.Generator(device=device)
+                generator.manual_seed(
+                    synthetic_projection_seed(seed, expert_id, lane)
+                )
+                source = (
+                    torch.randn(
+                        (rows, cols),
+                        generator=generator,
+                        dtype=torch.bfloat16,
+                        device=device,
+                    )
+                    / 15.0
+                )
+                weight_global_scale = (
+                    fp8_max * fp4_max / source.abs().amax().to(torch.float32)
+                )
+                packed, block_scale = ops.scaled_fp4_quant(
+                    source,
+                    weight_global_scale,
+                    is_sf_swizzled_layout=False,
+                )
+                if packed.dtype != torch.uint8 or tuple(packed.shape) != tuple(
+                    packed_dst.shape
+                ):
+                    raise RuntimeError(
+                        "scaled_fp4_quant returned an unexpected packed-weight "
+                        f"contract: dtype={packed.dtype}, shape={tuple(packed.shape)}"
+                    )
+                if block_scale.dtype != torch.float8_e4m3fn or tuple(
+                    block_scale.shape
+                ) != tuple(scale_dst.shape):
+                    raise RuntimeError(
+                        "scaled_fp4_quant returned an unexpected block-scale "
+                        f"contract: dtype={block_scale.dtype}, "
+                        f"shape={tuple(block_scale.shape)}"
+                    )
+                packed_dst.copy_(packed)
+                scale_dst.copy_(block_scale)
+                scale_2_dst[expert_id].copy_(weight_global_scale.reciprocal())
+                del source, packed, block_scale, weight_global_scale
+
+        for name, scale_2 in (
+            ("w13_weight_scale_2", w13_scale_2),
+            ("w2_weight_scale_2", w2_scale_2),
+        ):
+            if not bool(torch.isfinite(scale_2).all().item()) or not bool(
+                (scale_2 > 0).all().item()
+            ):
+                raise RuntimeError(f"{name} contains non-positive/non-finite values")
+            metadata[f"{name}_stats"] = {
+                "min": float(scale_2.min().item()),
+                "max": float(scale_2.max().item()),
+            }
+
     ones = torch.ones(experts, dtype=torch.float32, device=device)
     return _finish_scale_preparation(
         torch,
         w13=w13,
         w13_scale=w13_scale,
-        w13_scale_2=ones.clone(),
+        w13_scale_2=w13_scale_2,
         w13_input_scale=ones.clone() if prepare_cutlass else None,
         w2=w2,
         w2_scale=w2_scale,
-        w2_scale_2=ones.clone(),
+        w2_scale_2=w2_scale_2,
         w2_input_scale=ones.clone() if prepare_cutlass else None,
         shape=shape,
-        metadata={
-            "source": "synthetic-shape-only",
-            "packed_fill": "0x11",
-            "logical_scale": scale_value,
-            "w13_layout": "w13 (up/w3, gate/w1; B12X up_gate)",
-        },
+        metadata=metadata,
         prepare_cutlass=prepare_cutlass,
     )
 
@@ -1760,10 +1922,13 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             tp_rank=args.tp_rank,
         )
         shape.validate()
-        checkpoint_metadata = {"source": "synthetic-shape-only"}
         print("Creating synthetic real-shape packed NVFP4 weights...", flush=True)
         weights = make_synthetic_weights(
-            torch, shape, prepare_cutlass=prepare_cutlass
+            torch,
+            shape,
+            seed=args.seed,
+            legacy_degenerate=args.legacy_degenerate_synthetic,
+            prepare_cutlass=prepare_cutlass,
         )
     else:
         if args.model_path is None:
@@ -1853,6 +2018,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             "correctness_m": list(args.correctness_m),
             "routing": args.routing,
             "seed": args.seed,
+            "synthetic_fixture": weights.metadata.get("synthetic_fixture"),
             "input_rms": args.input_rms,
             "input_rms_relative_tolerance": INPUT_RMS_RELATIVE_TOLERANCE,
             "warmup": args.warmup,
@@ -2257,6 +2423,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Override E only for a faster synthetic smoke test",
     )
+    parser.add_argument(
+        "--legacy-degenerate-synthetic",
+        action="store_true",
+        help=(
+            "Reproduce the old uniform 0x11/2^-7 synthetic fixture; diagnostic "
+            "only because its rank-1 math can legitimately produce all-zero output"
+        ),
+    )
     parser.add_argument("--layer-idx", type=int, default=0)
     parser.add_argument("--tp-size", type=int, default=2)
     parser.add_argument("--tp-rank", type=int, default=0)
@@ -2332,6 +2506,8 @@ def build_parser() -> argparse.ArgumentParser:
 def validate_args(args: argparse.Namespace) -> None:
     if args.synthetic_experts is not None and not args.synthetic:
         raise ValueError("--synthetic-experts requires --synthetic")
+    if args.legacy_degenerate_synthetic and not args.synthetic:
+        raise ValueError("--legacy-degenerate-synthetic requires --synthetic")
     if args.synthetic_experts is not None and args.synthetic_experts < 1:
         raise ValueError("--synthetic-experts must be positive")
     if args.layer_idx < 0:
