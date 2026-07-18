@@ -517,10 +517,16 @@ BF16 versus packed branch inputs, clamp parity, separate graph captures on
 both sides, wrapper memory at `T`, repeated-forward allocator stability, and
 explicit EP/DBO rejection. If winners alternate with M, keep a pure backend.
 
-## Phase 2: checkpoint staging to the head
+## Phase 2: future head-only checkpoint staging for the RoCE/hybrid lane
 
-This is a bulk-I/O operation and requires a fresh explicit lock if it was not
-included in the active window.
+The current NVIDIA target-only lane skips this phase: read-only inventory has
+already proved the exact 46-shard payload and pinned metadata are complete on
+both HEAD and WORKER. It uses those local files with the direct loader and
+does not depend on RoCE.
+
+Use the procedure below only for a future checkpoint that is not already
+present on both nodes. This is a bulk-I/O operation and requires a fresh
+explicit lock if it was not included in the active window.
 
 1. Reconfirm the hybrid source validation and free space.
 2. Copy exactly one runnable hybrid payload to the head SSD, dereferencing the
@@ -532,22 +538,24 @@ included in the active window.
      <head-fabric-destination>/<hybrid-name>/
    ```
 
-3. Do not copy the full checkpoint to the worker. For `roce_tp`, provide only
-   the metadata required for construction: config, index, tokenizer,
-   generation/quantization metadata, and provenance. Verify from logs that
-   rank 1 never opens checkpoint payload files.
+3. For a separately authorized head-only `roce_tp` experiment, provide the
+   worker only the metadata required for construction: config, index,
+   tokenizer, generation/quantization metadata, and provenance. Verify from
+   logs that rank 1 never opens checkpoint payload files. This rule does not
+   describe the current direct lane, whose complete worker payload already
+   exists and must not be recopied.
 4. On the head, verify metadata hashes and selected shard sizes against
    `checkpoint.provenance.json`. If full payload hashes were generated, verify
    them before model load.
 5. Record transfer start/end, bytes, route/interface, exit status, destination
    free space, and any residual copy process or storage activity.
 
-Gate: the transfer completed over the dedicated fabric route, the head has a
-fully materialized 48-shard checkpoint, worker metadata matches, no payload
-copy exists on the worker, and no transfer process remains before releasing
-or changing the lock scope.
+Gate for that future lane: the transfer completed over the dedicated fabric
+route, the head has a fully materialized checkpoint, worker metadata matches,
+the declared head-only placement contract holds, and no transfer process
+remains before releasing or changing the lock scope.
 
-## Phase 3: TP=2 and RoCE integration
+## Phase 3: TP=2 direct integration, then optional RoCE startup work
 
 Do not begin this phase until the RoCE task releases its current window and
 the new test owner receives an explicit ACK for a fresh GX10 window.
@@ -586,7 +594,13 @@ The required sequence is:
 6. Require `/health`, `/version`, and `/v1/models` success; dashboard health
    alone is insufficient.
 
-For the head-only checkpoint experiment, set on both ranks:
+For the current NVIDIA target-only staged-loader experiment, use the ordinary
+local direct loader on both ranks. Both nodes already have the exact payload;
+there is no model copy and no RoCE transport in this decision lane. Archive
+the rendered loader value and prove both ranks open their own local shards.
+
+Only after direct serving and its API gates pass may a separately authorized
+head-only RoCE experiment set on both ranks:
 
 ```dotenv
 DSPARK_WEIGHT_LOAD_FORMAT=roce_tp
@@ -599,7 +613,7 @@ hardware-validated frame size and completion/release watermark from the RoCE
 task. Refuse a candidate that bounds allocation size but leaves an unbounded
 number of asynchronous sends or source storages outstanding.
 
-Required loader evidence includes:
+Required evidence for that optional RoCE lane includes:
 
 - rank 0 is the sole payload reader;
 - rank 1 does not open payload shards;
@@ -613,10 +627,9 @@ Required loader evidence includes:
   phase occurs.
 
 Do not claim a RoCE startup speedup unless a matched `direct_timed` run exists
-with the same checkpoint, image, cache policy, and settings. A direct run
-requires local payloads on both ranks and is therefore optional; never create
-a worker payload copy silently just to obtain it. A cold-direct versus
-warm-RoCE comparison is invalid.
+with the same checkpoint, image, cache policy, and settings. The current
+complete local payloads make that direct control available without any copy.
+A cold-direct versus warm-RoCE comparison is invalid.
 
 If `roce_tp` cannot finish without rank-0 packing memory pressure, stop and
 preserve logs. Do not fall back to ordinary loading or copy weights to the
@@ -834,7 +847,7 @@ hypothesis before moving to the next layer.
 | P0 | Archive real SM121 balanced K matrix for both TP slices. | Phase 1.3 unchanged defaults. | Correctness/graphs pass and tactic proof is present. |
 | P0 | Establish the B12X/CUTLASS crossover. | `--backend w4a4-ab`, including M=64, on both TP slices. | Same-weight numerical gates pass and the per-M winner is repeatable before any hybrid policy is proposed. |
 | P0 | Prove one shared B12X arena in the full model. | M=1/128/8,192 eager/captured profile with allocator counters. | One wrapper, <=635,144,040 unique bytes, parity passes, no repeated-forward growth. |
-| P0 | Boot target-only T through `roce_tp`. | Minimal API smoke, no speculation. | Both ranks ready; rank 1 opens no payloads; output sane. |
+| P0 | Boot target-only T through the direct staged loader. | Minimal API smoke, no speculation, using the existing complete payload on each node. | Both ranks ready; each rank loads locally through the staged path; output sane. |
 | P0 | Boot hybrid H with mixed quant dispatch. | Same settings as T plus three-stage DSpark. | Three stages load; acceptance and quality smoke pass. |
 | P1 | Confirm large-M prefill advantage. | Balanced then random M=128-8,192. | Repeatable material gain with stable p95. |
 | P1 | Measure T versus H speculation economics. | Fixed prompts, MTP length, and scheduler. | H improves accepted/output throughput without quality loss. |
@@ -844,7 +857,7 @@ hypothesis before moving to the next layer.
 | P2 | Tune chunk size and graph capture. | 4K/8K/16K batching, one knob at a time. | API prefill improves with memory and decode neutral. |
 | P2 | Tune DSpark MTP/scheduler. | T/H and multiple fixed MTP lengths. | Net throughput/latency improves and acceptance stays healthy. |
 | P2 | Reduce route-pack/quantization traffic. | Profile-backed fusion/layout experiment. | Kernel/API gain survives random and hot routing. |
-| P2 | Tune RoCE loader memory/packing. | 32/64/128 MiB matched warm-cache starts after the bounded baseline passes. | Complete startup with lower critical time and safe memory. |
+| P2 | Tune optional RoCE loader memory/packing. | After direct serving passes and RoCE is separately resumed, run 32/64/128 MiB matched starts. | Complete startup beats the matched direct control with safe memory. |
 | P3 | Quantize the three-stage draft to NVFP4. | Separate conversion plus quality calibration. | Exact checkpoint contract and full quality suite pass. |
 | P3 | Produce an abliterated-lineage NVFP4 hybrid. | Closed-form native MXFP4-to-NVFP4 expert conversion plus activation-scale calibration, never metadata relabeling. | Same-lineage provenance and quality plus all K/H gates pass. |
 
