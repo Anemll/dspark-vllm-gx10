@@ -139,6 +139,48 @@ class DeepseekV4NvFp4WeightLoadingTest(unittest.TestCase):
         self.assertIsNotNone(match)
         self.assertEqual([candidate[2] for candidate in candidates], [5, 9])
 
+    def test_eplb_duplicate_attempt_order_matches_legacy_scan(self) -> None:
+        # Captures the shape of RoutedExperts.build_expert_params_mapping when
+        # redundant physical experts map back to the same logical expert.
+        mapping = [
+            ("experts.routed_experts.w13_", "experts.0.w1.", 0, "w1"),
+            ("experts.routed_experts.w2_", "experts.0.w2.", 0, "w2"),
+            ("experts.routed_experts.w13_", "experts.0.w3.", 0, "w3"),
+            ("experts.routed_experts.w13_", "experts.1.w1.", 1, "w1"),
+            ("experts.routed_experts.w2_", "experts.1.w2.", 1, "w2"),
+            ("experts.routed_experts.w13_", "experts.1.w3.", 1, "w3"),
+            ("experts.routed_experts.w13_", "experts.0.w1.", 2, "w1"),
+            ("experts.routed_experts.w2_", "experts.0.w2.", 2, "w2"),
+            ("experts.routed_experts.w13_", "experts.0.w3.", 2, "w3"),
+        ]
+        name = "layers.0.ffn.experts.0.w1.weight_scale_2"
+        index = self.helper.build_expert_mapping_index(mapping)
+        match, fast_candidates = self.helper.select_expert_mappings(
+            name, mapping, index
+        )
+        legacy_candidates = [
+            candidate for candidate in mapping if candidate[1] in name
+        ]
+        self.assertEqual(list(fast_candidates), legacy_candidates)
+        self.assertEqual([candidate[2] for candidate in fast_candidates], [0, 2])
+
+        for outcomes in ((False, True), (False, False)):
+            legacy_attempts = []
+            fast_attempts = []
+            for candidate, success in zip(legacy_candidates, outcomes, strict=True):
+                legacy_attempts.append(candidate[2])
+                if success:
+                    break
+            for candidate, success in zip(fast_candidates, outcomes, strict=True):
+                fast_attempts.append(candidate[2])
+                mapped = self.helper.map_expert_parameter_name(
+                    name, candidate[0], candidate[1], match
+                )
+                self.assertEqual(mapped, name.replace(candidate[1], candidate[0]))
+                if success:
+                    break
+            self.assertEqual(fast_attempts, legacy_attempts)
+
     def test_unknown_grammar_uses_legacy_fallback(self) -> None:
         mapping = _expert_mapping(num_experts=1)
         index = self.helper.build_expert_mapping_index(mapping)
