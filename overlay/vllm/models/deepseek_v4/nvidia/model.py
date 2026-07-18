@@ -71,6 +71,9 @@ from vllm.models.deepseek_v4.nvidia.flashinfer_sparse import (
 )
 from vllm.models.deepseek_v4.nvidia.flashmla import DeepseekV4FlashMLAAttention
 from vllm.models.deepseek_v4.nvidia.ops.prepare_megamoe import prepare_megamoe_inputs
+from vllm.models.deepseek_v4.nvidia.staged_weight_loading import (
+    maybe_create_nvfp4_layer_stager,
+)
 from vllm.models.deepseek_v4.nvidia.weight_loading import (
     build_expert_mapping_index,
     map_expert_parameter_name,
@@ -952,6 +955,7 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         self.config = config
         self.quant_config = quant_config
         self.parallel_config = vllm_config.parallel_config
+        self.load_format = str(vllm_config.load_config.load_format)
         self.use_mega_moe = (
             vllm_config.kernel_config.moe_backend == "deep_gemm_mega_moe"
         )
@@ -1158,6 +1162,23 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         # Pre-compute expert mapping ONCE.
         expert_mapping = self.get_expert_mapping()
         expert_mapping_index = build_expert_mapping_index(expert_mapping)
+        expert_stager = maybe_create_nvfp4_layer_stager(
+            torch_module=torch,
+            params_dict=params_dict,
+            expert_mapping_index=expert_mapping_index,
+            start_layer=self.start_layer,
+            end_layer=self.end_layer,
+            num_hidden_layers=self.config.num_hidden_layers,
+            num_routed_experts=self.config.n_routed_experts,
+            tp_size=tp_size,
+            use_mega_moe=self.use_mega_moe,
+            enable_expert_parallel=self.parallel_config.enable_expert_parallel,
+            num_redundant_experts=(
+                self.parallel_config.eplb_config.num_redundant_experts
+            ),
+            load_format=self.load_format,
+            quant_config=self.quant_config,
+        )
 
         # Block-FP8 shared experts: pad the intermediate up to the TP-uniform
         # block count so the standard loaders below slice it evenly (trailing
@@ -1199,36 +1220,75 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
                     expert_name_match, candidate_mappings = select_expert_mappings(
                         name, expert_mapping, expert_mapping_index
                     )
+                    staged_source = (
+                        expert_stager.begin_source(
+                            name, loaded_weight, expert_name_match
+                        )
+                        if expert_stager is not None
+                        and expert_name_match is not None
+                        else None
+                    )
+                    expert_loaded_weight = (
+                        staged_source.loaded_weight
+                        if staged_source is not None
+                        else loaded_weight
+                    )
+                    name_mapped: str | None = None
+                    mapping_succeeded = False
                     for mapping in candidate_mappings:
                         param_name, weight_name, expert_id, expert_shard_id = mapping
                         if expert_name_match is None and weight_name not in name:
                             continue
-                        name_mapped = map_expert_parameter_name(
+                        candidate_name = map_expert_parameter_name(
                             name,
                             param_name,
                             weight_name,
                             expert_name_match,
                         )
-                        if is_pp_missing_parameter(name_mapped, self):
+                        name_mapped = candidate_name
+                        if is_pp_missing_parameter(candidate_name, self):
                             continue
-                        param = params_dict[name_mapped]
+                        actual_param = params_dict[name_mapped]
+                        param = (
+                            expert_stager.destination(
+                                staged_source, name_mapped, actual_param
+                            )
+                            if expert_stager is not None
+                            and staged_source is not None
+                            else actual_param
+                        )
                         # We should ask the weight loader to return success or not
                         # here since otherwise we may skip experts with other
                         # available replicas.
                         weight_loader = typing.cast(
-                            Callable[..., bool], param.weight_loader
+                            Callable[..., bool], actual_param.weight_loader
                         )
                         success = weight_loader(
                             param,
-                            loaded_weight,
+                            expert_loaded_weight,
                             name_mapped,
                             shard_id=expert_shard_id,
                             expert_id=expert_id,
                             return_success=True,
                         )
                         if success:
+                            mapping_succeeded = True
                             name = name_mapped
                             break
+                    if name_mapped is None:
+                        raise RuntimeError(
+                            f"No expert parameter mapping accepted {name!r}"
+                        )
+                    if expert_stager is not None and staged_source is not None:
+                        if not mapping_succeeded:
+                            raise RuntimeError(
+                                "NVFP4 staged source had no successful expert "
+                                f"destination: {staged_source.name!r}"
+                            )
+                        expert_stager.complete_source(staged_source)
+                        # The loop-local proxy would otherwise retain the last
+                        # CPU staging allocation into the next layer.
+                        del param
                     loaded_params.add(name_mapped)
                     continue
                 elif "attn_sink" in name:
@@ -1250,6 +1310,8 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
                     loaded_params.add(name)
                     continue
 
+        if expert_stager is not None:
+            expert_stager.finish()
         return loaded_params
 
     def _pad_shared_expert_weight(
