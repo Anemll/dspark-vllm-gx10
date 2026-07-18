@@ -2,6 +2,7 @@
 ARG VLLM_BASE=vllm/vllm-openai:v0.25.1
 ARG FLASHINFER_COMMIT=0472b9b3f2fba11b463f8526f390297d52a8aad7
 ARG B12X_COMMIT=7dc6fb8fcc6446ea093537d1657df81985fa5f43
+ARG FLASHINFER_VERSION=0.6.15
 ARG CUTLASS_DSL_VERSION=4.5.2
 ARG CUDA_PYTHON_VERSION=13.3.1
 ARG TVM_FFI_VERSION=0.1.9
@@ -10,6 +11,7 @@ FROM ${VLLM_BASE}
 
 ARG FLASHINFER_COMMIT
 ARG B12X_COMMIT
+ARG FLASHINFER_VERSION
 ARG CUTLASS_DSL_VERSION
 ARG CUDA_PYTHON_VERSION
 ARG TVM_FFI_VERSION
@@ -22,7 +24,8 @@ COPY LICENSE NOTICE CREDITS.md /usr/share/licenses/dspark-vllm-gx10/
 COPY LICENSES/Apache-2.0.txt \
   /usr/share/licenses/dspark-vllm-gx10/Apache-2.0.txt
 
-ENV FLASHINFER_DISABLE_VERSION_CHECK=1
+ENV FLASHINFER_DISABLE_VERSION_CHECK=""
+COPY scripts/verify_flashinfer_runtime.py /usr/local/bin/dspark-verify-flashinfer-runtime
 RUN python3 -m pip install --no-cache-dir \
       "cuda-python==${CUDA_PYTHON_VERSION}" \
       "nvidia-cutlass-dsl==${CUTLASS_DSL_VERSION}" \
@@ -33,7 +36,17 @@ RUN python3 -m pip install --no-cache-dir \
       "https://github.com/lukealonso/b12x/archive/${B12X_COMMIT}.tar.gz" && \
     python3 -m pip install --no-cache-dir --no-deps --no-build-isolation \
       --force-reinstall \
-      "https://github.com/flashinfer-ai/flashinfer/archive/${FLASHINFER_COMMIT}.tar.gz"
+      "https://github.com/flashinfer-ai/flashinfer/archive/${FLASHINFER_COMMIT}.tar.gz" && \
+    python3 -m pip install --no-cache-dir --no-deps --force-reinstall \
+      "https://github.com/flashinfer-ai/flashinfer/releases/download/v${FLASHINFER_VERSION}/flashinfer_jit_cache-${FLASHINFER_VERSION}%2Bcu130-cp39-abi3-manylinux_2_28_aarch64.whl#sha256=39e4f52378a34107ee277907bdec8bf8528c13a84143de8469d6da42ad937db3" \
+      "https://github.com/flashinfer-ai/flashinfer/releases/download/v${FLASHINFER_VERSION}/flashinfer_cubin-${FLASHINFER_VERSION}-py3-none-any.whl#sha256=3870958b02a1752b44121d6842c531e1be2a29202f623a5fd5f08efe3eb70186" && \
+    env -u FLASHINFER_DISABLE_VERSION_CHECK python3 \
+      /usr/local/bin/dspark-verify-flashinfer-runtime \
+      --expected-version "${FLASHINFER_VERSION}" \
+      --expected-cuda-suffix cu130 \
+      --require-jit-cache \
+      --require-cubin \
+      --require-fused-moe-120
 
 # Merge the downstream Python overlay into the installed vLLM package.
 COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/

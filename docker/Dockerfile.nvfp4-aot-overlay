@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_REVISION=unknown
+ARG FLASHINFER_JIT_CACHE_WHEEL=flashinfer_jit_cache-0.6.15+cu130-cp39-abi3-manylinux_2_28_aarch64.whl
+ARG FLASHINFER_CUBIN_WHEEL=flashinfer_cubin-0.6.15-py3-none-any.whl
+ARG FLASHINFER_JIT_CACHE_SHA256=39e4f52378a34107ee277907bdec8bf8528c13a84143de8469d6da42ad937db3
+ARG FLASHINFER_CUBIN_SHA256=3870958b02a1752b44121d6842c531e1be2a29202f623a5fd5f08efe3eb70186
+
+COPY .local/wheels/${FLASHINFER_JIT_CACHE_WHEEL} /tmp/${FLASHINFER_JIT_CACHE_WHEEL}
+COPY .local/wheels/${FLASHINFER_CUBIN_WHEEL} /tmp/${FLASHINFER_CUBIN_WHEEL}
+COPY scripts/verify_flashinfer_runtime.py /usr/local/bin/dspark-verify-flashinfer-runtime
+
+RUN echo "${FLASHINFER_JIT_CACHE_SHA256}  /tmp/${FLASHINFER_JIT_CACHE_WHEEL}" | sha256sum -c - && \
+    echo "${FLASHINFER_CUBIN_SHA256}  /tmp/${FLASHINFER_CUBIN_WHEEL}" | sha256sum -c - && \
+    python3 -m pip install --no-cache-dir --no-deps --force-reinstall \
+      "/tmp/${FLASHINFER_JIT_CACHE_WHEEL}" \
+      "/tmp/${FLASHINFER_CUBIN_WHEEL}" && \
+    env -u FLASHINFER_DISABLE_VERSION_CHECK python3 \
+      /usr/local/bin/dspark-verify-flashinfer-runtime \
+      --expected-version 0.6.15 \
+      --expected-cuda-suffix cu130 \
+      --require-jit-cache \
+      --require-cubin \
+      --require-fused-moe-120 && \
+    rm -f "/tmp/${FLASHINFER_JIT_CACHE_WHEEL}" "/tmp/${FLASHINFER_CUBIN_WHEEL}"
+
+ENV FLASHINFER_DISABLE_VERSION_CHECK=""
+ENV FLASHINFER_WORKSPACE_BASE=/cache/huggingface/flashinfer-0.6.15-0472b9b3
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.flashinfer-jit-cache-sha256="${FLASHINFER_JIT_CACHE_SHA256}"
+LABEL org.opencontainers.image.flashinfer-cubin-sha256="${FLASHINFER_CUBIN_SHA256}"
+
+COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/

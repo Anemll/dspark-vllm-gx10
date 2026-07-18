@@ -1,0 +1,5 @@
+services:
+  vllm-dspark:
+    environment:
+      FLASHINFER_DISABLE_VERSION_CHECK: ""
+      FLASHINFER_WORKSPACE_BASE: /cache/huggingface/flashinfer-0.6.15-0472b9b3

@@ -21,6 +21,10 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
             self.compose,
         )
 
+    def test_flashinfer_version_check_cannot_be_disabled_by_host_env(self) -> None:
+        self.assertIn('FLASHINFER_DISABLE_VERSION_CHECK: ""', self.compose)
+        self.assertNotIn("${FLASHINFER_DISABLE_VERSION_CHECK", self.compose)
+
     def test_rank_examples_pin_the_same_backend(self) -> None:
         values = []
         for relative_path in ("config/head.env.example", "config/worker.env.example"):

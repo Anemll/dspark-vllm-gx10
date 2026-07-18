@@ -1,0 +1,9 @@
+**
+!.local/
+!.local/wheels/
+!.local/wheels/flashinfer_jit_cache-0.6.15+cu130-cp39-abi3-manylinux_2_28_aarch64.whl
+!.local/wheels/flashinfer_cubin-0.6.15-py3-none-any.whl
+!scripts/
+!scripts/verify_flashinfer_runtime.py
+!overlay/
+!overlay/**

@@ -72,7 +72,9 @@ services:
 
       TORCH_CUDA_ARCH_LIST: "${TORCH_CUDA_ARCH_LIST:-12.1a}"
       FLASHINFER_CUDA_ARCH_LIST: "${FLASHINFER_CUDA_ARCH_LIST:-12.1a}"
-      FLASHINFER_DISABLE_VERSION_CHECK: "${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
+      # Fail closed on Python/AOT package skew. Any non-empty value, including
+      # "0" or "false", disables FlashInfer's compatibility check.
+      FLASHINFER_DISABLE_VERSION_CHECK: ""
       FLASHINFER_WORKSPACE_BASE: "${FLASHINFER_WORKSPACE_BASE:-/cache/huggingface/flashinfer}"
       TILELANG_CLEANUP_TEMP_FILES: "${TILELANG_CLEANUP_TEMP_FILES:-1}"
       DG_JIT_USE_NVRTC: "${DG_JIT_USE_NVRTC:-0}"
