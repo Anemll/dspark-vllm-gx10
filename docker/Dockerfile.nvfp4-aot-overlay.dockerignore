@@ -5,5 +5,7 @@
 !.local/wheels/flashinfer_cubin-0.6.15-py3-none-any.whl
 !scripts/
 !scripts/verify_flashinfer_runtime.py
+!benchmarks/
+!benchmarks/probe_nvfp4_staged_routed_loader.py
 !overlay/
 !overlay/**

@@ -40,6 +40,17 @@ single-layer result is never an end-to-end serving result.
   133,660 non-`mtp.*` tensors plus 1,575 `mtp.0.*` tensors in 46 shards. Its
   Hub revision is
   `e3cd60e7de98e9867116860d522499a728de1cf9`.
+- A header-only preflight of the exact checkpoint staged on GX10 HEAD pinned
+  index SHA-256
+  `2d83d58754cff11724f117d20d95e31803a48512d29f8e00463b2501905d6d72`
+  and header-manifest SHA-256
+  `1c29d5d4b02973b956c0b13abeb03629ddd6bf04161fe914e739941878118353`.
+  The 132,096 main routed tensors are exactly 43 complete, contiguous runs of
+  3,072 tensors, with layer N wholly in shard N+2. Main packed weights are
+  `U8`; block scales are `F8_E4M3`; `weight_scale_2` and `input_scale` are
+  rank-0 `F32` scalars. The separate `mtp.0` routed tensors use `I8` weights
+  and `F8_E8M0` scales. The preflight read only the declared safetensors JSON
+  headers, never payload ranges.
 - One `mtp.0` stage is not a runnable three-stage DSpark checkpoint. It must
   not be described or tested as one.
 - The native DSpark source has three draft stages: 1,568 `mtp.0.*`, 1,565

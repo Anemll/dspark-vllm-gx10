@@ -98,6 +98,8 @@ def _expected_parameter_dtypes(torch_module: Any) -> dict[str, Any]:
     return {
         "w13_weight": torch_module.uint8,
         "w2_weight": torch_module.uint8,
+        "w13_weight_scale": torch_module.float8_e4m3fn,
+        "w2_weight_scale": torch_module.float8_e4m3fn,
         "w13_weight_scale_2": torch_module.float32,
         "w2_weight_scale_2": torch_module.float32,
         "w13_input_scale": torch_module.float32,
@@ -109,10 +111,10 @@ def _expected_checkpoint_dtype(torch_module: Any, suffix: str) -> Any:
     if suffix == "weight":
         return torch_module.uint8
     if suffix == "weight_scale":
-        # DeepseekV4Model reinterprets checkpoint E8M0 scales as uint8 before
-        # dispatch.  Requiring that post-reinterpret dtype prevents copy_ from
-        # numerically converting the exponent bytes.
-        return torch_module.uint8
+        # The pinned NVIDIA main routed checkpoint stores ModelOpt NVFP4 block
+        # scales as E4M3.  Staging reinterprets these one-byte values only
+        # after validating this exact on-disk dtype.
+        return torch_module.float8_e4m3fn
     if suffix in ("weight_scale_2", "input_scale"):
         return torch_module.float32
     raise ValueError(f"Unsupported staged NVFP4 checkpoint suffix: {suffix!r}")
@@ -285,7 +287,19 @@ class Nvfp4LayerStager:
         if key in self._active.seen:
             raise RuntimeError(f"Duplicate staged NVFP4 source tensor: {name!r}")
 
-        source = StagedSource(name, layer, key, suffix, loaded_weight)
+        staged_weight = loaded_weight
+        if suffix == "weight_scale":
+            if int(loaded_weight.element_size()) != 1:
+                raise RuntimeError(
+                    f"NVFP4 staged block scale {name!r} is not one byte"
+                )
+            # CPU float8 arithmetic is deliberately outside this path's
+            # contract.  Preserve the exact E4M3 payload while the real
+            # RoutedExperts loader performs only slicing and copy_ into the
+            # uint8 proxy; commit later reinterprets the CUDA destination.
+            staged_weight = loaded_weight.view(self._torch.uint8)
+
+        source = StagedSource(name, layer, key, suffix, staged_weight)
         self._pending = source
         return source
 
@@ -320,7 +334,12 @@ class Nvfp4LayerStager:
             proxy = self._torch.nn.Parameter(host, requires_grad=False)
             # RoutedExperts.weight_loader consults these optional attributes.
             # Preserve them without copying hooks or the CUDA storage itself.
-            for attr in ("is_transposed", "use_bitsandbytes_4bit", "quant_method"):
+            for attr in (
+                "is_transposed",
+                "use_bitsandbytes_4bit",
+                "quant_method",
+                "load_full_w2",
+            ):
                 if hasattr(actual_parameter, attr):
                     setattr(proxy, attr, getattr(actual_parameter, attr))
             staged = _StagedParameter(
@@ -464,7 +483,9 @@ def maybe_create_nvfp4_layer_stager(
     if not staged_load_requested(environ):
         return None
     source = os.environ if environ is None else environ
-    effective_load_format = str(load_format).lower()
+    # Accept either the configured string or an enum-style ``LoadFormat.X``
+    # representation, but compare the effective terminal token exactly.
+    effective_load_format = str(load_format).lower().rsplit(".", 1)[-1]
     if (
         effective_load_format == ROCE_LOAD_FORMAT
         or source.get("DSPARK_WEIGHT_LOAD_FORMAT", "auto").lower()
@@ -545,10 +566,6 @@ def maybe_create_nvfp4_layer_stager(
     parameter_relative_names = _reviewed_parameter_relative_names(
         expert_mapping_index
     )
-    reviewed_raw_byte_dtypes = {
-        torch_module.uint8,
-        torch_module.float8_e4m3fn,
-    }
     expected_shapes = _expected_parameter_shapes()
     eligible_parameters: dict[int, dict[str, Any]] = {}
     for layer in range(start_layer, end_layer):
@@ -569,21 +586,18 @@ def maybe_create_nvfp4_layer_stager(
                     f"Staged NVFP4 parameter {name!r} has shape "
                     f"{observed_shape}; expected {expected_shapes[basename]}"
                 )
-            if basename in _RAW_BYTE_PARAMETERS:
-                if (
-                    parameter.dtype not in reviewed_raw_byte_dtypes
-                    or int(parameter.element_size()) != 1
-                ):
-                    raise RuntimeError(
-                        f"Staged NVFP4 raw-byte parameter {name!r} has dtype "
-                        f"{parameter.dtype} with element size "
-                        f"{parameter.element_size()}; expected reviewed "
-                        "one-byte uint8 or float8_e4m3fn storage"
-                    )
-            elif parameter.dtype != expected_dtypes[basename]:
+            if parameter.dtype != expected_dtypes[basename]:
                 raise RuntimeError(
                     f"Staged NVFP4 parameter {name!r} has dtype "
                     f"{parameter.dtype}; expected {expected_dtypes[basename]}"
+                )
+            if (
+                basename in _RAW_BYTE_PARAMETERS
+                and int(parameter.element_size()) != 1
+            ):
+                raise RuntimeError(
+                    f"Staged NVFP4 raw-byte parameter {name!r} must use "
+                    "one-byte E4M3 storage"
                 )
             parameters[basename] = parameter
         observed_bytes = sum(_tensor_bytes(p) for p in parameters.values())

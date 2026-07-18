@@ -149,8 +149,8 @@ _PARAMETER_SHAPES = {
 _PARAMETER_DTYPES = {
     "w13_weight": _FakeTorch.uint8,
     "w2_weight": _FakeTorch.uint8,
-    "w13_weight_scale": _FakeTorch.uint8,
-    "w2_weight_scale": _FakeTorch.uint8,
+    "w13_weight_scale": _FakeTorch.float8_e4m3fn,
+    "w2_weight_scale": _FakeTorch.float8_e4m3fn,
     "w13_weight_scale_2": _FakeTorch.float32,
     "w2_weight_scale_2": _FakeTorch.float32,
     "w13_input_scale": _FakeTorch.float32,
@@ -206,7 +206,7 @@ def _match(layer: int, mapping_key: str, suffix: str):
 def _source_dtype(suffix: str):
     return {
         "weight": _FakeTorch.uint8,
-        "weight_scale": _FakeTorch.uint8,
+        "weight_scale": _FakeTorch.float8_e4m3fn,
         "weight_scale_2": _FakeTorch.float32,
         "input_scale": _FakeTorch.float32,
     }[suffix]
@@ -246,7 +246,16 @@ def _fake_routed_weight_loader(
     return bool(return_success)
 
 
-def _factory(helper, params, *, start=0, end=1, environ=None, index=None):
+def _factory(
+    helper,
+    params,
+    *,
+    start=0,
+    end=1,
+    environ=None,
+    index=None,
+    load_format="auto",
+):
     return helper.maybe_create_nvfp4_layer_stager(
         torch_module=_FakeTorch,
         params_dict=params,
@@ -259,7 +268,7 @@ def _factory(helper, params, *, start=0, end=1, environ=None, index=None):
         use_mega_moe=False,
         enable_expert_parallel=False,
         num_redundant_experts=0,
-        load_format="auto",
+        load_format=load_format,
         quant_config=DeepseekV4FP8Config(),
         environ=environ
         or {
@@ -366,25 +375,27 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "mapping candidate drifted"):
             _factory(self.helper, _make_params(0), index=wrong_candidate)
 
-    def test_post_e8m0_reinterpret_is_the_only_scale_source_contract(self):
+    def test_e4m3_scale_source_is_reinterpreted_to_raw_bytes(self):
         stager = _factory(self.helper, _make_params(0))
-        raw_e8m0 = _FakeTensor(
-            (8,), dtype=_FakeTorch.float8_e8m0fnu, device="cpu"
+        e4m3 = _FakeTensor(
+            (8,), dtype=_FakeTorch.float8_e4m3fn, device="cpu"
         )
-        post_reinterpret = raw_e8m0.view(_FakeTorch.uint8)
         source = stager.begin_source(
             "layers.0.ffn.experts.0.w1.weight_scale",
-            post_reinterpret,
+            e4m3,
             _match(0, "experts.0.w1.", "weight_scale"),
         )
-        self.assertIs(source.loaded_weight._storage, raw_e8m0._storage)
+        self.assertIs(source.loaded_weight._storage, e4m3._storage)
         self.assertEqual(source.loaded_weight.dtype, _FakeTorch.uint8)
 
         other = _factory(self.helper, _make_params(0))
+        e8m0 = _FakeTensor(
+            (8,), dtype=_FakeTorch.float8_e8m0fnu, device="cpu"
+        )
         with self.assertRaisesRegex(RuntimeError, "has dtype"):
             other.begin_source(
-                "unconverted-e8m0",
-                raw_e8m0,
+                "wrong-e8m0",
+                e8m0,
                 _match(0, "experts.0.w1.", "weight_scale"),
             )
 
@@ -600,6 +611,13 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
                 params,
                 environ=base | {"DSPARK_WEIGHT_LOAD_FORMAT": "roce_tp"},
             )
+        with self.assertRaisesRegex(RuntimeError, "does not support roce_tp"):
+            _factory(
+                self.helper,
+                params,
+                load_format="LoadFormat.ROCE_TP",
+                environ=base,
+            )
 
         kwargs = dict(
             torch_module=_FakeTorch,
@@ -686,15 +704,14 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
         params = _make_params(0)
         scale = params[_parameter_name(0, "w13_weight_scale")]
         scale.data.dtype = _FakeTorch.float32
-        with self.assertRaisesRegex(RuntimeError, "raw-byte parameter"):
+        with self.assertRaisesRegex(RuntimeError, "has dtype"):
             _factory(self.helper, params)
 
         params = _make_params(0)
         for basename in ("w13_weight_scale", "w2_weight_scale"):
-            params[_parameter_name(0, basename)].data.dtype = (
-                _FakeTorch.float8_e4m3fn
-            )
-        self.assertIsNotNone(_factory(self.helper, params))
+            params[_parameter_name(0, basename)].data.dtype = _FakeTorch.uint8
+        with self.assertRaisesRegex(RuntimeError, "has dtype"):
+            _factory(self.helper, params)
 
         params = _make_params(0)
         weight = params[_parameter_name(0, "w13_weight")]

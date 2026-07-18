@@ -11,6 +11,7 @@ ARG FLASHINFER_CUBIN_SHA256=3870958b02a1752b44121d6842c531e1be2a29202f623a5fd5f0
 COPY .local/wheels/${FLASHINFER_JIT_CACHE_WHEEL} /tmp/${FLASHINFER_JIT_CACHE_WHEEL}
 COPY .local/wheels/${FLASHINFER_CUBIN_WHEEL} /tmp/${FLASHINFER_CUBIN_WHEEL}
 COPY scripts/verify_flashinfer_runtime.py /usr/local/bin/dspark-verify-flashinfer-runtime
+COPY benchmarks/probe_nvfp4_staged_routed_loader.py /usr/local/bin/dspark-probe-nvfp4-staged-routed-loader
 
 RUN echo "${FLASHINFER_JIT_CACHE_SHA256}  /tmp/${FLASHINFER_JIT_CACHE_WHEEL}" | sha256sum -c - && \
     echo "${FLASHINFER_CUBIN_SHA256}  /tmp/${FLASHINFER_CUBIN_WHEEL}" | sha256sum -c - && \
