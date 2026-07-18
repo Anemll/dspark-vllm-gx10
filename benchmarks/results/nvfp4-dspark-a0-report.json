@@ -1,0 +1,144 @@
+{
+  "schema_version": 1,
+  "status": "a0_pass_phase_b_complete_phase_c_not_authorized",
+  "source_revision": "7b877eaae2a8e2b5800e84b585d7f14fb90f5294",
+  "contract": "prepared_nvfp4_target_plus_separate_native_dspark_draft",
+  "target": {
+    "format": "tp2_cutlass_prepared_v1",
+    "quantization": "ModelOpt NVFP4 W4A4",
+    "backend": "flashinfer_cutlass",
+    "routed_layers": 43
+  },
+  "draft": {
+    "quantization": "native MXFP4",
+    "stages": 3,
+    "stage_tensor_counts": [1568, 1565, 1572],
+    "num_speculative_tokens": 5,
+    "config_sha256": "6c8f3d2d3b48707541b88f32f22ef3f0f8a6b57d8523281e2b8d3cdb0ae9a023",
+    "index_sha256": "98efab455cf08dfbbbaaba6f570e1bf10bf927d2b4c3c453a59c2f6f0e3be92b",
+    "stage_shard_sha256": [
+      "14810f274692bb771c3970e8cba45846c4aa2213dcfb0025ffebe788d229e18d",
+      "7a44164698d90648a35c030c5eb369256d2c469306bfbf2b1ae27f35b6e57889",
+      "a0bbb24f36d2ef6107250088e0f020f93aec0677cd24be3e9e69589547a7656f"
+    ]
+  },
+  "memory_projection_per_rank_gib": {
+    "usable_after_stop": 121.0,
+    "prepared_target": 78.11,
+    "draft_parameters": 5.335556533187628,
+    "draft_with_15_percent_overhead": 6.135890013873577,
+    "graph_workspace_reserve": 4.0,
+    "system_safety_reserve": 2.0,
+    "projected_kv_remaining": 30.754109986126423,
+    "candidate_kv_allocation": 30.0,
+    "candidate_kv_allocation_bytes": 32212254720,
+    "passed": true
+  },
+  "evidence_sha256": {
+    "split_contract": "2db1156483824ab2623bc17c9ad3f51c423261c6b1a18b8f3ebbc0a6f82f1e20",
+    "pinned_upstream_audit": "8009edf1dd4b324d1e60db7ad27461367e3e6656555ff075815fa5b1f5291ea8",
+    "head_rendered_compose": "23037e385b4693666c0c6ea2e0e06c0cc49a3f8ff11a5c99133a761a3e43a4f6",
+    "worker_rendered_compose": "8c0a91748f7eb066b506754d6adeec3e784c040fe73e3eb4f24000c57c21942f",
+    "worker_synthetic_small_m": "4528748bd74fa8838963d1fa98cf18e8edf1d75bafc9d30d9fa08f0ef8bc2d76",
+    "production_acceptance_baseline": "8674acf55e12a3c7cd765f91bf0ee57655d8134cd73688bcd7c703b5a4a9eaef",
+    "production_live_spec_config": "006f8c8919f472aa079cc67679093a4032591070b857dba0317eb0b31d72e4aa",
+    "phase_c_head_env": "04652744bb2c9b94a3abc755ce724448274d1e149a9264a3904b588974828cc2",
+    "phase_c_worker_env": "80f658ad0b3652eda8ef9f3274c8a3e0794b6c131f82fb400eeebfe0d650945c",
+    "phase_c_failure_result": "8efb22c6c05db022a73b5865463f64cd1e4dfed317db917c0f65ad7e37a1e3b3"
+  },
+  "worker_synthetic_small_m": {
+    "scope": "synthetic E=8 TP2 rank1 CUTLASS diagnostic, not end-to-end serving",
+    "m": [4, 8, 12, 16, 20, 24, 32, 64],
+    "correctness_m": [4, 24, 64],
+    "failures": [],
+    "cuda_graphs_captured": true,
+    "peak_allocated_gib": 0.08398675918579102
+  },
+  "production_decode_baseline": {
+    "model": "deepseek-v4-flash-dspark-abliterated",
+    "trials": 2,
+    "max_tokens": 512,
+    "speculative_positions": 5,
+    "configuration_label": "production_dspark_5token_confidence_off_threshold_0_probabilistic",
+    "configuration_interpretation": "underperforming_configuration_baseline_for_exact_phase_c_parity",
+    "verified_live_speculation_config": {
+      "num_speculative_tokens": 5,
+      "confidence_scheduler": "off",
+      "confidence_threshold": "0.0",
+      "draft_sample_method": "probabilistic",
+      "both_ranks_match": true
+    },
+    "by_concurrency": [
+      {
+        "concurrency": 1,
+        "median_output_tps": 45.31081024859496,
+        "median_acceptance_rate": 0.38742857142857146,
+        "median_acceptance_length": 2.937142857142857,
+        "median_per_position": [0.7771428571428571, 0.49714285714285716, 0.3142857142857143, 0.22285714285714286, 0.12571428571428572]
+      },
+      {
+        "concurrency": 2,
+        "median_output_tps": 74.68458084788512,
+        "median_acceptance_rate": 0.4599908711799,
+        "median_acceptance_length": 3.2999543558995,
+        "median_per_position": [0.8132170791925144, 0.6166621714143448, 0.41232701923276416, 0.27878171746301794, 0.17896636859685885]
+      },
+      {
+        "concurrency": 4,
+        "median_output_tps": 95.1104519341502,
+        "median_acceptance_rate": 0.41860104201308057,
+        "median_acceptance_length": 3.093005210065403,
+        "median_per_position": [0.7769252696090077, 0.5537871949577968, 0.36573392243495334, 0.2430123362946775, 0.15354648676896765]
+      }
+    ]
+  },
+  "phase_c_result": {
+    "authorized": true,
+    "attempt_complete": true,
+    "decision": "rejected_before_readiness",
+    "result_json": "benchmarks/results/nvfp4-dspark-phase-c-failure.json",
+    "failure_gate": "native_draft_mxfp4_cutlass_postload_conversion",
+    "c1_trials_run": 0,
+    "retry_authorized": false,
+    "hard_outage_ceiling_seconds": 1800,
+    "candidate_decision_deadline_seconds": 1440,
+    "concurrency": [1],
+    "trials": 2,
+    "max_tokens": 512,
+    "exact_production_parity": {
+      "num_speculative_tokens": 5,
+      "confidence_scheduler": "off",
+      "confidence_threshold": "0.0",
+      "draft_sample_method": "probabilistic"
+    },
+    "minimum_acceptance_rate": 0.3,
+    "minimum_acceptance_length": 2.5,
+    "minimum_final_position_acceptance": 0.06,
+    "minimum_baseline_output_tps_ratio": 1.0,
+    "minimum_baseline_acceptance_retention": 0.8,
+    "minimum_each_position_retention": 0.5,
+    "required_observed_kv_gib": 30.0,
+    "changes_speculation_settings": false
+  },
+  "c2_followup": {
+    "authorized": false,
+    "objective": "matched production and NVFP4 confidence-enabled recheck",
+    "num_speculative_tokens": 5,
+    "draft_sample_method": "probabilistic",
+    "confidence_scheduler": "on for both sides",
+    "confidence_threshold": "must be pinned identically from the verified runtime contract before execution",
+    "execution_shape": "separate bounded production-on and candidate-on restart windows",
+    "required_metrics": [
+      "output_tps",
+      "aggregate_acceptance_rate",
+      "mean_acceptance_length",
+      "per_position_acceptance_rates"
+    ],
+    "keeps_phase_c_baseline_immutable": true
+  },
+  "c3_followup": {
+    "authorized": false,
+    "status": "reserved_for_anemll_dspark_optimizations",
+    "details": "pending advisor-channel specification"
+  }
+}

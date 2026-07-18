@@ -1,0 +1,15 @@
+COMPOSE_SPLIT_PASS=true
+ROLE=worker
+CID=e8f54391b202
+PROD_SOURCE=/mnt/xfsflash/models/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored
+TARGET=/mnt/xfsflash/models/DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1
+COMPOSE_VERSION=5.0.2
+RUN_RC=0
+MEM_BEFORE_KB=14887392
+MEM_AFTER_KB=14854268
+SWAP_BEFORE_KB=12489344
+SWAP_AFTER_KB=12489924
+WORKER_SMALLM_PASS=true
+4528748bd74fa8838963d1fa98cf18e8edf1d75bafc9d30d9fa08f0ef8bc2d76  /home/anemll/nvfp4-artifacts/20260718-a0-dspark-split/worker-smallm.json
+33dcb81bff1d1434080b7df00721dd6f93b88a61d25f9f7840aa1444dd41b530  /home/anemll/nvfp4-artifacts/20260718-a0-dspark-split/worker-smallm.log
+PRODUCTION_POST_PASS=true

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "evidence_type": "read_only_live_container_environment_and_pid1_argv",
+  "production_image": "sha256:3430d6614a8e2925f34d059af6caf05aff42387326db4d05639a60f10f2654d8",
+  "nodes": [
+    {
+      "role": "head",
+      "container_id": "8f015736a18e",
+      "running": true,
+      "oom_killed": false,
+      "health_http": 200,
+      "confidence_scheduler": "off",
+      "confidence_threshold": "0.0",
+      "speculative_method": "dspark",
+      "num_speculative_tokens": 5,
+      "draft_sample_method": "probabilistic"
+    },
+    {
+      "role": "worker",
+      "container_id": "e8f54391b202",
+      "running": true,
+      "oom_killed": false,
+      "confidence_scheduler": "off",
+      "confidence_threshold": "0.0",
+      "speculative_method": "dspark",
+      "num_speculative_tokens": 5,
+      "draft_sample_method": "probabilistic"
+    }
+  ],
+  "both_ranks_match": true,
+  "baseline_json": "benchmarks/results/dspark-production-acceptance-baseline.json",
+  "baseline_json_sha256": "8674acf55e12a3c7cd765f91bf0ee57655d8134cd73688bcd7c703b5a4a9eaef",
+  "baseline_label": "production_dspark_5token_confidence_off_threshold_0_probabilistic",
+  "interpretation": "underperforming_configuration_baseline_for_exact_phase_c_parity",
+  "phase_c_requires_exact_match": true,
+  "phase_c_changes_speculation_settings": false
+}

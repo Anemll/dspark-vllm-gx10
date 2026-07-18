@@ -1,0 +1,9 @@
+23037e385b4693666c0c6ea2e0e06c0cc49a3f8ff11a5c99133a761a3e43a4f6  ./hardware/head-compose.json
+61d6e45e7cd263df0c6f8294dde74f021890c6ee6e187b527903982f2ee9374a  ./hardware/head-head.log
+c2645d3c15028da57c48392c5b10aaa67b7c9da670dfc4b40fa730c0c85ea534  ./hardware/node-a0.sh
+8c0a91748f7eb066b506754d6adeec3e784c040fe73e3eb4f24000c57c21942f  ./hardware/worker-compose.json
+4528748bd74fa8838963d1fa98cf18e8edf1d75bafc9d30d9fa08f0ef8bc2d76  ./hardware/worker-worker-smallm.json
+33dcb81bff1d1434080b7df00721dd6f93b88a61d25f9f7840aa1444dd41b530  ./hardware/worker-worker-smallm.log
+0bcbe9224ca05decc0d1726daa9df805f9b7f8fcb6200ebbc0ae219610f015ff  ./hardware/worker-worker.log
+8009edf1dd4b324d1e60db7ad27461367e3e6656555ff075815fa5b1f5291ea8  ./pinned-upstream-audit.json
+2db1156483824ab2623bc17c9ad3f51c423261c6b1a18b8f3ebbc0a6f82f1e20  ./split-contract.json

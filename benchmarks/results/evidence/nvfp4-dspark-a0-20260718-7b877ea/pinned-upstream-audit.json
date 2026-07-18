@@ -1,0 +1,41 @@
+{
+  "acceptance_metric_source": {
+    "aggregate_acceptance_formula": "delta(accepted_tokens) / delta(draft_tokens)",
+    "mean_acceptance_length_formula": "1 + delta(accepted_tokens) / delta(drafts)",
+    "per_position_formula": "delta(accepted_per_position) / delta(drafts)",
+    "prometheus_counters": {
+      "accepted_per_position": "vllm:spec_decode_num_accepted_tokens_per_pos_total",
+      "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+      "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+      "drafts": "vllm:spec_decode_num_drafts_total"
+    }
+  },
+  "draft_model_construction": {
+    "get_model_receives_draft_model_config": true
+  },
+  "draft_tp_expert_partition": {
+    "non_eplb_physical_experts_divided_by_tp_size": true,
+    "path": "DeepseekV4MoE._init_fused_moe_experts",
+    "projection_assumption": "no redundant experts and TP=2 imply exactly half of routed-expert payload per rank",
+    "rank_owns_contiguous_expert_range": true
+  },
+  "draft_weight_filter": {
+    "load_weights_uses_mtp_remapper": true,
+    "non_mtp_weights_are_skipped": true
+  },
+  "file_sha256": {
+    "vllm/config/speculative.py": "3f1abd1ca3042fba239e7bf98b08f645f3e950c16ab510fbc99a49c5c507721f",
+    "vllm/models/deepseek_v4/nvidia/dspark.py": "efe33c32d37ed7f26d869d94626f1415906d31218ec0ee44d79bb2b815b8cf39",
+    "vllm/models/deepseek_v4/nvidia/model.py": "a0cbb88b7a0ac5ba9419e07f8922bb84c861f41611596d719efdd86ce95a2e50",
+    "vllm/v1/spec_decode/metrics.py": "c1c6b20bbf0ae3427dc331bbf8032193cf0b1ab9f3fe552257da6e4d51f2f4f6",
+    "vllm/v1/worker/gpu/spec_decode/dspark/utils.py": "457c44aec45fe00780748c34288a091bd212d18b40b0d901a8f628640c0a2d24"
+  },
+  "ok": true,
+  "schema_version": 1,
+  "split_model_config": {
+    "explicit_model_builds_separate_draft_model_config": true,
+    "explicit_model_field": true,
+    "omitted_model_defaults_to_target_path": true
+  },
+  "vllm_revision": "752a3a504485790a2e8491cacbb35c137339ad34"
+}

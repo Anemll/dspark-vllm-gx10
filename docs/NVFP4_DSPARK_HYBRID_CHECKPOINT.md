@@ -1,5 +1,13 @@
 # NVIDIA NVFP4 + DSpark hybrid checkpoint
 
+> **Prepared-target note:** this builder accepts the raw 46-shard NVIDIA
+> checkpoint, not `tp2_cutlass_prepared_v1`. The current prepared NVFP4 +
+> DSpark candidate uses two explicit read-only model paths instead: the
+> immutable prepared target and the native three-stage DSpark checkpoint.
+> See `NVFP4_DSPARK_SPLIT_RUNTIME.md`. This builder remains the fallback for a
+> future raw-hybrid-then-prepared conversion; it is not part of the current
+> Phase C candidate.
+
 `scripts/build_hybrid_nvfp4_dspark_checkpoint.py` creates a metadata-correct
 checkpoint view with NVIDIA's W4A4 NVFP4 target model and the existing
 native-MXFP4 DSpark drafter. It does not quantize, convert, or rewrite tensor

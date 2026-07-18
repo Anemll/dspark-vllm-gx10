@@ -1,0 +1,11 @@
+7f4544091732853f89a79a641be4cf2412b6071273b3dad39442427f301b3fbd  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/banked/candidate-worker-inspect.json
+839dffc1d94db6de7bc0324c9f0c6f11a7d4d274103e69cf6807afcd6c974132  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/banked/candidate-worker.log
+11223b090a6321bf2f466493fca49815082196f9578297c23a2c49919a27187e  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/banked/worker-sha256s.txt
+10da8e1733ba0b637bbb82c9c8a6dc3266b01c44b3cbf650cba2bbd82599e90a  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/final-worker-sha256s.txt
+898dc50bab47b44344ec7b1ceb1d490050e4fa0dbd6fb8b4388b22b1b7694996  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/preflight/compose-worker.json
+c2d32189e343c1f2ed76f85c3ab77f2c643e83f40b6bdd7b015303ad310f08e5  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/preflight/input-sha256s.txt
+52030872cab563ea5f10609412a37bbe2e1e61a65ffc90061a6ceb9fc5c3d6a0  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/preflight/production-inspect.json
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/preflight/watchdog-launch-worker.log
+52030872cab563ea5f10609412a37bbe2e1e61a65ffc90061a6ceb9fc5c3d6a0  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/prestop/production-worker-inspect.json
+3286d35848211443af71507527aa5c0c44cf77f4ac158f1395263f6f4941e1f5  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/prestop/production-worker.log
+2db0a1fe0ea3dec2d16dbf91d03a3f07ac343b5162c3a6d0946c45ca8c1a91f3  /home/anemll/nvfp4-artifacts/20260718T210716Z-7b877ea-dspark-phase-c/prestop/stopped-worker.txt

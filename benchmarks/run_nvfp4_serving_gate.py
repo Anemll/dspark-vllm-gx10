@@ -19,6 +19,9 @@ import urllib.request
 
 DEFAULT_SIZES = [1024, 2048, 4096, 8192, 16384, 32768]
 DEFAULT_CONCURRENCY = [1, 2, 4]
+DEFAULT_MINIMUM_SPEC_ACCEPTANCE_RATE = 0.30
+DEFAULT_MINIMUM_SPEC_ACCEPTANCE_LENGTH = 2.50
+DEFAULT_MINIMUM_SPEC_LAST_POSITION_RATE = 0.06
 
 
 def require(condition: bool, message: str) -> None:
@@ -88,12 +91,30 @@ def validate_decode_report(
     concurrencies: list[int],
     trials: int,
     max_tokens: int,
+    require_spec_metrics: bool = False,
+    expected_spec_positions: int = 5,
+    minimum_spec_acceptance_rate: float = DEFAULT_MINIMUM_SPEC_ACCEPTANCE_RATE,
+    minimum_spec_acceptance_length: float = DEFAULT_MINIMUM_SPEC_ACCEPTANCE_LENGTH,
+    minimum_spec_last_position_rate: float = DEFAULT_MINIMUM_SPEC_LAST_POSITION_RATE,
 ) -> list[dict[str, object]]:
     require(report.get("model") == model, "decode model mismatch")
     require(report.get("max_tokens") == max_tokens, "decode token limit mismatch")
     rows = report.get("trials")
     require(isinstance(rows, list), "decode trials missing")
     require(len(rows) == len(concurrencies) * trials, "decode trial count mismatch")
+    if require_spec_metrics:
+        require(
+            report.get("spec_decode_metric_source")
+            == {
+                "num_drafts": "vllm:spec_decode_num_drafts_total",
+                "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+                "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+                "accepted_per_position": (
+                    "vllm:spec_decode_num_accepted_tokens_per_pos_total"
+                ),
+            },
+            "decode speculative metric source mismatch",
+        )
     summary: list[dict[str, object]] = []
     for concurrency in concurrencies:
         selected = [row for row in rows if row.get("concurrency") == concurrency]
@@ -105,6 +126,9 @@ def validate_decode_report(
         )
         rates: list[float] = []
         ttfts: list[float] = []
+        acceptance_rates: list[float] = []
+        acceptance_lengths: list[float] = []
+        per_position_rates: list[list[float]] = []
         for row in selected:
             require(row.get("total_tokens") == concurrency * max_tokens, "decode total token mismatch")
             require(finite_positive(row.get("wall_s")), "decode wall time invalid")
@@ -122,16 +146,148 @@ def validate_decode_report(
                     require(finite_positive(stream.get(key)), f"decode {key} invalid")
             rates.append(float(row["aggregate_token_tps"]))
             ttfts.append(float(row["mean_ttft_s"]))
-        summary.append(
+            if require_spec_metrics:
+                spec = row.get("spec_decode")
+                require(isinstance(spec, dict), "decode speculative metrics missing")
+                require(int(spec.get("num_drafts", 0)) > 0, "decode draft count missing")
+                require(int(spec.get("draft_tokens", 0)) > 0, "decode draft tokens missing")
+                require(
+                    minimum_spec_acceptance_rate
+                    <= float(spec.get("aggregate_acceptance_rate", -1))
+                    <= 1,
+                    "decode acceptance rate below gate",
+                )
+                require(
+                    minimum_spec_acceptance_length
+                    <= float(spec.get("mean_acceptance_length", 0))
+                    <= expected_spec_positions + 1,
+                    "decode acceptance length below gate",
+                )
+                positions = spec.get("per_position_acceptance_rates")
+                require(
+                    isinstance(positions, list)
+                    and len(positions) == expected_spec_positions,
+                    "decode per-position acceptance missing",
+                )
+                require(
+                    all(
+                        isinstance(value, (int, float)) and 0 <= value <= 1
+                        for value in positions
+                    ),
+                    "decode per-position acceptance invalid",
+                )
+                require(
+                    all(left >= right for left, right in zip(positions, positions[1:])),
+                    "decode per-position acceptance is not monotonic",
+                )
+                require(
+                    float(positions[-1]) >= minimum_spec_last_position_rate,
+                    "decode final-position acceptance below gate",
+                )
+                acceptance_rates.append(float(spec["aggregate_acceptance_rate"]))
+                acceptance_lengths.append(float(spec["mean_acceptance_length"]))
+                per_position_rates.append([float(value) for value in positions])
+        row_summary: dict[str, object] = {
+            "concurrency": concurrency,
+            "median_aggregate_output_tps": statistics.median(rates),
+            "min_aggregate_output_tps": min(rates),
+            "max_aggregate_output_tps": max(rates),
+            "median_mean_ttft_s": statistics.median(ttfts),
+        }
+        if require_spec_metrics:
+            row_summary.update(
+                {
+                    "median_spec_acceptance_rate": statistics.median(acceptance_rates),
+                    "median_spec_acceptance_length": statistics.median(
+                        acceptance_lengths
+                    ),
+                    "median_spec_acceptance_per_position": [
+                        statistics.median(row[position] for row in per_position_rates)
+                        for position in range(expected_spec_positions)
+                    ],
+                }
+            )
+        summary.append(row_summary)
+    return summary
+
+
+def compare_decode_summaries(
+    candidate: list[dict[str, object]],
+    baseline: list[dict[str, object]],
+    *,
+    minimum_output_tps_ratio: float,
+    minimum_spec_retention_ratio: float,
+    minimum_spec_position_retention_ratio: float,
+) -> list[dict[str, object]]:
+    require(
+        [row["concurrency"] for row in candidate]
+        == [row["concurrency"] for row in baseline],
+        "candidate/baseline decode concurrency mismatch",
+    )
+    comparisons: list[dict[str, object]] = []
+    for candidate_row, baseline_row in zip(candidate, baseline):
+        concurrency = int(candidate_row["concurrency"])
+        candidate_tps = float(candidate_row["median_aggregate_output_tps"])
+        baseline_tps = float(baseline_row["median_aggregate_output_tps"])
+        output_ratio = candidate_tps / baseline_tps
+        require(
+            output_ratio >= minimum_output_tps_ratio,
+            f"decode x{concurrency} output throughput below baseline gate",
+        )
+
+        candidate_acceptance = float(candidate_row["median_spec_acceptance_rate"])
+        baseline_acceptance = float(baseline_row["median_spec_acceptance_rate"])
+        acceptance_retention = candidate_acceptance / baseline_acceptance
+        require(
+            acceptance_retention >= minimum_spec_retention_ratio,
+            f"decode x{concurrency} acceptance retention below gate",
+        )
+
+        candidate_length = float(candidate_row["median_spec_acceptance_length"])
+        baseline_length = float(baseline_row["median_spec_acceptance_length"])
+        accepted_excess_retention = (candidate_length - 1) / (baseline_length - 1)
+        require(
+            accepted_excess_retention >= minimum_spec_retention_ratio,
+            f"decode x{concurrency} accepted-length retention below gate",
+        )
+
+        candidate_positions = [
+            float(value)
+            for value in candidate_row["median_spec_acceptance_per_position"]
+        ]
+        baseline_positions = [
+            float(value)
+            for value in baseline_row["median_spec_acceptance_per_position"]
+        ]
+        require(
+            len(candidate_positions) == len(baseline_positions),
+            "candidate/baseline acceptance position mismatch",
+        )
+        position_retentions = [
+            candidate_value / baseline_value
+            for candidate_value, baseline_value in zip(
+                candidate_positions, baseline_positions
+            )
+        ]
+        require(
+            all(
+                value >= minimum_spec_position_retention_ratio
+                for value in position_retentions
+            ),
+            f"decode x{concurrency} per-position acceptance retention below gate",
+        )
+        comparisons.append(
             {
                 "concurrency": concurrency,
-                "median_aggregate_output_tps": statistics.median(rates),
-                "min_aggregate_output_tps": min(rates),
-                "max_aggregate_output_tps": max(rates),
-                "median_mean_ttft_s": statistics.median(ttfts),
+                "candidate_median_output_tps": candidate_tps,
+                "baseline_median_output_tps": baseline_tps,
+                "output_tps_ratio": output_ratio,
+                "acceptance_retention_ratio": acceptance_retention,
+                "accepted_excess_length_retention_ratio": accepted_excess_retention,
+                "per_position_acceptance_retention_ratios": position_retentions,
             }
         )
-    return summary
+    return comparisons
 
 
 def validate_prefill_report(
@@ -260,10 +416,36 @@ def main() -> None:
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
+    parser.add_argument("--label", required=True)
+    parser.add_argument("--expected-content", default="NVIDIA ready")
     parser.add_argument("--concurrency", default="1,2,4")
     parser.add_argument("--sizes", default=",".join(str(value) for value in DEFAULT_SIZES))
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument("--require-spec-metrics", action="store_true")
+    parser.add_argument("--expected-spec-positions", type=int, default=5)
+    parser.add_argument(
+        "--minimum-spec-acceptance-rate",
+        type=float,
+        default=DEFAULT_MINIMUM_SPEC_ACCEPTANCE_RATE,
+    )
+    parser.add_argument(
+        "--minimum-spec-acceptance-length",
+        type=float,
+        default=DEFAULT_MINIMUM_SPEC_ACCEPTANCE_LENGTH,
+    )
+    parser.add_argument(
+        "--minimum-spec-last-position-rate",
+        type=float,
+        default=DEFAULT_MINIMUM_SPEC_LAST_POSITION_RATE,
+    )
+    parser.add_argument("--baseline-decode-json", type=Path)
+    parser.add_argument("--minimum-output-tps-ratio", type=float, default=1.0)
+    parser.add_argument("--minimum-spec-retention-ratio", type=float, default=0.8)
+    parser.add_argument(
+        "--minimum-spec-position-retention-ratio", type=float, default=0.5
+    )
+    parser.add_argument("--skip-prefill", action="store_true")
     parser.add_argument("--seed", type=int, default=4104)
     parser.add_argument("--request-timeout", type=float, default=240)
     parser.add_argument("--decode-timeout", type=float, default=900)
@@ -273,6 +455,40 @@ def main() -> None:
     concurrencies = parse_csv(args.concurrency)
     sizes = parse_csv(args.sizes)
     require(args.trials > 0 and args.max_tokens > 0, "trials/max-tokens must be positive")
+    require(args.expected_spec_positions > 0, "expected spec positions must be positive")
+    require(
+        0 < args.minimum_spec_acceptance_rate <= 1,
+        "minimum speculative acceptance rate must be in (0, 1]",
+    )
+    require(
+        1 < args.minimum_spec_acceptance_length <= args.expected_spec_positions + 1,
+        "minimum speculative acceptance length is invalid",
+    )
+    require(
+        0 < args.minimum_spec_last_position_rate <= 1,
+        "minimum final-position acceptance rate must be in (0, 1]",
+    )
+    require(
+        args.minimum_output_tps_ratio > 0,
+        "minimum output throughput ratio must be positive",
+    )
+    require(
+        0 < args.minimum_spec_retention_ratio <= 1,
+        "minimum speculative retention ratio must be in (0, 1]",
+    )
+    require(
+        0 < args.minimum_spec_position_retention_ratio <= 1,
+        "minimum per-position retention ratio must be in (0, 1]",
+    )
+    require(
+        args.baseline_decode_json is None or args.require_spec_metrics,
+        "baseline decode comparison requires speculative metrics",
+    )
+    require(args.label.strip() == args.label and bool(args.label), "label must be nonempty and trimmed")
+    require(
+        args.expected_content.strip() == args.expected_content and bool(args.expected_content),
+        "expected content must be nonempty and trimmed",
+    )
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     root = Path(__file__).resolve().parents[1]
@@ -282,6 +498,11 @@ def main() -> None:
 
     smoke_started = time.monotonic()
     nonstream = run_nonstream_smoke(args.base_url, args.model, args.request_timeout)
+    nonstream_content = nonstream["choices"][0]["message"]["content"]
+    require(
+        " ".join(nonstream_content.split()) == args.expected_content,
+        "nonstream smoke content mismatch",
+    )
     stream = decode_module.run_stream(args.base_url, args.model, 64, 0)
     require(stream.completion_tokens == 64, "stream smoke token count mismatch")
     require(stream.finish_reason == "length", "stream smoke finish reason mismatch")
@@ -297,8 +518,7 @@ def main() -> None:
     print("functional smoke passed", flush=True)
 
     decode_json = output_dir / "decode.json"
-    run_command(
-        [
+    decode_command = [
             sys.executable,
             str(decode_path),
             "--base-url",
@@ -313,7 +533,17 @@ def main() -> None:
             str(args.max_tokens),
             "--output",
             str(decode_json),
-        ],
+    ]
+    if args.require_spec_metrics:
+        decode_command.extend(
+            [
+                "--require-spec-metrics",
+                "--expected-spec-positions",
+                str(args.expected_spec_positions),
+            ]
+        )
+    run_command(
+        decode_command,
         timeout=args.decode_timeout,
         log_path=output_dir / "decode.log",
     )
@@ -324,58 +554,100 @@ def main() -> None:
         concurrencies=concurrencies,
         trials=args.trials,
         max_tokens=args.max_tokens,
+        require_spec_metrics=args.require_spec_metrics,
+        expected_spec_positions=args.expected_spec_positions,
+        minimum_spec_acceptance_rate=args.minimum_spec_acceptance_rate,
+        minimum_spec_acceptance_length=args.minimum_spec_acceptance_length,
+        minimum_spec_last_position_rate=args.minimum_spec_last_position_rate,
     )
     print("decode gate passed", flush=True)
 
-    prefill_json = output_dir / "prefill.json"
-    run_command(
-        [
-            sys.executable,
-            str(prefill_path),
-            "--base-url",
-            args.base_url,
-            "--model",
-            args.model,
-            "--sizes",
-            args.sizes,
-            "--concurrency",
-            args.concurrency,
-            "--trials",
-            str(args.trials),
-            "--warmup-tokens",
-            "1024",
-            "--shape-warmup-trials",
-            "1",
-            "--timeout",
-            str(args.request_timeout),
-            "--seed",
-            str(args.seed),
-            "--label",
-            "cutlass-71d0a3c",
-            "--report-target",
-            "gx10-tp2",
-            "--output",
-            str(prefill_json),
-        ],
-        timeout=args.prefill_timeout,
-        log_path=output_dir / "prefill.log",
-    )
-    prefill_report = json.loads(prefill_json.read_text())
-    prefill_summary = validate_prefill_report(
-        prefill_report,
-        model=args.model,
-        sizes=sizes,
-        concurrencies=concurrencies,
-        trials=args.trials,
-        seed=args.seed,
-    )
-    print("prefill gate passed", flush=True)
+    decode_comparison: list[dict[str, object]] | None = None
+    if args.baseline_decode_json is not None:
+        baseline_path = args.baseline_decode_json.resolve()
+        baseline_report = json.loads(baseline_path.read_text())
+        baseline_rows = baseline_report.get("trials")
+        require(isinstance(baseline_rows, list), "baseline decode trials missing")
+        selected_baseline_rows = [
+            row for row in baseline_rows if row.get("concurrency") in concurrencies
+        ]
+        baseline_subset = dict(baseline_report)
+        baseline_subset["trials"] = selected_baseline_rows
+        baseline_summary = validate_decode_report(
+            baseline_subset,
+            model=str(baseline_report.get("model")),
+            concurrencies=concurrencies,
+            trials=args.trials,
+            max_tokens=args.max_tokens,
+            require_spec_metrics=True,
+            expected_spec_positions=args.expected_spec_positions,
+            minimum_spec_acceptance_rate=args.minimum_spec_acceptance_rate,
+            minimum_spec_acceptance_length=args.minimum_spec_acceptance_length,
+            minimum_spec_last_position_rate=args.minimum_spec_last_position_rate,
+        )
+        decode_comparison = compare_decode_summaries(
+            decode_summary,
+            baseline_summary,
+            minimum_output_tps_ratio=args.minimum_output_tps_ratio,
+            minimum_spec_retention_ratio=args.minimum_spec_retention_ratio,
+            minimum_spec_position_retention_ratio=(
+                args.minimum_spec_position_retention_ratio
+            ),
+        )
+        print("decode production comparison passed", flush=True)
+
+    prefill_summary: list[dict[str, object]] = []
+    if not args.skip_prefill:
+        prefill_json = output_dir / "prefill.json"
+        run_command(
+            [
+                sys.executable,
+                str(prefill_path),
+                "--base-url",
+                args.base_url,
+                "--model",
+                args.model,
+                "--sizes",
+                args.sizes,
+                "--concurrency",
+                args.concurrency,
+                "--trials",
+                str(args.trials),
+                "--warmup-tokens",
+                "1024",
+                "--shape-warmup-trials",
+                "1",
+                "--timeout",
+                str(args.request_timeout),
+                "--seed",
+                str(args.seed),
+                "--label",
+                args.label,
+                "--report-target",
+                "gx10-tp2",
+                "--output",
+                str(prefill_json),
+            ],
+            timeout=args.prefill_timeout,
+            log_path=output_dir / "prefill.log",
+        )
+        prefill_report = json.loads(prefill_json.read_text())
+        prefill_summary = validate_prefill_report(
+            prefill_report,
+            model=args.model,
+            sizes=sizes,
+            concurrencies=concurrencies,
+            trials=args.trials,
+            seed=args.seed,
+        )
+        print("prefill gate passed", flush=True)
 
     summary = {
         "schema_version": 1,
         "base_url": args.base_url,
         "model": args.model,
         "decode": decode_summary,
+        "decode_comparison": decode_comparison,
         "prefill": prefill_summary,
     }
     summary_path = output_dir / "summary.json"
@@ -383,13 +655,14 @@ def main() -> None:
     print("=== DECODE MEDIAN AGGREGATE OUTPUT TOK/S ===")
     for row in decode_summary:
         print(f"C{row['concurrency']}: {row['median_aggregate_output_tps']:.2f}")
-    print("=== PREFILL MEDIAN AGGREGATE INPUT TOK/S ===")
-    for row in prefill_summary:
-        print(
-            f"C{row['concurrency']} L{row['target_tokens']}: "
-            f"{row['median_aggregate_input_tps']:.2f} "
-            f"TTFT={row['median_ttft_s']:.3f}s"
-        )
+    if prefill_summary:
+        print("=== PREFILL MEDIAN AGGREGATE INPUT TOK/S ===")
+        for row in prefill_summary:
+            print(
+                f"C{row['concurrency']} L{row['target_tokens']}: "
+                f"{row['median_aggregate_input_tps']:.2f} "
+                f"TTFT={row['median_ttft_s']:.3f}s"
+            )
     print(f"summary={summary_path}")
 
 

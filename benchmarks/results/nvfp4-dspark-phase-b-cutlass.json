@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "report": "nvfp4-dspark-phase-b-cutlass",
+  "scope": {
+    "checkpoint": "official NVIDIA DeepSeek V4 Flash NVFP4",
+    "backend": "flashinfer_cutlass",
+    "quantization": "W4A4 NVFP4",
+    "measurement": "real-checkpoint layer-0 TP=2 rank-0 routed-MoE microkernel",
+    "serving_result": false,
+    "source_revision": "71d0a3c328c0bf544e98e579ebdcf039552de889"
+  },
+  "local_archive": {
+    "path": ".local/results/20260717T163428Z-fddb151/ledger.md",
+    "size_bytes": 15059,
+    "sha256": "72b7961338893847af1c850fab2a1ed6ada4f6261d3cbbf24fd2578c5f82bede",
+    "raw_gate_artifacts_present": false
+  },
+  "graph_gate": {
+    "m": 1,
+    "eager_median_us": 229.664,
+    "cuda_graph_median_us": 224.32,
+    "cosine": 1.0,
+    "normalized_rmse": 0.0,
+    "finite": true,
+    "nonzero": true,
+    "passed": true,
+    "recorded_artifact_sha256": {
+      "log": "9054735a57b2c1bc620d03b1b7f90618185f10dcad61a2e5a9fae50f166684f2",
+      "json": "c6d6b7f0bcfdceb01ba840de3ceed8c386de5a7a832c9b1770eb18fc3131d430"
+    }
+  },
+  "cutlass_eager_frontier": [
+    {"m": 2, "median_us": 414.976},
+    {"m": 4, "median_us": 786.304},
+    {"m": 6, "median_us": 1162.976},
+    {"m": 12, "median_us": 2289.728},
+    {"m": 64, "median_us": 8348.864},
+    {"m": 128, "median_us": 8180.224},
+    {"m": 512, "median_us": 8597.408},
+    {"m": 2048, "median_us": 10222.016}
+  ],
+  "frontier_gate": {
+    "all_rows_passed": true,
+    "swap_growth_kib": 0,
+    "recorded_artifact_sha256": {
+      "log": "d67b786575bcf11efe4ef8914cd3364524d1efdc003f5836bc955b0c8d95d",
+      "json": "55e6ba570082b692e4f7428e233acba54dbb8edef77c4220ed3e993a03b943a4"
+    }
+  },
+  "b12x_bridge": [
+    {
+      "m": 1,
+      "cutlass_median_us": 226.624,
+      "b12x_median_us": 217.12,
+      "b12x_throughput_over_cutlass": 1.043773,
+      "cosine": 0.9877584,
+      "normalized_rmse": 0.1560521
+    },
+    {
+      "m": 4,
+      "cutlass_median_us": 795.616,
+      "b12x_median_us": 803.072,
+      "b12x_throughput_over_cutlass": 0.990716,
+      "cosine": 0.9871223,
+      "normalized_rmse": 0.1604985
+    },
+    {
+      "m": 128,
+      "cutlass_median_us": 8417.472,
+      "b12x_median_us": 9186.336,
+      "b12x_throughput_over_cutlass": 0.916304,
+      "cosine": 0.9865133,
+      "normalized_rmse": 0.1641534
+    },
+    {
+      "m": 2048,
+      "cutlass_median_us": 10077.376,
+      "b12x_median_us": 9904.32,
+      "b12x_throughput_over_cutlass": 1.017473,
+      "cosine": 0.9865086,
+      "normalized_rmse": 0.1642079
+    }
+  ],
+  "bridge_gate": {
+    "all_rows_passed": true,
+    "workspace_contract": "not_applicable_below_m8192",
+    "swap_growth_kib": 0,
+    "decision": "retain CUTLASS; B12X is shape-dependent and is 8.37% slower at M=128",
+    "recorded_artifact_sha256": {
+      "log": "bf4c2bd85390d7db3cc54b25b9341fa458f1cfbf80c26123727440b3bd4c9de8",
+      "json": "1e386ad0d9649f85ea29db616f38129a5796e496c53991da6b9514f4f6169878"
+    }
+  },
+  "explicit_gaps": [
+    "M=24 was not measured in the archived gate chain and must not be inferred.",
+    "The local immutable archive contains ledger.md only; raw graph/frontier/bridge JSON and logs are not present locally, so their recorded hashes were not re-verified for this report.",
+    "These are one-layer rank-0 microkernel results, not TP=2 end-to-end serving, decode, acceptance-rate, or API throughput results.",
+    "No DSpark/MTP draft model was active in these measurements.",
+    "The M=1 graph and M=1 bridge timings are from separate runs and are not interchangeable."
+  ]
+}

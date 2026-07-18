@@ -8,6 +8,8 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 import json
+import math
+import re
 import statistics
 import time
 import urllib.request
@@ -18,6 +20,19 @@ PROMPT = (
     "in an autoregressive language model. Continue until the token limit and "
     "do not use a conclusion or summary."
 )
+
+SPEC_METRICS = {
+    "num_drafts": "vllm:spec_decode_num_drafts_total",
+    "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+    "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+    "accepted_per_position": "vllm:spec_decode_num_accepted_tokens_per_pos_total",
+}
+PROM_LINE = re.compile(
+    r"^(?P<name>[^\s{]+)(?:\{(?P<labels>[^}]*)\})?\s+"
+    r"(?P<value>[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
+    r"(?:\s+\d+)?$"
+)
+POSITION_LABEL = re.compile(r'(?:^|,)position="(?P<position>\d+)"(?:,|$)')
 
 
 @dataclass
@@ -32,6 +47,106 @@ class StreamResult:
     token_tps: float
     chunk_tps: float
     finish_reason: str | None
+
+
+@dataclass(frozen=True)
+class SpecMetricsSnapshot:
+    num_drafts: int
+    draft_tokens: int
+    accepted_tokens: int
+    accepted_per_position: dict[int, int]
+
+
+def parse_spec_metrics(text: str) -> SpecMetricsSnapshot:
+    totals = {key: 0 for key in ("num_drafts", "draft_tokens", "accepted_tokens")}
+    positions: dict[int, int] = {}
+    recognized = 0
+    reverse = {value: key for key, value in SPEC_METRICS.items()}
+    for raw in text.splitlines():
+        if not raw or raw.startswith("#"):
+            continue
+        match = PROM_LINE.match(raw)
+        if match is None or match.group("name") not in reverse:
+            continue
+        value = float(match.group("value"))
+        if not math.isfinite(value) or value < 0 or not value.is_integer():
+            raise ValueError(f"invalid speculative counter: {raw}")
+        integer = int(value)
+        key = reverse[match.group("name")]
+        recognized += 1
+        if key == "accepted_per_position":
+            label_match = POSITION_LABEL.search(match.group("labels") or "")
+            if label_match is None:
+                raise ValueError("per-position acceptance counter lacks position label")
+            position = int(label_match.group("position"))
+            positions[position] = positions.get(position, 0) + integer
+        else:
+            totals[key] += integer
+    if recognized == 0:
+        raise ValueError("speculative decoding counters are absent")
+    if not positions:
+        raise ValueError("per-position speculative counters are absent")
+    return SpecMetricsSnapshot(
+        num_drafts=totals["num_drafts"],
+        draft_tokens=totals["draft_tokens"],
+        accepted_tokens=totals["accepted_tokens"],
+        accepted_per_position=positions,
+    )
+
+
+def fetch_spec_metrics(base_url: str) -> SpecMetricsSnapshot:
+    with urllib.request.urlopen(f"{base_url.rstrip('/')}/metrics", timeout=10) as response:
+        return parse_spec_metrics(response.read().decode("utf-8", "strict"))
+
+
+def spec_metrics_delta(
+    before: SpecMetricsSnapshot,
+    after: SpecMetricsSnapshot,
+    *,
+    expected_positions: int,
+) -> dict[str, object]:
+    deltas = {
+        "num_drafts": after.num_drafts - before.num_drafts,
+        "draft_tokens": after.draft_tokens - before.draft_tokens,
+        "accepted_tokens": after.accepted_tokens - before.accepted_tokens,
+    }
+    if any(value < 0 for value in deltas.values()):
+        raise ValueError("speculative counters moved backwards")
+    if deltas["num_drafts"] <= 0 or deltas["draft_tokens"] <= 0:
+        raise ValueError("benchmark emitted no speculative drafts")
+    if deltas["accepted_tokens"] > deltas["draft_tokens"]:
+        raise ValueError("accepted-token count exceeds drafted-token count")
+    expected = list(range(expected_positions))
+    if sorted(set(before.accepted_per_position) | set(after.accepted_per_position)) != expected:
+        raise ValueError("per-position speculative metric set drifted")
+    per_position_counts = [
+        after.accepted_per_position[position] - before.accepted_per_position[position]
+        for position in expected
+    ]
+    if any(value < 0 for value in per_position_counts):
+        raise ValueError("per-position acceptance counters moved backwards")
+    if any(value > deltas["num_drafts"] for value in per_position_counts):
+        raise ValueError("per-position acceptance exceeds draft count")
+    if any(
+        left < right
+        for left, right in zip(per_position_counts, per_position_counts[1:])
+    ):
+        raise ValueError("per-position acceptance is not monotonic")
+    if sum(per_position_counts) != deltas["accepted_tokens"]:
+        raise ValueError("per-position and total accepted-token counters disagree")
+    return {
+        **deltas,
+        "aggregate_acceptance_rate": (
+            deltas["accepted_tokens"] / deltas["draft_tokens"]
+        ),
+        "mean_acceptance_length": (
+            1 + deltas["accepted_tokens"] / deltas["num_drafts"]
+        ),
+        "accepted_tokens_per_position": per_position_counts,
+        "per_position_acceptance_rates": [
+            value / deltas["num_drafts"] for value in per_position_counts
+        ],
+    }
 
 
 def run_stream(base_url: str, model: str, max_tokens: int, request_id: int) -> StreamResult:
@@ -101,6 +216,8 @@ def main() -> None:
     parser.add_argument("--concurrency", default="1,2,4")
     parser.add_argument("--trials", type=int, default=2)
     parser.add_argument("--max-tokens", type=int, default=512)
+    parser.add_argument("--require-spec-metrics", action="store_true")
+    parser.add_argument("--expected-spec-positions", type=int, default=5)
     parser.add_argument("--output")
     args = parser.parse_args()
 
@@ -108,12 +225,16 @@ def main() -> None:
         "base_url": args.base_url,
         "model": args.model,
         "max_tokens": args.max_tokens,
+        "spec_decode_metric_source": SPEC_METRICS if args.require_spec_metrics else None,
         "trials": [],
     }
     print(f"target {args.base_url} model {args.model}", flush=True)
     for concurrency in (int(value) for value in args.concurrency.split(",")):
         print(f"=== concurrency {concurrency} ===", flush=True)
         for trial in range(1, args.trials + 1):
+            spec_before = (
+                fetch_spec_metrics(args.base_url) if args.require_spec_metrics else None
+            )
             wall_started = time.perf_counter()
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
                 results = list(
@@ -135,6 +256,13 @@ def main() -> None:
                 "mean_ttft_s": statistics.mean(result.ttft_s for result in results),
                 "streams": [asdict(result) for result in results],
             }
+            if spec_before is not None:
+                spec_after = fetch_spec_metrics(args.base_url)
+                trial_result["spec_decode"] = spec_metrics_delta(
+                    spec_before,
+                    spec_after,
+                    expected_positions=args.expected_spec_positions,
+                )
             report["trials"].append(trial_result)
             token_rates = ", ".join(f"{result.token_tps:.1f}" for result in results)
             chunk_rates = ", ".join(f"{result.chunk_tps:.1f}" for result in results)
@@ -145,6 +273,19 @@ def main() -> None:
                 f"TTFT {trial_result['mean_ttft_s']:.2f}s",
                 flush=True,
             )
+            if "spec_decode" in trial_result:
+                spec = trial_result["spec_decode"]
+                print(
+                    "    spec: acceptance "
+                    f"{100 * spec['aggregate_acceptance_rate']:.1f}% | "
+                    f"mean length {spec['mean_acceptance_length']:.3f} | "
+                    "per-position "
+                    + ", ".join(
+                        f"{value:.3f}"
+                        for value in spec["per_position_acceptance_rates"]
+                    ),
+                    flush=True,
+                )
 
     print("=== BEST AGGREGATE TOKEN THROUGHPUT ===")
     for concurrency in sorted({trial["concurrency"] for trial in report["trials"]}):

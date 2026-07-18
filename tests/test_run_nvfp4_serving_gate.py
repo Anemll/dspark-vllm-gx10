@@ -18,6 +18,20 @@ SPEC.loader.exec_module(gate)
 
 class ServingGateValidationTests(unittest.TestCase):
     @staticmethod
+    def decode_stream() -> dict[str, object]:
+        return {
+            "completion_tokens": 512,
+            "finish_reason": "length",
+            "prompt_tokens": 10,
+            "chunks": 512,
+            "ttft_s": 0.1,
+            "decode_s": 1.0,
+            "elapsed_s": 1.1,
+            "token_tps": 512.0,
+            "chunk_tps": 512.0,
+        }
+
+    @staticmethod
     def prefill_report(*, cache_hits: int = 0):
         results = []
         summary = []
@@ -155,6 +169,207 @@ class ServingGateValidationTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             gate.validate_decode_report(
                 report, model="m", concurrencies=[1], trials=1, max_tokens=512
+            )
+
+    def test_decode_report_requires_per_position_acceptance(self):
+        streams = [
+            {
+                "completion_tokens": 512,
+                "finish_reason": "length",
+                "prompt_tokens": 10,
+                "chunks": 512,
+                "ttft_s": 0.1,
+                "decode_s": 1.0,
+                "elapsed_s": 1.1,
+                "token_tps": 512.0,
+                "chunk_tps": 512.0,
+            }
+        ]
+        report = {
+            "model": "m",
+            "max_tokens": 512,
+            "spec_decode_metric_source": {
+                "num_drafts": "vllm:spec_decode_num_drafts_total",
+                "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+                "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+                "accepted_per_position": (
+                    "vllm:spec_decode_num_accepted_tokens_per_pos_total"
+                ),
+            },
+            "trials": [
+                {
+                    "concurrency": 1,
+                    "trial": 1,
+                    "wall_s": 1.0,
+                    "total_tokens": 512,
+                    "aggregate_token_tps": 512.0,
+                    "mean_ttft_s": 0.1,
+                    "streams": streams,
+                    "spec_decode": {
+                        "num_drafts": 200,
+                        "draft_tokens": 600,
+                        "accepted_tokens": 420,
+                        "aggregate_acceptance_rate": 0.7,
+                        "mean_acceptance_length": 3.1,
+                        "per_position_acceptance_rates": [1.0, 0.7, 0.4],
+                    },
+                }
+            ],
+        }
+        summary = gate.validate_decode_report(
+            report,
+            model="m",
+            concurrencies=[1],
+            trials=1,
+            max_tokens=512,
+            require_spec_metrics=True,
+            expected_spec_positions=3,
+        )
+        self.assertEqual(summary[0]["median_spec_acceptance_rate"], 0.7)
+        self.assertEqual(
+            summary[0]["median_spec_acceptance_per_position"], [1.0, 0.7, 0.4]
+        )
+
+    def test_decode_spec_metrics_reject_near_zero_acceptance(self):
+        report = {
+            "model": "m",
+            "max_tokens": 512,
+            "spec_decode_metric_source": {
+                "num_drafts": "vllm:spec_decode_num_drafts_total",
+                "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+                "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+                "accepted_per_position": (
+                    "vllm:spec_decode_num_accepted_tokens_per_pos_total"
+                ),
+            },
+            "trials": [
+                {
+                    "concurrency": 1,
+                    "trial": 1,
+                    "wall_s": 1.0,
+                    "total_tokens": 512,
+                    "aggregate_token_tps": 512.0,
+                    "mean_ttft_s": 0.1,
+                    "streams": [self.decode_stream()],
+                    "spec_decode": {
+                        "num_drafts": 500,
+                        "draft_tokens": 2500,
+                        "accepted_tokens": 0,
+                        "aggregate_acceptance_rate": 0.0,
+                        "mean_acceptance_length": 1.0,
+                        "per_position_acceptance_rates": [0.0] * 5,
+                    },
+                }
+            ],
+        }
+        with self.assertRaisesRegex(RuntimeError, "acceptance rate below gate"):
+            gate.validate_decode_report(
+                report,
+                model="m",
+                concurrencies=[1],
+                trials=1,
+                max_tokens=512,
+                require_spec_metrics=True,
+                expected_spec_positions=5,
+            )
+
+    def test_decode_spec_metrics_reject_final_position_collapse(self):
+        report = {
+            "model": "m",
+            "max_tokens": 512,
+            "spec_decode_metric_source": {
+                "num_drafts": "vllm:spec_decode_num_drafts_total",
+                "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+                "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+                "accepted_per_position": (
+                    "vllm:spec_decode_num_accepted_tokens_per_pos_total"
+                ),
+            },
+            "trials": [
+                {
+                    "concurrency": 1,
+                    "trial": 1,
+                    "wall_s": 1.0,
+                    "total_tokens": 512,
+                    "aggregate_token_tps": 512.0,
+                    "mean_ttft_s": 0.1,
+                    "streams": [self.decode_stream()],
+                    "spec_decode": {
+                        "num_drafts": 200,
+                        "draft_tokens": 1000,
+                        "accepted_tokens": 400,
+                        "aggregate_acceptance_rate": 0.4,
+                        "mean_acceptance_length": 3.0,
+                        "per_position_acceptance_rates": [
+                            0.9,
+                            0.6,
+                            0.3,
+                            0.1,
+                            0.01,
+                        ],
+                    },
+                }
+            ],
+        }
+        with self.assertRaisesRegex(RuntimeError, "final-position acceptance"):
+            gate.validate_decode_report(
+                report,
+                model="m",
+                concurrencies=[1],
+                trials=1,
+                max_tokens=512,
+                require_spec_metrics=True,
+                expected_spec_positions=5,
+            )
+
+    def test_decode_comparison_enforces_production_non_regression(self):
+        baseline = [
+            {
+                "concurrency": 1,
+                "median_aggregate_output_tps": 45.0,
+                "median_spec_acceptance_rate": 0.40,
+                "median_spec_acceptance_length": 3.0,
+                "median_spec_acceptance_per_position": [
+                    0.8,
+                    0.5,
+                    0.3,
+                    0.2,
+                    0.12,
+                ],
+            }
+        ]
+        candidate = [
+            {
+                "concurrency": 1,
+                "median_aggregate_output_tps": 46.0,
+                "median_spec_acceptance_rate": 0.34,
+                "median_spec_acceptance_length": 2.7,
+                "median_spec_acceptance_per_position": [
+                    0.7,
+                    0.4,
+                    0.2,
+                    0.12,
+                    0.07,
+                ],
+            }
+        ]
+        comparisons = gate.compare_decode_summaries(
+            candidate,
+            baseline,
+            minimum_output_tps_ratio=1.0,
+            minimum_spec_retention_ratio=0.8,
+            minimum_spec_position_retention_ratio=0.5,
+        )
+        self.assertGreater(comparisons[0]["output_tps_ratio"], 1.0)
+
+        candidate[0]["median_aggregate_output_tps"] = 44.0
+        with self.assertRaisesRegex(RuntimeError, "throughput below baseline"):
+            gate.compare_decode_summaries(
+                candidate,
+                baseline,
+                minimum_output_tps_ratio=1.0,
+                minimum_spec_retention_ratio=0.8,
+                minimum_spec_position_retention_ratio=0.5,
             )
 
     def test_prefill_report(self):

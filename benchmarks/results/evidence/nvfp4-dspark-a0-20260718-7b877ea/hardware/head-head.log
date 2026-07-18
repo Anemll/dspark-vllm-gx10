@@ -1,0 +1,7 @@
+COMPOSE_SPLIT_PASS=true
+ROLE=head
+CID=8f015736a18e
+PROD_SOURCE=/srv/dspark/models/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored
+TARGET=/home/anemll/models/DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1
+COMPOSE_VERSION=5.0.2
+PRODUCTION_POST_PASS=true

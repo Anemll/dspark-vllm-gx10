@@ -89,6 +89,27 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
             self.compose,
         )
 
+    def test_split_draft_checkpoint_has_a_distinct_read_only_mount(self) -> None:
+        self.assertIn(
+            "${DSPARK_DRAFT_MODEL_HOST:-${HOME}/models/"
+            "dsv4-flash-dspark-abliterated}:/models/dspark-draft:ro",
+            self.compose,
+        )
+        for relative_path in ("config/head.env.example", "config/worker.env.example"):
+            lines = (REPO_ROOT / relative_path).read_text().splitlines()
+            values = [
+                line.split("=", 1)[1]
+                for line in lines
+                if line.startswith("DSPARK_DRAFT_MODEL_HOST=")
+            ]
+            self.assertEqual(
+                values,
+                [
+                    "/srv/dspark/models/"
+                    "DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored"
+                ],
+            )
+
     def test_vllm_command_consumes_conditional_speculation_outputs(self) -> None:
         self.assertIn('"$${SPECULATIVE_ARGS[@]}"', self.compose)
         self.assertIn(
@@ -144,7 +165,9 @@ done
         self.assertIn("argc=2\n", result.stdout)
         self.assertIn("arg=<--speculative-config>\n", result.stdout)
         self.assertIn('"method":"dspark"', result.stdout)
+        self.assertIn('"model":"/models/dspark-draft"', result.stdout)
         self.assertIn('"num_speculative_tokens":5', result.stdout)
+        self.assertIn('"draft_sample_method":"probabilistic"', result.stdout)
 
     def test_unset_mode_defaults_to_dspark(self) -> None:
         result = self._run_speculation_setup(None, max_num_seqs=6, mtp_num_tokens=3)
@@ -175,6 +198,75 @@ done
                 if line.startswith("DSPARK_SPECULATION_MODE=")
             )
         self.assertEqual(values, ["dspark", "dspark"])
+
+    def test_rank_examples_pin_released_confidence_settings(self) -> None:
+        for name, expected in (
+            ("VLLM_DSPARK_CONFIDENCE_SCHEDULER", ["off", "off"]),
+            ("VLLM_DSPARK_CONFIDENCE_THRESHOLD", ["0.0", "0.0"]),
+        ):
+            values = []
+            for relative_path in (
+                "config/head.env.example",
+                "config/worker.env.example",
+            ):
+                lines = (REPO_ROOT / relative_path).read_text().splitlines()
+                values.extend(
+                    line.split("=", 1)[1]
+                    for line in lines
+                    if line.startswith(name + "=")
+                )
+            self.assertEqual(values, expected)
+
+    def test_compose_pins_released_confidence_defaults(self) -> None:
+        self.assertIn(
+            'VLLM_DSPARK_CONFIDENCE_SCHEDULER: '
+            '"${VLLM_DSPARK_CONFIDENCE_SCHEDULER:-off}"',
+            self.compose,
+        )
+        self.assertIn(
+            'VLLM_DSPARK_CONFIDENCE_THRESHOLD: '
+            '"${VLLM_DSPARK_CONFIDENCE_THRESHOLD:-0.0}"',
+            self.compose,
+        )
+
+    def _run_kv_cache_setup(self, value: str | None) -> subprocess.CompletedProcess[str]:
+        start = self.compose.index("        KV_CACHE_ARGS=();")
+        end = self.compose.index("        SPECULATIVE_ARGS=();", start)
+        setup = self.compose[start:end].replace("$$", "$")
+        script = setup + "\nprintf 'argc=%s\\n' \"${#KV_CACHE_ARGS[@]}\"\n" + (
+            "for arg in \"${KV_CACHE_ARGS[@]}\"; do "
+            "printf 'arg=<%s>\\n' \"$arg\"; done\n"
+        )
+        env = {**os.environ}
+        if value is None:
+            env.pop("KV_CACHE_MEMORY_BYTES", None)
+        else:
+            env["KV_CACHE_MEMORY_BYTES"] = value
+        return subprocess.run(
+            ["bash", "-c", script],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    def test_explicit_kv_cache_bytes_are_forwarded_semantically(self) -> None:
+        result = self._run_kv_cache_setup("32212254720")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout,
+            "argc=2\narg=<--kv-cache-memory-bytes>\narg=<32212254720>\n",
+        )
+
+    def test_empty_kv_cache_bytes_preserve_legacy_allocation(self) -> None:
+        result = self._run_kv_cache_setup(None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "argc=0\n")
+
+    def test_invalid_explicit_kv_cache_bytes_fail_closed(self) -> None:
+        result = self._run_kv_cache_setup("30GiB")
+        self.assertEqual(result.returncode, 64)
+        self.assertIn("Invalid KV_CACHE_MEMORY_BYTES", result.stderr)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "run_id": "20260718T210716Z-7b877ea-dspark-phase-c",
+  "decision": "rejected_before_readiness",
+  "deployment_revision": "bb808028b8e5652f70d3a6ef79d68de5c1da8db7",
+  "candidate_image": "sha256:222c3295b804664f19442a953143fef45a7fdc3ed278ae5e82eab546f7519b99",
+  "production_image": "sha256:3430d6614a8e2925f34d059af6caf05aff42387326db4d05639a60f10f2654d8",
+  "parity_settings": {
+    "num_speculative_tokens": 5,
+    "confidence_scheduler": "off",
+    "confidence_threshold": 0.0,
+    "draft_sample_method": "probabilistic"
+  },
+  "worker_target_load": {
+    "backend": "FLASHINFER_CUTLASS",
+    "enabled_layers": 43,
+    "reads_per_layer": 8,
+    "copies_per_layer": 8,
+    "complete_layers": 43,
+    "complete_reads": 344,
+    "complete_copies": 344,
+    "runtime_transforms": 0,
+    "postload_transform_zero_rows": 43,
+    "elapsed_seconds": 73.786095,
+    "layer_seconds_sum": 53.692049
+  },
+  "worker_draft_load": {
+    "backend": "FLASHINFER_CUTLASS_MXFP4_MXFP8",
+    "parameter_count": 96,
+    "load_seconds": 28.65,
+    "exit_code": 1,
+    "oom_killed": false,
+    "failure": "Unsupported mxfp4_backend for Mxfp4MoEMethod: Mxfp4MoeBackend.FLASHINFER_CUTLASS_MXFP4_MXFP8. Expected TRTLLM, Triton, AITER, or XPU backend."
+  },
+  "head_partial_target_load": {
+    "completed_layers": 21,
+    "highest_layer": 20,
+    "layer_seconds_sum": 267.459086,
+    "postload_started": false,
+    "oom_killed": false
+  },
+  "serving_gates": {
+    "readiness": false,
+    "deterministic_candidate_generation": false,
+    "graph_canary": false,
+    "c1_trials_run": 0,
+    "benchmark_result": null
+  },
+  "rollback": {
+    "order": [
+      "worker",
+      "head"
+    ],
+    "worker_final_cid": "c2daa6890ee1",
+    "head_final_cid": "aff9b17eed02",
+    "health_http": 200,
+    "dashboard_http": 200,
+    "chat_content": "OK",
+    "outage_to_chat_seconds": 1112.7319090366364,
+    "watchdogs_disarmed": true,
+    "candidate_containers_absent": true
+  },
+  "artifact_sha256": {
+    "worker_candidate_log": "839dffc1d94db6de7bc0324c9f0c6f11a7d4d274103e69cf6807afcd6c974132",
+    "worker_candidate_inspect": "7f4544091732853f89a79a641be4cf2412b6071273b3dad39442427f301b3fbd",
+    "head_candidate_final_log": "01165e55758bc48f920ee9f47f1ba64fbbcd69703a67c5a8d72753f18faa3d88",
+    "head_compose": "6d2a071f15894edbf9e8b892074a859316e70e386c6172630e1b1df7d8659cd7",
+    "worker_compose": "898dc50bab47b44344ec7b1ceb1d490050e4fa0dbd6fb8b4388b22b1b7694996",
+    "rollback_chat": "be9bf15195bb50bb596d21dbe54eb15a5fad8beede3cc3e18a9ba6b9bb4b004b",
+    "rollback_models": "cb032ddc20bf56b1dc7759fc74a8ec24d965e8c34af2e4a25e998d315020804d",
+    "rollback_version": "427741f0bc940b3bcd3d36fe8b021c29a30027d9af23354ccf346dfab8c1a774"
+  },
+  "next_required_gate": "Remove the process-global CUTLASS requirement from native MXFP4 draft dispatch, scope CUTLASS to the prepared NVFP4 target, and execute the intended draft post-load conversion in the in-image probe before requesting another TP=2 outage."
+}

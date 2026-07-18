@@ -1,0 +1,129 @@
+{
+  "name": "dspark-vllm-gx10",
+  "services": {
+    "vllm-dspark": {
+      "command": [
+        "bash",
+        "-lc",
+        "export PATH=\"/usr/local/cuda/bin:$${PATH:-}\"; export CUDA_HOME=\"$${CUDA_HOME:-/usr/local/cuda}\"; export CUDA_PATH=\"$${CUDA_PATH:-$${CUDA_HOME}}\"; export CUDAToolkit_ROOT=\"$${CUDAToolkit_ROOT:-$${CUDA_HOME}}\"; export LD_LIBRARY_PATH=\"/usr/local/cuda/lib64:$${LD_LIBRARY_PATH:-}\"; MODEL_LOADER_EXTRA_CONFIG='{}'; if [[ \"$${DSPARK_WEIGHT_LOAD_FORMAT:-auto}\" == \"roce_tp\" ]]; then\n  MODEL_LOADER_EXTRA_CONFIG=\"{\\\"buffer_size_mb\\\":$${DSPARK_ROCE_LOAD_BUFFER_MB:-256}}\";\nfi; KV_CACHE_ARGS=(); if [[ -n \"$${KV_CACHE_MEMORY_BYTES:-}\" ]]; then\n  if [[ ! \"$${KV_CACHE_MEMORY_BYTES}\" =~ ^[1-9][0-9]*$$ ]]; then\n    printf 'Invalid KV_CACHE_MEMORY_BYTES=%q; expected a positive integer\\n' \"$${KV_CACHE_MEMORY_BYTES}\" \u003e\u00262;\n    exit 64;\n  fi;\n  KV_CACHE_ARGS=(--kv-cache-memory-bytes \"$${KV_CACHE_MEMORY_BYTES}\");\nfi; SPECULATIVE_ARGS=(); case \"$${DSPARK_SPECULATION_MODE:-dspark}\" in\n  dspark)\n    SPECULATIVE_CONFIG=\"{\\\"method\\\":\\\"dspark\\\",\\\"model\\\":\\\"/models/dspark-draft\\\",\\\"num_speculative_tokens\\\":5,\\\"draft_sample_method\\\":\\\"probabilistic\\\"}\";\n    SPECULATIVE_ARGS=(--speculative-config \"$${SPECULATIVE_CONFIG}\");\n    MAX_CUDAGRAPH_CAPTURE_SIZE=$$(( 12 * (5 + 1) ));\n    ;;\n  off)\n    MAX_CUDAGRAPH_CAPTURE_SIZE=12;\n    ;;\n  *)\n    printf 'Invalid DSPARK_SPECULATION_MODE=%q; expected dspark or off\\n' \"$${DSPARK_SPECULATION_MODE}\" \u003e\u00262;\n    exit 64;\n    ;;\nesac; exec /usr/local/bin/vllm serve /models/dsv4-abliterated --served-model-name deepseek-v4-flash-nvfp4-prepared --host 0.0.0.0 --port 8888 --trust-remote-code --load-format \"$${DSPARK_WEIGHT_LOAD_FORMAT:-auto}\" --model-loader-extra-config \"$${MODEL_LOADER_EXTRA_CONFIG}\" --tensor-parallel-size 2 --pipeline-parallel-size 1 --kv-cache-dtype nvfp4_ds_mla --block-size 256 --max-model-len 350000 --max-num-seqs 12 --max-num-batched-tokens 8192 --max-cudagraph-capture-size \"$${MAX_CUDAGRAPH_CAPTURE_SIZE}\" --gpu-memory-utilization 0.78 \"$${KV_CACHE_ARGS[@]}\" --enable-prefix-caching --async-scheduling --enable-chunked-prefill \"$${SPECULATIVE_ARGS[@]}\" --tokenizer-mode deepseek_v4 --distributed-executor-backend mp --moe-backend flashinfer_cutlass --tool-call-parser deepseek_v4 --enable-auto-tool-choice --reasoning-parser deepseek_v4 --reasoning-config '{\"reasoning_parser\":\"deepseek_v4\",\"reasoning_start_str\":\"\u003cthink\u003e\",\"reasoning_end_str\":\"\u003c/think\u003e\"}' --default-chat-template-kwargs '{\"thinking\":false}' --generation-config vllm --enable-flashinfer-autotune --nnodes 2 --node-rank 1 --master-addr 10.200.0.1 --master-port 25000 --jit-monitor-mode warn --jit-monitor-verbose --headless\n"
+      ],
+      "devices": [
+        {
+          "source": "/dev/infiniband",
+          "target": "/dev/infiniband",
+          "permissions": "rwm"
+        }
+      ],
+      "entrypoint": [],
+      "environment": {
+        "B12X_W4A16_TC_DECODE": "0",
+        "DG_JIT_NVCC_COMPILER": "/usr/local/cuda/bin/nvcc",
+        "DG_JIT_USE_NVRTC": "0",
+        "DSPARK_ROCE_LOAD_BUFFER_MB": "256",
+        "DSPARK_SLOT_CLAMP": "1",
+        "DSPARK_SPECULATION_MODE": "dspark",
+        "DSPARK_WEIGHT_LOAD_FORMAT": "auto",
+        "FLASHINFER_CUDA_ARCH_LIST": "12.1a",
+        "FLASHINFER_DISABLE_VERSION_CHECK": "",
+        "FLASHINFER_WORKSPACE_BASE": "/cache/huggingface/flashinfer-0.6.15-0472b9b3",
+        "GLOO_SOCKET_IFNAME": "enp1s0f0np0",
+        "HEADLESS": "1",
+        "HF_HOME": "/cache/huggingface",
+        "HF_HUB_DISABLE_XET": "1",
+        "HF_HUB_OFFLINE": "1",
+        "KV_CACHE_MEMORY_BYTES": "32212254720",
+        "MASTER_ADDR": "10.200.0.1",
+        "MASTER_PORT": "25000",
+        "MTP_NUM_TOKENS": "5",
+        "NCCL_CROSS_NIC": "1",
+        "NCCL_CUMEM_ENABLE": "0",
+        "NCCL_DEBUG": "INFO",
+        "NCCL_IB_ADDR_FAMILY": "AF_INET",
+        "NCCL_IB_ADDR_RANGE": "",
+        "NCCL_IB_DISABLE": "0",
+        "NCCL_IB_GID_INDEX": "",
+        "NCCL_IB_HCA": "rocep1s0f0,roceP2p1s0f0",
+        "NCCL_IB_ROCE_VERSION_NUM": "2",
+        "NCCL_IGNORE_CPU_AFFINITY": "1",
+        "NCCL_NET": "IB",
+        "NCCL_NVLS_ENABLE": "0",
+        "NCCL_SOCKET_IFNAME": "enp1s0f0np0",
+        "NODE_RANK": "1",
+        "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+        "TILELANG_CLEANUP_TEMP_FILES": "1",
+        "TORCH_CUDA_ARCH_LIST": "12.1a",
+        "TP_SOCKET_IFNAME": "enp1s0f0np0",
+        "TRANSFORMERS_OFFLINE": "1",
+        "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1",
+        "VLLM_B12X_W4A16_FORCE_BLOCKS_MAX_M": "16",
+        "VLLM_B12X_W4A16_FORCE_BLOCKS_PER_SM": "0",
+        "VLLM_B12X_W4A16_FORCE_TILE_CONFIG": "",
+        "VLLM_CACHE_ROOT": "/cache/huggingface/vllm-cache",
+        "VLLM_DSPARK_CONFIDENCE_SCHEDULER": "off",
+        "VLLM_DSPARK_CONFIDENCE_THRESHOLD": "0.0",
+        "VLLM_DSPARK_FUSED_MARKOV_ARGMAX": "0",
+        "VLLM_DSPARK_GPU_REJECTED_CONTEXT_MASK": "1",
+        "VLLM_DSPARK_HARDWARE_SCHEDULER_EARLY_STOP": "1",
+        "VLLM_DSPARK_LOCAL_ARGMAX": "1",
+        "VLLM_DSPARK_REFERENCE_KV_QUANT_DEQUANT": "0",
+        "VLLM_DSPARK_REPLICATE_MARKOV_W1": "1",
+        "VLLM_DSV4_B12X_COMPRESSED_MLA": "0",
+        "VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE": "0",
+        "VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT": "0",
+        "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD": "1",
+        "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256": "972ba797456da80e586324a5a8c29af42bac86510ceff983e674de41d31e6f26",
+        "VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD": "0",
+        "VLLM_HOST_IP": "10.200.0.0",
+        "VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS": "0",
+        "VLLM_SKIP_INIT_MEMORY_CHECK": "1",
+        "VLLM_SPARSE_INDEXER_MAX_LOGITS_MB": "256",
+        "VLLM_TRITON_MLA_SPARSE": "1",
+        "VLLM_USE_B12X_MOE": "1",
+        "VLLM_USE_B12X_WO_PROJECTION": "1",
+        "VLLM_USE_FLASHINFER_SAMPLER": "1"
+      },
+      "gpus": [
+        {
+          "count": -1
+        }
+      ],
+      "image": "dspark-vllm-gx10:dev-7b877eaae2a8-aot0615-prepared",
+      "ipc": "host",
+      "network_mode": "host",
+      "pull_policy": "missing",
+      "shm_size": "68719476736",
+      "ulimits": {
+        "memlock": -1,
+        "stack": 67108864
+      },
+      "volumes": [
+        {
+          "type": "bind",
+          "source": "/mnt/xfsflash/dspark-hf-cache",
+          "target": "/cache/huggingface",
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/mnt/xfsflash/models/DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1",
+          "target": "/models/dsv4-abliterated",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/mnt/xfsflash/models/DeepSeek-V4-Flash-DSpark-Abliterated-Uncensored",
+          "target": "/models/dspark-draft",
+          "read_only": true,
+          "bind": {}
+        },
+        {
+          "type": "bind",
+          "source": "/var/lib/dspark-tmp",
+          "target": "/tmp",
+          "bind": {}
+        }
+      ]
+    }
+  }
+}

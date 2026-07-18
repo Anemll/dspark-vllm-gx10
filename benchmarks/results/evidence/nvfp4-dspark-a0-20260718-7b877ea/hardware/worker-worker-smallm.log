@@ -1,0 +1,13 @@
+Creating synthetic real-shape packed NVFP4 weights...
+GPU=NVIDIA GB10 capability=(12, 1); K=4096, I/rank=1024, E=8, top-k=6
+Backends: flashinfer_cutlass=vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe.FlashInferExperts
+Activation match: W4A4 swigluoai_uninterleave(alpha=1, beta=0, limit=10); W4A16 silu(limit=10)
+M=    4 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    286.0 us p95=    352.6 us graph=    291.0 us p95=    378.8 us
+M=    8 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    290.8 us p95=    355.2 us graph=    294.9 us p95=    326.4 us
+M=   12 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    298.3 us p95=    355.9 us graph=    294.0 us p95=    319.5 us
+M=   16 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    301.6 us p95=    359.9 us graph=    295.4 us p95=    302.0 us
+M=   20 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    420.0 us p95=    557.5 us graph=    433.4 us p95=    471.1 us
+M=   24 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    447.4 us p95=    481.3 us graph=    359.4 us p95=    426.9 us
+M=   32 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    420.0 us p95=    477.8 us graph=    395.5 us p95=    449.5 us
+M=   64 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    423.9 us p95=    499.9 us graph=    410.7 us p95=    473.5 us
+Wrote /artifacts/worker-smallm.json

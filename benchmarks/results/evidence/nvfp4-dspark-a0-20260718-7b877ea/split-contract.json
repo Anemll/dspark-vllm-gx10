@@ -1,0 +1,193 @@
+{
+  "compatibility": {
+    "allowed_differences": [
+      "compress_ratios",
+      "dspark_block_size",
+      "dspark_markov_rank",
+      "dspark_noise_token_id",
+      "dspark_nvfp4_prepared",
+      "dspark_target_layer_ids",
+      "quantization_config"
+    ],
+    "draft_config_source_is_distinct": true,
+    "draft_quantization": "native MXFP4",
+    "equal_fields": [
+      "architectures",
+      "attention_bias",
+      "attention_dropout",
+      "bos_token_id",
+      "compress_rope_theta",
+      "eos_token_id",
+      "expert_dtype",
+      "hc_eps",
+      "hc_mult",
+      "hc_sinkhorn_iters",
+      "head_dim",
+      "hidden_act",
+      "hidden_size",
+      "index_head_dim",
+      "index_n_heads",
+      "index_topk",
+      "initializer_range",
+      "max_position_embeddings",
+      "model_type",
+      "moe_intermediate_size",
+      "n_routed_experts",
+      "n_shared_experts",
+      "norm_topk_prob",
+      "num_attention_heads",
+      "num_experts_per_tok",
+      "num_hash_layers",
+      "num_hidden_layers",
+      "num_key_value_heads",
+      "num_nextn_predict_layers",
+      "o_groups",
+      "o_lora_rank",
+      "q_lora_rank",
+      "qk_rope_head_dim",
+      "rms_norm_eps",
+      "rope_scaling",
+      "rope_theta",
+      "routed_scaling_factor",
+      "scoring_func",
+      "sliding_window",
+      "swiglu_limit",
+      "tie_word_embeddings",
+      "topk_method",
+      "torch_dtype",
+      "transformers_version",
+      "use_cache",
+      "vocab_size"
+    ],
+    "passed": true,
+    "target_quantization": "ModelOpt NVFP4 / prepared CUTLASS"
+  },
+  "contract": "prepared_nvfp4_target_plus_separate_native_dspark_draft",
+  "draft": {
+    "config_sha256": "6c8f3d2d3b48707541b88f32f22ef3f0f8a6b57d8523281e2b8d3cdb0ae9a023",
+    "expert_payload_bytes": 10267656192,
+    "index_sha256": "98efab455cf08dfbbbaaba6f570e1bf10bf927d2b4c3c453a59c2f6f0e3be92b",
+    "mtp_payload_bytes": 10862838300,
+    "nonexpert_payload_bytes": 595182108,
+    "path": "/Volumes/TB36/Models/DS/DeepSeek-V4-Flash-DSpark",
+    "stages": {
+      "0": {
+        "dtype_shape_bytes_exact": true,
+        "expert_dtypes": {
+          "scale": [
+            "F8_E8M0"
+          ],
+          "weight": [
+            "I8"
+          ]
+        },
+        "expert_payload_bytes": 3422552064,
+        "expert_suffix_counts": {
+          "scale": 768,
+          "weight": 768
+        },
+        "expert_tensor_count": 1536,
+        "nonexpert_payload_bytes": 187735384,
+        "payload_bytes": 3610287448,
+        "payload_gapless": true,
+        "shard": "model-00046-of-00048.safetensors",
+        "shard_sha256": "14810f274692bb771c3970e8cba45846c4aa2213dcfb0025ffebe788d229e18d",
+        "tensor_count": 1568
+      },
+      "1": {
+        "dtype_shape_bytes_exact": true,
+        "expert_dtypes": {
+          "scale": [
+            "F8_E8M0"
+          ],
+          "weight": [
+            "I8"
+          ]
+        },
+        "expert_payload_bytes": 3422552064,
+        "expert_suffix_counts": {
+          "scale": 768,
+          "weight": 768
+        },
+        "expert_tensor_count": 1536,
+        "nonexpert_payload_bytes": 137392472,
+        "payload_bytes": 3559944536,
+        "payload_gapless": true,
+        "shard": "model-00047-of-00048.safetensors",
+        "shard_sha256": "7a44164698d90648a35c030c5eb369256d2c469306bfbf2b1ae27f35b6e57889",
+        "tensor_count": 1565
+      },
+      "2": {
+        "dtype_shape_bytes_exact": true,
+        "expert_dtypes": {
+          "scale": [
+            "F8_E8M0"
+          ],
+          "weight": [
+            "I8"
+          ]
+        },
+        "expert_payload_bytes": 3422552064,
+        "expert_suffix_counts": {
+          "scale": 768,
+          "weight": 768
+        },
+        "expert_tensor_count": 1536,
+        "nonexpert_payload_bytes": 270054252,
+        "payload_bytes": 3692606316,
+        "payload_gapless": true,
+        "shard": "model-00048-of-00048.safetensors",
+        "shard_sha256": "a0bbb24f36d2ef6107250088e0f020f93aec0677cd24be3e9e69589547a7656f",
+        "tensor_count": 1572
+      }
+    },
+    "tensor_count": 72317,
+    "total_size": 166878536440
+  },
+  "memory": {
+    "configuration_retune_required": true,
+    "configured_kv_gap_to_minimum_gib": 19.200000000186265,
+    "expert_payload_partition": "exactly half per rank under pinned TP2 fused-MoE loader",
+    "graph_workspace_reserve_gib": 4.0,
+    "incremental_draft_budget_bytes": 6588361735,
+    "loader_overhead_bytes": 859351531,
+    "loader_overhead_fraction": 0.15,
+    "method": "usable per-rank envelope minus target, TP2 draft, workspace, and safety reserves",
+    "minimum_kv_reserve_gib": 30.0,
+    "nonexpert_payload_partition": "charged fully to each rank",
+    "observed_target_only_kv_allocation_gib": 10.8,
+    "observed_target_only_kv_is_hardware_ceiling": false,
+    "passed": true,
+    "phase_c_requires_observed_kv_at_or_above_floor": true,
+    "projected_remaining_kv_bytes": 33021974152,
+    "projected_remaining_kv_gib": 30.754109986126423,
+    "rank_parameter_bytes": 5729010204,
+    "rank_parameter_gib": 5.335556533187628,
+    "recommended_allocation_mode": "explicit --kv-cache-memory-bytes",
+    "recommended_kv_cache_memory_bytes": 32212254720,
+    "recommended_kv_cache_memory_gib": 30.0,
+    "system_safety_reserve_gib": 2.0,
+    "target_only_model_gib_per_rank": 78.11,
+    "usable_memory_gib_per_rank": 121.0
+  },
+  "ok": true,
+  "runtime": {
+    "draft_model_is_explicit": true,
+    "draft_model_path": "/models/dspark-draft",
+    "native_mtp_stage_count": 3,
+    "num_speculative_tokens": 5,
+    "prepared_target_skips_mtp": true,
+    "speculative_method": "dspark",
+    "target_model_path": "/models/dsv4-abliterated"
+  },
+  "schema_version": 1,
+  "target": {
+    "config_sha256": "f5d2f027ba158b88707c6715d7c1080f119b6fb244cfa4162d883e8935f72e1d",
+    "index_sha256": "9f768c86d1eb7e09c9dff4fb9f87b20cf59df17923f415f697f9ee6caecf328f",
+    "manifest_sha256": "972ba797456da80e586324a5a8c29af42bac86510ceff983e674de41d31e6f26",
+    "path": "/Volumes/SN8100/DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1",
+    "physical_tensor_count": 3483,
+    "required_backend": "FLASHINFER_CUTLASS",
+    "tp_size": 2
+  }
+}
