@@ -31,6 +31,7 @@ import importlib.metadata
 import inspect
 import json
 import math
+import os
 import pathlib
 import statistics
 import sys
@@ -45,6 +46,17 @@ INPUT_RMS_RELATIVE_TOLERANCE = 0.01
 DSV4_TP2_M8192_B12X_WRAPPER_CEILING_BYTES = 635_144_040
 B12X_W13_LAYOUT = "w13"
 FLASHINFER_CUTLASS_MODE = "flashinfer_cutlass"
+CHECKPOINT_LOAD_STRATEGIES = ("per-expert", "layer-staged")
+LOAD_PREDICTOR_ROUTED_LAYERS = 43
+LOAD_PREDICTOR_FIXED_SECONDS = 60.0
+LOAD_SERVING_TARGET_SECONDS = 300.0
+LOAD_PREDICTOR_RESERVE_SECONDS = 30.0
+LOAD_PREDICTOR_DECISION_LIMIT_SECONDS = (
+    LOAD_SERVING_TARGET_SECONDS - LOAD_PREDICTOR_RESERVE_SECONDS
+)
+LOAD_MEMORY_FLOOR_KIB = 2 * (1 << 20)
+LOAD_CUDA_PEAK_CEILING_BYTES = int(3.2 * (1 << 30))
+LOAD_PROTOTYPE_MINIMUM_SPEEDUP = 2.0
 BACKEND_SELECTIONS = (
     "both",
     "all",
@@ -74,6 +86,218 @@ DEFAULT_M_VALUES = (
 DEFAULT_CORRECTNESS_M = (1, 24, 64, 128, 2048)
 SYNTHETIC_RANDOM_FIXTURE = "upstream-random-quantized"
 SYNTHETIC_LEGACY_FIXTURE = "legacy-uniform-0x11"
+
+
+def parse_sha256(value: str) -> str:
+    normalized = value.strip().lower()
+    if len(normalized) != 64 or any(
+        character not in "0123456789abcdef" for character in normalized
+    ):
+        raise argparse.ArgumentTypeError("expected a 64-character SHA-256 digest")
+    return normalized
+
+
+def checkpoint_load_prediction(
+    layer_seconds: float,
+    *,
+    routed_layers: int = LOAD_PREDICTOR_ROUTED_LAYERS,
+    fixed_seconds: float = LOAD_PREDICTOR_FIXED_SECONDS,
+    decision_limit_seconds: float = LOAD_PREDICTOR_DECISION_LIMIT_SECONDS,
+    serving_target_seconds: float = LOAD_SERVING_TARGET_SECONDS,
+) -> dict[str, Any]:
+    """Screen a prototype layer against the budget for a future serving loader."""
+
+    if not math.isfinite(layer_seconds) or layer_seconds < 0:
+        raise ValueError("layer_seconds must be finite and non-negative")
+    if (
+        routed_layers <= 0
+        or fixed_seconds < 0
+        or decision_limit_seconds <= 0
+        or serving_target_seconds < decision_limit_seconds
+    ):
+        raise ValueError("invalid checkpoint-load predictor contract")
+    routed_layer_seconds = routed_layers * layer_seconds
+    screening_total = routed_layer_seconds + fixed_seconds
+    reserve_seconds = serving_target_seconds - decision_limit_seconds
+    return {
+        "prototype_only": True,
+        "serving_loader_integrated": False,
+        "serving_run_authorized": False,
+        "routed_layers": routed_layers,
+        "representative_layer_seconds": layer_seconds,
+        "projected_routed_layer_seconds": routed_layer_seconds,
+        "fixed_budget_allowance_seconds": fixed_seconds,
+        "unspent_serving_reserve_seconds": reserve_seconds,
+        "effective_non_layer_budget_seconds": (
+            fixed_seconds + reserve_seconds
+        ),
+        "serving_target_seconds": serving_target_seconds,
+        "prototype_screening_total_seconds": screening_total,
+        "prototype_decision_limit_seconds": decision_limit_seconds,
+        "required_layer_seconds": (
+            decision_limit_seconds - fixed_seconds
+        )
+        / routed_layers,
+        "prototype_budget_passed": screening_total <= decision_limit_seconds,
+    }
+
+
+def linux_memory_snapshot() -> dict[str, int | bool | None]:
+    """Read fail-closed Linux process/system memory evidence when available."""
+
+    result: dict[str, int | bool | None] = {
+        "available": False,
+        "process_rss_kib": None,
+        "process_hwm_kib": None,
+        "mem_available_kib": None,
+        "swap_free_kib": None,
+    }
+
+    def read_kib(path: pathlib.Path, names: dict[str, str]) -> None:
+        if not path.is_file():
+            return
+        for line in path.read_text().splitlines():
+            key, separator, value = line.partition(":")
+            destination = names.get(key)
+            if not separator or destination is None:
+                continue
+            fields = value.strip().split()
+            if fields:
+                result[destination] = int(fields[0])
+
+    read_kib(
+        pathlib.Path("/proc/self/status"),
+        {"VmRSS": "process_rss_kib", "VmHWM": "process_hwm_kib"},
+    )
+    read_kib(
+        pathlib.Path("/proc/meminfo"),
+        {"MemAvailable": "mem_available_kib", "SwapFree": "swap_free_kib"},
+    )
+    result["available"] = all(
+        result[key] is not None
+        for key in (
+            "process_rss_kib",
+            "process_hwm_kib",
+            "mem_available_kib",
+            "swap_free_kib",
+        )
+    )
+    return result
+
+
+def checkpoint_load_memory_contract(
+    before: dict[str, int | bool | None],
+    during: dict[str, dict[str, int | bool | None]],
+    after: dict[str, int | bool | None],
+    *,
+    cuda_peak_allocated_bytes: int,
+    staged_host_bytes: int,
+) -> dict[str, Any]:
+    snapshots = {"before": before, **during, "after": after}
+    applies = all(bool(snapshot.get("available")) for snapshot in snapshots.values())
+    swap_growth_kib = None
+    minimum_mem_available_kib = None
+    if applies:
+        minimum_swap_free_kib = min(
+            int(snapshot["swap_free_kib"]) for snapshot in snapshots.values()
+        )
+        swap_growth_kib = max(
+            0,
+            int(before["swap_free_kib"]) - minimum_swap_free_kib,
+        )
+        minimum_mem_available_kib = min(
+            int(snapshot["mem_available_kib"])
+            for snapshot in snapshots.values()
+        )
+    passed = (
+        applies
+        and minimum_mem_available_kib >= LOAD_MEMORY_FLOOR_KIB
+        and swap_growth_kib == 0
+        and cuda_peak_allocated_bytes <= LOAD_CUDA_PEAK_CEILING_BYTES
+    )
+    return {
+        "contract_applies": applies,
+        "passed": passed if applies else None,
+        "snapshots": snapshots,
+        "minimum_mem_available_kib": minimum_mem_available_kib,
+        "swap_growth_kib": swap_growth_kib,
+        "mem_available_floor_kib": LOAD_MEMORY_FLOOR_KIB,
+        "cuda_peak_allocated_bytes": cuda_peak_allocated_bytes,
+        "cuda_peak_ceiling_bytes": LOAD_CUDA_PEAK_CEILING_BYTES,
+        "staged_host_bytes": staged_host_bytes,
+        "unified_memory_warning": (
+            "GB10 host staging and CUDA allocations share system-memory pressure"
+        ),
+    }
+
+
+def checkpoint_reference_failures(
+    candidate: dict[str, Any],
+    reference_report: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Compare staged invariants with a preserved per-expert reference report."""
+
+    reference = reference_report.get("checkpoint", reference_report)
+    if not isinstance(reference, dict):
+        return [{"kind": "reference_contract", "reason": "missing checkpoint object"}]
+    failures: list[dict[str, Any]] = []
+    if reference.get("checkpoint_load_strategy") != "per-expert":
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "checkpoint_load_strategy",
+                "expected": "per-expert",
+                "observed": reference.get("checkpoint_load_strategy"),
+            }
+        )
+    settings = reference_report.get("settings")
+    if not isinstance(settings, dict) or settings.get(
+        "checkpoint_load_strategy"
+    ) != "per-expert":
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "settings.checkpoint_load_strategy",
+                "expected": "per-expert",
+                "observed": (
+                    settings.get("checkpoint_load_strategy")
+                    if isinstance(settings, dict)
+                    else None
+                ),
+            }
+        )
+    for field in (
+        "config_sha256",
+        "index_sha256",
+        "layer_idx",
+        "tp_offset",
+        "sample_fingerprints",
+        "checkpoint_input_scale_stats",
+        "checkpoint_input_scale_tensor_count",
+        "w1_w3_scale2_max_mismatch",
+        "w13_layout",
+        "checkpoint_cache_evidence",
+    ):
+        observed = candidate.get(field)
+        expected = reference.get(field)
+        if expected is None:
+            failures.append(
+                {
+                    "kind": "reference_contract",
+                    "field": field,
+                    "reason": "field missing from reference",
+                }
+            )
+        elif observed != expected:
+            failures.append(
+                {
+                    "kind": "reference_mismatch",
+                    "field": field,
+                    "expected": expected,
+                    "observed": observed,
+                }
+            )
+    return failures
 
 
 @dataclasses.dataclass(frozen=True)
@@ -106,6 +330,30 @@ class Dsv4Shape:
             raise ValueError(
                 "SM121 W4A4 requires per-rank intermediate size divisible by 128"
             )
+
+
+def expected_layer_staging_bytes(
+    shape: Dsv4Shape,
+    *,
+    prepare_cutlass: bool,
+) -> int:
+    """Exact bounded CPU sidecar size for the fused one-layer load strategy."""
+
+    experts = shape.num_experts
+    hidden = shape.hidden_size
+    intermediate = shape.intermediate_size_per_rank
+    packed_weights = experts * (
+        (2 * intermediate * (hidden // 2))
+        + (hidden * (intermediate // 2))
+    )
+    block_scales = experts * (
+        (2 * intermediate * (hidden // 16))
+        + (hidden * (intermediate // 16))
+    )
+    scalar_bytes = experts * 3 * 4
+    if prepare_cutlass:
+        scalar_bytes += experts * 3 * 4
+    return packed_weights + block_scales + scalar_bytes
 
 
 def calculate_dsv4_tp2_m8192_workspace_bytes() -> dict[str, int]:
@@ -408,6 +656,46 @@ def _sha256_file(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def evict_checkpoint_layer_pages(
+    model_path: pathlib.Path,
+    *,
+    layer_idx: int,
+) -> dict[str, Any]:
+    """Advise Linux to drop clean cached pages for shards containing one layer."""
+
+    if not hasattr(os, "posix_fadvise") or not hasattr(os, "POSIX_FADV_DONTNEED"):
+        raise RuntimeError("POSIX_FADV_DONTNEED is unavailable on this platform")
+    index = json.loads(
+        (model_path / "model.safetensors.index.json").read_text()
+    )
+    prefix = f"layers.{layer_idx}."
+    shards = sorted(
+        {
+            shard
+            for key, shard in index.get("weight_map", {}).items()
+            if key.startswith(prefix)
+        }
+    )
+    if not shards:
+        raise ValueError(f"no checkpoint shards contain layer {layer_idx}")
+    total_bytes = 0
+    for shard in shards:
+        path = model_path / shard
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.posix_fadvise(descriptor, 0, 0, os.POSIX_FADV_DONTNEED)
+        finally:
+            os.close(descriptor)
+        total_bytes += path.stat().st_size
+    return {
+        "method": "POSIX_FADV_DONTNEED",
+        "advisory_only": True,
+        "layer_idx": layer_idx,
+        "shards": shards,
+        "shard_bytes": total_bytes,
+    }
+
+
 def read_checkpoint_contract(
     model_path: pathlib.Path,
     *,
@@ -636,6 +924,38 @@ def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dic
         "shape": dataclasses.asdict(shape)
         | {"intermediate_size_per_rank": shape.intermediate_size_per_rank},
         "checkpoint": checkpoint,
+        "checkpoint_loading": {
+            "strategy": args.checkpoint_load_strategy,
+            "load_only": args.load_only,
+            "require_predictor": args.require_load_predictor,
+            "evict_checkpoint_pages": args.evict_checkpoint_pages,
+            "reference_load_json": (
+                str(args.reference_load_json)
+                if args.reference_load_json is not None
+                else None
+            ),
+            "reference_load_sha256": args.reference_load_sha256,
+            "predictor_contract": {
+                "prototype_only": True,
+                "serving_run_authorized": False,
+                "routed_layers": LOAD_PREDICTOR_ROUTED_LAYERS,
+                "fixed_budget_allowance_seconds": LOAD_PREDICTOR_FIXED_SECONDS,
+                "unspent_serving_reserve_seconds": LOAD_PREDICTOR_RESERVE_SECONDS,
+                "effective_non_layer_budget_seconds": (
+                    LOAD_PREDICTOR_FIXED_SECONDS
+                    + LOAD_PREDICTOR_RESERVE_SECONDS
+                ),
+                "serving_target_seconds": LOAD_SERVING_TARGET_SECONDS,
+                "prototype_decision_limit_seconds": (
+                    LOAD_PREDICTOR_DECISION_LIMIT_SECONDS
+                ),
+                "required_layer_seconds": (
+                    LOAD_PREDICTOR_DECISION_LIMIT_SECONDS
+                    - LOAD_PREDICTOR_FIXED_SECONDS
+                )
+                / LOAD_PREDICTOR_ROUTED_LAYERS,
+            },
+        },
         "matrix": [
             {
                 "m": m,
@@ -693,14 +1013,77 @@ class IndexedSafetensorLoader:
         index = json.loads((model_path / "model.safetensors.index.json").read_text())
         self.weight_map: dict[str, str] = index["weight_map"]
         self._open_files: dict[str, Any] = {}
+        self._profile: dict[str, Any] = {
+            "open_seconds": 0.0,
+            "opened_shards": 0,
+            "get_tensor_seconds": 0.0,
+            "get_tensor_calls": 0,
+            "source_tensor_bytes": 0,
+            "families": {},
+        }
+
+    @staticmethod
+    def _family(key: str) -> str:
+        for suffix in (
+            "weight_scale_2",
+            "input_scale",
+            "weight_scale",
+            "weight",
+        ):
+            if key.endswith(f".{suffix}"):
+                return suffix
+        return "other"
 
     def get_tensor(self, key: str) -> Any:
         shard = self.weight_map[key]
         handle = self._open_files.get(shard)
         if handle is None:
+            started = time.perf_counter()
             handle = self._safe_open(str(self.model_path / shard), framework="pt")
+            self._profile["open_seconds"] += time.perf_counter() - started
+            self._profile["opened_shards"] += 1
             self._open_files[shard] = handle
-        return handle.get_tensor(key)
+        started = time.perf_counter()
+        tensor = handle.get_tensor(key)
+        elapsed = time.perf_counter() - started
+        tensor_bytes = int(tensor.numel()) * int(tensor.element_size())
+        self._profile["get_tensor_seconds"] += elapsed
+        self._profile["get_tensor_calls"] += 1
+        self._profile["source_tensor_bytes"] += tensor_bytes
+        family = self._family(key)
+        family_profile = self._profile["families"].setdefault(
+            family,
+            {"calls": 0, "source_tensor_bytes": 0, "get_tensor_seconds": 0.0},
+        )
+        family_profile["calls"] += 1
+        family_profile["source_tensor_bytes"] += tensor_bytes
+        family_profile["get_tensor_seconds"] += elapsed
+        return tensor
+
+    def profile(self) -> dict[str, Any]:
+        """Return a detached, JSON-safe snapshot of indexed-reader work."""
+
+        return json.loads(json.dumps(self._profile))
+
+
+def _copy_with_profile(
+    destination: Any,
+    source: Any,
+    profile: dict[str, dict[str, Any]],
+    family: str,
+) -> None:
+    started = time.perf_counter()
+    destination.copy_(source.to(destination.device))
+    elapsed = time.perf_counter() - started
+    row = profile.setdefault(family, {"calls": 0, "seconds": 0.0})
+    row["calls"] += 1
+    row["seconds"] += elapsed
+
+
+def _scalar_source(tensor: Any, name: str) -> Any:
+    if tensor.numel() != 1:
+        raise ValueError(f"{name} must contain exactly one scalar, got {tensor.shape}")
+    return tensor.reshape(())
 
 
 def _packed_bytes(torch: Any, tensor: Any) -> Any:
@@ -916,7 +1299,10 @@ def load_checkpoint_weights(
     layer_idx: int,
     checkpoint_metadata: dict[str, Any],
     prepare_cutlass: bool = False,
+    load_strategy: str = "per-expert",
 ) -> PreparedWeights:
+    if load_strategy not in CHECKPOINT_LOAD_STRATEGIES:
+        raise ValueError(f"unsupported checkpoint load strategy {load_strategy!r}")
     loader = IndexedSafetensorLoader(model_path)
     device = torch.device("cuda")
     experts = shape.num_experts
@@ -925,63 +1311,347 @@ def load_checkpoint_weights(
     tp_offset = shape.tp_rank * intermediate
     tp_packed_offset = shape.tp_rank * (intermediate // 2)
     tp_scale_offset = shape.tp_rank * (intermediate // 16)
+    copy_profile: dict[str, dict[str, Any]] = {}
+    staged_host_bytes = 0
+    memory_before = linux_memory_snapshot()
+    memory_during: dict[str, dict[str, int | bool | None]] = {}
+    torch.cuda.reset_peak_memory_stats()
+    raw_started = time.perf_counter()
 
-    w1 = torch.empty(experts, intermediate, hidden // 2, dtype=torch.uint8, device=device)
-    w3 = torch.empty_like(w1)
-    w2 = torch.empty(experts, hidden, intermediate // 2, dtype=torch.uint8, device=device)
-    s1 = torch.empty(
-        experts, intermediate, hidden // 16, dtype=torch.float8_e4m3fn, device=device
-    )
-    s3 = torch.empty_like(s1)
-    s2 = torch.empty(
-        experts, hidden, intermediate // 16, dtype=torch.float8_e4m3fn, device=device
-    )
-    gs1 = torch.empty(experts, dtype=torch.float32, device=device)
-    gs3 = torch.empty_like(gs1)
-    gs2 = torch.empty_like(gs1)
-    input1 = torch.empty_like(gs1) if prepare_cutlass else None
-    input3 = torch.empty_like(gs1) if prepare_cutlass else None
-    input2 = torch.empty_like(gs1) if prepare_cutlass else None
+    if load_strategy == "per-expert":
+        w1 = torch.empty(
+            experts, intermediate, hidden // 2, dtype=torch.uint8, device=device
+        )
+        w3 = torch.empty_like(w1)
+        w2 = torch.empty(
+            experts, hidden, intermediate // 2, dtype=torch.uint8, device=device
+        )
+        s1 = torch.empty(
+            experts,
+            intermediate,
+            hidden // 16,
+            dtype=torch.float8_e4m3fn,
+            device=device,
+        )
+        s3 = torch.empty_like(s1)
+        s2 = torch.empty(
+            experts,
+            hidden,
+            intermediate // 16,
+            dtype=torch.float8_e4m3fn,
+            device=device,
+        )
+        gs1 = torch.empty(experts, dtype=torch.float32, device=device)
+        gs3 = torch.empty_like(gs1)
+        gs2 = torch.empty_like(gs1)
+        input1 = torch.empty_like(gs1) if prepare_cutlass else None
+        input3 = torch.empty_like(gs1) if prepare_cutlass else None
+        input2 = torch.empty_like(gs1) if prepare_cutlass else None
 
-    started = time.perf_counter()
-    for expert_id in range(experts):
-        prefix = f"layers.{layer_idx}.ffn.experts.{expert_id}"
-        w1[expert_id] = _packed_bytes(
-            torch, loader.get_tensor(f"{prefix}.w1.weight")
-        ).narrow(0, tp_offset, intermediate).to(device)
-        w3[expert_id] = _packed_bytes(
-            torch, loader.get_tensor(f"{prefix}.w3.weight")
-        ).narrow(0, tp_offset, intermediate).to(device)
-        w2[expert_id] = _packed_bytes(
-            torch, loader.get_tensor(f"{prefix}.w2.weight")
-        ).narrow(1, tp_packed_offset, intermediate // 2).to(device)
+        for expert_id in range(experts):
+            prefix = f"layers.{layer_idx}.ffn.experts.{expert_id}"
+            _copy_with_profile(
+                w1[expert_id],
+                _packed_bytes(torch, loader.get_tensor(f"{prefix}.w1.weight")).narrow(
+                    0, tp_offset, intermediate
+                ),
+                copy_profile,
+                "weight",
+            )
+            _copy_with_profile(
+                w3[expert_id],
+                _packed_bytes(torch, loader.get_tensor(f"{prefix}.w3.weight")).narrow(
+                    0, tp_offset, intermediate
+                ),
+                copy_profile,
+                "weight",
+            )
+            _copy_with_profile(
+                w2[expert_id],
+                _packed_bytes(torch, loader.get_tensor(f"{prefix}.w2.weight")).narrow(
+                    1, tp_packed_offset, intermediate // 2
+                ),
+                copy_profile,
+                "weight",
+            )
+            _copy_with_profile(
+                s1[expert_id],
+                loader.get_tensor(f"{prefix}.w1.weight_scale").narrow(
+                    0, tp_offset, intermediate
+                ),
+                copy_profile,
+                "weight_scale",
+            )
+            _copy_with_profile(
+                s3[expert_id],
+                loader.get_tensor(f"{prefix}.w3.weight_scale").narrow(
+                    0, tp_offset, intermediate
+                ),
+                copy_profile,
+                "weight_scale",
+            )
+            _copy_with_profile(
+                s2[expert_id],
+                loader.get_tensor(f"{prefix}.w2.weight_scale").narrow(
+                    1, tp_scale_offset, intermediate // 16
+                ),
+                copy_profile,
+                "weight_scale",
+            )
+            for projection, destination in (
+                ("w1", gs1[expert_id]),
+                ("w3", gs3[expert_id]),
+                ("w2", gs2[expert_id]),
+            ):
+                _copy_with_profile(
+                    destination,
+                    _scalar_source(
+                        loader.get_tensor(
+                            f"{prefix}.{projection}.weight_scale_2"
+                        ),
+                        f"{prefix}.{projection}.weight_scale_2",
+                    ),
+                    copy_profile,
+                    "weight_scale_2",
+                )
+            if prepare_cutlass:
+                assert input1 is not None and input3 is not None and input2 is not None
+                for projection, destination in (
+                    ("w1", input1[expert_id]),
+                    ("w3", input3[expert_id]),
+                    ("w2", input2[expert_id]),
+                ):
+                    _copy_with_profile(
+                        destination,
+                        _scalar_source(
+                            loader.get_tensor(f"{prefix}.{projection}.input_scale"),
+                            f"{prefix}.{projection}.input_scale",
+                        ),
+                        copy_profile,
+                        "input_scale",
+                    )
+            if (expert_id + 1) % 32 == 0 or expert_id + 1 == experts:
+                print(f"  loaded experts {expert_id + 1}/{experts}", flush=True)
+        sync_started = time.perf_counter()
+        torch.cuda.synchronize()
+        cuda_sync_seconds = time.perf_counter() - sync_started
+        memory_during["per_expert_device_loaded"] = linux_memory_snapshot()
+        # FlashInfer B12X expects [up/w3, gate/w1] source order.
+        w13 = torch.cat((w3, w1), dim=1).contiguous()
+        w13_scale = torch.cat((s3, s1), dim=1).contiguous()
+        del w1, w3, s1, s3
+    else:
+        # Stage one complete routed layer on CPU and transfer each final fused
+        # tensor once. This exchanges one bounded host memcpy for thousands of
+        # tiny CPU->GPU assignments and preserves the serving up/gate layout.
+        w13_host = torch.empty(
+            experts,
+            2 * intermediate,
+            hidden // 2,
+            dtype=torch.uint8,
+            device="cpu",
+        )
+        w2_host = torch.empty(
+            experts,
+            hidden,
+            intermediate // 2,
+            dtype=torch.uint8,
+            device="cpu",
+        )
+        w13_scale_host = torch.empty(
+            experts,
+            2 * intermediate,
+            hidden // 16,
+            # Stage one-byte block-scale payloads as raw bytes. CPU float8
+            # kernels are not part of the contract; reinterpret only on CUDA.
+            dtype=torch.uint8,
+            device="cpu",
+        )
+        s2_host = torch.empty(
+            experts,
+            hidden,
+            intermediate // 16,
+            dtype=torch.uint8,
+            device="cpu",
+        )
+        gs1_host = torch.empty(experts, dtype=torch.float32, device="cpu")
+        gs3_host = torch.empty_like(gs1_host)
+        gs2_host = torch.empty_like(gs1_host)
+        input1_host = torch.empty_like(gs1_host) if prepare_cutlass else None
+        input3_host = torch.empty_like(gs1_host) if prepare_cutlass else None
+        input2_host = torch.empty_like(gs1_host) if prepare_cutlass else None
+        staged_host_bytes = sum(
+            int(tensor.numel()) * int(tensor.element_size())
+            for tensor in (
+                w13_host,
+                w2_host,
+                w13_scale_host,
+                s2_host,
+                gs1_host,
+                gs3_host,
+                gs2_host,
+                input1_host,
+                input3_host,
+                input2_host,
+            )
+            if tensor is not None
+        )
+        expected_host_bytes = expected_layer_staging_bytes(
+            shape,
+            prepare_cutlass=prepare_cutlass,
+        )
+        if staged_host_bytes != expected_host_bytes:
+            raise RuntimeError(
+                "layer staging allocation drifted from its reviewed memory contract: "
+                f"observed {staged_host_bytes}, expected {expected_host_bytes}"
+            )
 
-        s1[expert_id] = loader.get_tensor(f"{prefix}.w1.weight_scale").narrow(
-            0, tp_offset, intermediate
-        ).to(device)
-        s3[expert_id] = loader.get_tensor(f"{prefix}.w3.weight_scale").narrow(
-            0, tp_offset, intermediate
-        ).to(device)
-        s2[expert_id] = loader.get_tensor(f"{prefix}.w2.weight_scale").narrow(
-            1, tp_scale_offset, intermediate // 16
-        ).to(device)
-        gs1[expert_id] = loader.get_tensor(f"{prefix}.w1.weight_scale_2").to(device)
-        gs3[expert_id] = loader.get_tensor(f"{prefix}.w3.weight_scale_2").to(device)
-        gs2[expert_id] = loader.get_tensor(f"{prefix}.w2.weight_scale_2").to(device)
+        for expert_id in range(experts):
+            prefix = f"layers.{layer_idx}.ffn.experts.{expert_id}"
+            # w13 is [up/w3, gate/w1], matching both B12X and CUTLASS proof.
+            for projection, destination in (
+                ("w3", w13_host[expert_id, :intermediate]),
+                ("w1", w13_host[expert_id, intermediate:]),
+            ):
+                _copy_with_profile(
+                    destination,
+                    _packed_bytes(
+                        torch, loader.get_tensor(f"{prefix}.{projection}.weight")
+                    ).narrow(0, tp_offset, intermediate),
+                    copy_profile,
+                    "weight",
+                )
+            _copy_with_profile(
+                w2_host[expert_id],
+                _packed_bytes(torch, loader.get_tensor(f"{prefix}.w2.weight")).narrow(
+                    1, tp_packed_offset, intermediate // 2
+                ),
+                copy_profile,
+                "weight",
+            )
+            for projection, destination in (
+                ("w3", w13_scale_host[expert_id, :intermediate]),
+                ("w1", w13_scale_host[expert_id, intermediate:]),
+            ):
+                _copy_with_profile(
+                    destination,
+                    _packed_bytes(
+                        torch,
+                        loader.get_tensor(
+                            f"{prefix}.{projection}.weight_scale"
+                        ),
+                    ).narrow(0, tp_offset, intermediate),
+                    copy_profile,
+                    "weight_scale",
+                )
+            _copy_with_profile(
+                s2_host[expert_id],
+                _packed_bytes(
+                    torch,
+                    loader.get_tensor(f"{prefix}.w2.weight_scale"),
+                ).narrow(1, tp_scale_offset, intermediate // 16),
+                copy_profile,
+                "weight_scale",
+            )
+            for projection, destination in (
+                ("w1", gs1_host[expert_id]),
+                ("w3", gs3_host[expert_id]),
+                ("w2", gs2_host[expert_id]),
+            ):
+                _copy_with_profile(
+                    destination,
+                    _scalar_source(
+                        loader.get_tensor(
+                            f"{prefix}.{projection}.weight_scale_2"
+                        ),
+                        f"{prefix}.{projection}.weight_scale_2",
+                    ),
+                    copy_profile,
+                    "weight_scale_2",
+                )
+            if prepare_cutlass:
+                assert (
+                    input1_host is not None
+                    and input3_host is not None
+                    and input2_host is not None
+                )
+                for projection, destination in (
+                    ("w1", input1_host[expert_id]),
+                    ("w3", input3_host[expert_id]),
+                    ("w2", input2_host[expert_id]),
+                ):
+                    _copy_with_profile(
+                        destination,
+                        _scalar_source(
+                            loader.get_tensor(f"{prefix}.{projection}.input_scale"),
+                            f"{prefix}.{projection}.input_scale",
+                        ),
+                        copy_profile,
+                        "input_scale",
+                    )
+            if (expert_id + 1) % 32 == 0 or expert_id + 1 == experts:
+                print(f"  staged experts {expert_id + 1}/{experts}", flush=True)
+
+        memory_during["host_staged"] = linux_memory_snapshot()
+        transfer_sources = {
+            "w13": w13_host,
+            "w2": w2_host,
+            "w13_scale_raw": w13_scale_host,
+            "w2_scale_raw": s2_host,
+            "w13_weight_scale_2": gs1_host,
+            "w3_weight_scale_2_diagnostic": gs3_host,
+            "w2_weight_scale_2": gs2_host,
+        }
         if prepare_cutlass:
-            assert input1 is not None and input3 is not None and input2 is not None
-            input1[expert_id] = loader.get_tensor(f"{prefix}.w1.input_scale").to(
-                device
+            assert (
+                input1_host is not None
+                and input3_host is not None
+                and input2_host is not None
             )
-            input3[expert_id] = loader.get_tensor(f"{prefix}.w3.input_scale").to(
-                device
+            transfer_sources.update(
+                {
+                    "w1_input_scale": input1_host,
+                    "w3_input_scale": input3_host,
+                    "w2_input_scale": input2_host,
+                }
             )
-            input2[expert_id] = loader.get_tensor(f"{prefix}.w2.input_scale").to(
-                device
-            )
-        if (expert_id + 1) % 32 == 0 or expert_id + 1 == experts:
-            print(f"  loaded experts {expert_id + 1}/{experts}", flush=True)
-    torch.cuda.synchronize()
+        transfer_started = time.perf_counter()
+        transferred = {
+            name: source.to(device) for name, source in transfer_sources.items()
+        }
+        transfer_seconds = time.perf_counter() - transfer_started
+        w13 = transferred["w13"]
+        w2 = transferred["w2"]
+        w13_scale = transferred["w13_scale_raw"].view(torch.float8_e4m3fn)
+        s2 = transferred["w2_scale_raw"].view(torch.float8_e4m3fn)
+        gs1 = transferred["w13_weight_scale_2"]
+        gs3 = transferred["w3_weight_scale_2_diagnostic"]
+        gs2 = transferred["w2_weight_scale_2"]
+        input1 = transferred.get("w1_input_scale")
+        input3 = transferred.get("w3_input_scale")
+        input2 = transferred.get("w2_input_scale")
+        copy_profile["bulk_device_transfer"] = {
+            "calls": len(transfer_sources),
+            "tensor_names": sorted(transfer_sources),
+            "enqueue_or_blocking_seconds": transfer_seconds,
+        }
+        sync_started = time.perf_counter()
+        torch.cuda.synchronize()
+        cuda_sync_seconds = time.perf_counter() - sync_started
+        memory_during["host_and_cuda_resident"] = linux_memory_snapshot()
+        del transfer_sources, transferred
+        del (
+            w13_host,
+            w2_host,
+            w13_scale_host,
+            s2_host,
+            gs1_host,
+            gs3_host,
+            gs2_host,
+            input1_host,
+            input3_host,
+            input2_host,
+        )
 
     mismatch = float((gs1 - gs3).abs().max().item())
     if mismatch:
@@ -990,9 +1660,6 @@ def load_checkpoint_weights(
             "matching vLLM by using w1 scale for fused W13",
             file=sys.stderr,
         )
-    # FlashInfer B12X expects [up/w3, gate/w1] source order.
-    w13 = torch.cat((w3, w1), dim=1).contiguous()
-    w13_scale = torch.cat((s3, s1), dim=1).contiguous()
     w13_input_scale = None
     w2_input_scale = None
     if prepare_cutlass:
@@ -1032,16 +1699,38 @@ def load_checkpoint_weights(
         )
         w13_input_scale = w13_input_scalar.expand(experts)
         w2_input_scale = w2_input_scalar.expand(experts)
-    del w1, w3, s1, s3, gs3, input1, input3, input2
+    del gs3, input1, input3, input2
+    raw_load_seconds = time.perf_counter() - raw_started
     checkpoint_metadata.update(
         {
-            "load_seconds": time.perf_counter() - started,
+            # Preserve the legacy name while making the phase boundary explicit.
+            "load_seconds": raw_load_seconds,
+            "raw_load_seconds": raw_load_seconds,
+            "checkpoint_load_strategy": load_strategy,
+            "checkpoint_load_profile": {
+                "indexed_reader": loader.profile(),
+                "per_family_copy_or_stage": copy_profile,
+                "device_completion_sync_seconds": cuda_sync_seconds,
+                "destination_staging_bytes": staged_host_bytes,
+                "attribution_notes": {
+                    "indexed_source_bytes": (
+                        "full checkpoint tensors before TP slicing"
+                    ),
+                    "get_tensor_seconds": (
+                        "lazy view creation; page faults may occur during copy/stage"
+                    ),
+                    "bulk_device_transfer": (
+                        "host call duration; completion is the separate sync field"
+                    ),
+                },
+            },
             "w13_layout": "w13 (up/w3, gate/w1; B12X up_gate)",
             "w1_w3_scale2_max_mismatch": mismatch,
             "tp_offset": tp_offset,
         }
     )
-    return _finish_scale_preparation(
+    preparation_started = time.perf_counter()
+    prepared = _finish_scale_preparation(
         torch,
         w13=w13,
         w13_scale=w13_scale,
@@ -1055,6 +1744,27 @@ def load_checkpoint_weights(
         metadata=checkpoint_metadata,
         prepare_cutlass=prepare_cutlass,
     )
+    scale_prepare_seconds = time.perf_counter() - preparation_started
+    total_layer_seconds = time.perf_counter() - raw_started
+    memory_after = linux_memory_snapshot()
+    memory_contract = checkpoint_load_memory_contract(
+        memory_before,
+        memory_during,
+        memory_after,
+        cuda_peak_allocated_bytes=int(torch.cuda.max_memory_allocated()),
+        staged_host_bytes=staged_host_bytes,
+    )
+    checkpoint_metadata.update(
+        {
+            "scale_prepare_seconds": scale_prepare_seconds,
+            "total_layer_load_seconds": total_layer_seconds,
+            "prototype_load_screen": checkpoint_load_prediction(
+                total_layer_seconds
+            ),
+            "load_memory_contract": memory_contract,
+        }
+    )
+    return prepared
 
 
 def make_synthetic_weights(
@@ -1962,6 +2672,18 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             tp_rank=args.tp_rank,
             require_input_scales=prepare_cutlass,
         )
+        checkpoint_metadata["checkpoint_cache_evidence"] = (
+            evict_checkpoint_layer_pages(
+                args.model_path,
+                layer_idx=args.layer_idx,
+            )
+            if args.evict_checkpoint_pages
+            else {
+                "method": "uncontrolled",
+                "advisory_only": True,
+                "layer_idx": args.layer_idx,
+            }
+        )
         print(
             f"Loading NVIDIA NVFP4 layer {args.layer_idx}, TP rank {args.tp_rank}/"
             f"{args.tp_size} from {args.model_path}...",
@@ -1974,9 +2696,145 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             layer_idx=args.layer_idx,
             checkpoint_metadata=checkpoint_metadata,
             prepare_cutlass=prepare_cutlass,
+            load_strategy=args.checkpoint_load_strategy,
         )
 
     provenance = runtime_provenance(torch, repo_root)
+    if args.load_only:
+        prediction = weights.metadata.get("prototype_load_screen")
+        memory_contract = weights.metadata.get("load_memory_contract")
+        failures: list[dict[str, Any]] = []
+        reference_proof = None
+        if args.reference_load_json is not None:
+            if not args.reference_load_json.is_file():
+                raise FileNotFoundError(
+                    f"reference load JSON is missing: {args.reference_load_json}"
+                )
+            reference_sha256 = _sha256_file(args.reference_load_json)
+            digest_passed = (
+                args.reference_load_sha256 is None
+                or reference_sha256 == args.reference_load_sha256
+            )
+            if not digest_passed:
+                failures.append(
+                    {
+                        "kind": "reference_digest",
+                        "expected": args.reference_load_sha256,
+                        "observed": reference_sha256,
+                    }
+                )
+            reference_report = json.loads(args.reference_load_json.read_text())
+            reference_failures = checkpoint_reference_failures(
+                weights.metadata,
+                reference_report,
+            )
+            observed_shape = dataclasses.asdict(shape) | {
+                "intermediate_size_per_rank": shape.intermediate_size_per_rank
+            }
+            expected_shape = reference_report.get("shape")
+            if expected_shape != observed_shape:
+                reference_failures.append(
+                    {
+                        "kind": "reference_mismatch",
+                        "field": "shape",
+                        "expected": expected_shape,
+                        "observed": observed_shape,
+                    }
+                )
+            reference_checkpoint = reference_report.get("checkpoint", {})
+            reference_seconds = reference_checkpoint.get(
+                "total_layer_load_seconds"
+            )
+            observed_seconds = weights.metadata.get("total_layer_load_seconds")
+            speedup = None
+            speedup_passed = False
+            if (
+                isinstance(reference_seconds, (int, float))
+                and isinstance(observed_seconds, (int, float))
+                and math.isfinite(float(reference_seconds))
+                and math.isfinite(float(observed_seconds))
+                and float(observed_seconds) > 0
+            ):
+                speedup = float(reference_seconds) / float(observed_seconds)
+                speedup_passed = speedup >= LOAD_PROTOTYPE_MINIMUM_SPEEDUP
+            if args.require_load_predictor and not speedup_passed:
+                reference_failures.append(
+                    {
+                        "kind": "prototype_speedup",
+                        "minimum": LOAD_PROTOTYPE_MINIMUM_SPEEDUP,
+                        "observed": speedup,
+                        "reference_seconds": reference_seconds,
+                        "staged_seconds": observed_seconds,
+                    }
+                )
+            reference_proof = {
+                "path": str(args.reference_load_json.resolve()),
+                "expected_sha256": args.reference_load_sha256,
+                "observed_sha256": reference_sha256,
+                "digest_passed": digest_passed,
+                "declared_strategy": reference_checkpoint.get(
+                    "checkpoint_load_strategy"
+                ),
+                "speedup": speedup,
+                "minimum_speedup": LOAD_PROTOTYPE_MINIMUM_SPEEDUP,
+                "speedup_passed": speedup_passed,
+                "passed": digest_passed and not reference_failures,
+            }
+            failures.extend(reference_failures)
+        if args.require_load_predictor and (
+            not isinstance(prediction, dict)
+            or not prediction.get("prototype_budget_passed", False)
+        ):
+            failures.append(
+                {
+                    "kind": "prototype_load_budget",
+                    "prediction": prediction,
+                }
+            )
+        if args.require_load_predictor and (
+            not isinstance(memory_contract, dict)
+            or memory_contract.get("passed") is not True
+        ):
+            failures.append(
+                {
+                    "kind": "checkpoint_load_memory",
+                    "contract": memory_contract,
+                }
+            )
+        report = {
+            "schema_version": SCHEMA_VERSION,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "load_only": True,
+            "shape": dataclasses.asdict(shape)
+            | {"intermediate_size_per_rank": shape.intermediate_size_per_rank},
+            "checkpoint": weights.metadata,
+            "provenance": provenance,
+            "settings": {
+                "backend_selection": args.backend,
+                "checkpoint_load_strategy": args.checkpoint_load_strategy,
+                "require_load_predictor": args.require_load_predictor,
+                "evict_checkpoint_pages": args.evict_checkpoint_pages,
+            },
+            "reference_proof": reference_proof,
+            "memory": {
+                "allocated_gib": torch.cuda.memory_allocated() / (1 << 30),
+                "reserved_gib": torch.cuda.memory_reserved() / (1 << 30),
+                "peak_allocated_gib": torch.cuda.max_memory_allocated() / (1 << 30),
+            },
+            "failures": failures,
+        }
+        encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
+        if args.output is not None:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(encoded)
+            print(f"Wrote {args.output}")
+        else:
+            print(encoded, end="")
+        if failures:
+            print(f"FAILED: {len(failures)} prototype load gate(s)", file=sys.stderr)
+            return 2
+        return 0
+
     backend_proof: dict[str, Any] = {}
     w4a4_wrapper = None
     flashinfer_cutlass_runner = None
@@ -2035,6 +2893,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
         "settings": {
             "backend_selection": args.backend,
             "w4a4_order": args.w4a4_order,
+            "checkpoint_load_strategy": args.checkpoint_load_strategy,
             "modes": list(modes),
             "m": list(args.m),
             "correctness_m": list(args.correctness_m),
@@ -2476,6 +3335,50 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--layer-idx", type=int, default=0)
+    parser.add_argument(
+        "--checkpoint-load-strategy",
+        choices=CHECKPOINT_LOAD_STRATEGIES,
+        default="per-expert",
+        help=(
+            "Load real checkpoint tensors with the current per-expert path or "
+            "stage/fuse one complete layer on CPU before bounded bulk transfer"
+        ),
+    )
+    parser.add_argument(
+        "--load-only",
+        action="store_true",
+        help=(
+            "Load and prepare one real routed layer, emit a prototype budget "
+            "screen, and skip kernels"
+        ),
+    )
+    parser.add_argument(
+        "--require-load-predictor",
+        action="store_true",
+        help=(
+            "Fail the prototype load-only run unless CUTLASS preparation, an "
+            "immutable per-expert reference, memory safety, and the 270s "
+            "screening budget all pass; this does not authorize serving"
+        ),
+    )
+    parser.add_argument(
+        "--reference-load-json",
+        type=pathlib.Path,
+        help="Preserved per-expert real-layer JSON used for staged equivalence gates",
+    )
+    parser.add_argument(
+        "--reference-load-sha256",
+        type=parse_sha256,
+        help="Expected immutable SHA-256 of --reference-load-json",
+    )
+    parser.add_argument(
+        "--evict-checkpoint-pages",
+        action="store_true",
+        help=(
+            "Issue POSIX_FADV_DONTNEED for every shard containing the selected "
+            "layer before timing; advisory evidence, not a raw-storage benchmark"
+        ),
+    )
     parser.add_argument("--tp-size", type=int, default=2)
     parser.add_argument("--tp-rank", type=int, default=0)
     parser.add_argument(
@@ -2564,6 +3467,30 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--synthetic-experts must be positive")
     if args.layer_idx < 0:
         raise ValueError("--layer-idx must be non-negative")
+    if args.load_only and args.synthetic:
+        raise ValueError("--load-only requires a real --model-path checkpoint")
+    if args.require_load_predictor and not args.load_only:
+        raise ValueError("--require-load-predictor requires --load-only")
+    if args.reference_load_json is not None and not args.load_only:
+        raise ValueError("--reference-load-json requires --load-only")
+    if args.reference_load_sha256 is not None and args.reference_load_json is None:
+        raise ValueError("--reference-load-sha256 requires --reference-load-json")
+    if args.require_load_predictor and args.backend != FLASHINFER_CUTLASS_MODE:
+        raise ValueError(
+            "--require-load-predictor requires --backend flashinfer_cutlass"
+        )
+    if args.require_load_predictor and args.checkpoint_load_strategy != "layer-staged":
+        raise ValueError(
+            "--require-load-predictor requires --checkpoint-load-strategy layer-staged"
+        )
+    if args.require_load_predictor and args.reference_load_json is None:
+        raise ValueError("--require-load-predictor requires --reference-load-json")
+    if args.require_load_predictor and args.reference_load_sha256 is None:
+        raise ValueError("--require-load-predictor requires --reference-load-sha256")
+    if args.require_load_predictor and not args.evict_checkpoint_pages:
+        raise ValueError(
+            "--require-load-predictor requires --evict-checkpoint-pages"
+        )
     if args.warmup < 0 or args.iters <= 0 or args.repeats <= 0:
         raise ValueError("warmup must be non-negative; iters/repeats must be positive")
     if args.l2_flush_mib < 0:

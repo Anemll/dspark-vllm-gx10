@@ -13,6 +13,7 @@ import tempfile
 import unittest
 from dataclasses import dataclass
 from types import SimpleNamespace
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -56,6 +57,339 @@ def _write_checkpoint_contract(path: pathlib.Path, *, omit: str | None = None) -
 
 
 class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
+    def test_checkpoint_load_predictor_enforces_five_minute_reserve(self) -> None:
+        passing = bench.checkpoint_load_prediction(4.0)
+        boundary = bench.checkpoint_load_prediction(
+            (bench.LOAD_PREDICTOR_DECISION_LIMIT_SECONDS - 60.0) / 43
+        )
+        failing = bench.checkpoint_load_prediction(5.0)
+
+        self.assertEqual(passing["prototype_screening_total_seconds"], 232.0)
+        self.assertTrue(passing["prototype_budget_passed"])
+        self.assertTrue(boundary["prototype_budget_passed"])
+        self.assertFalse(failing["prototype_budget_passed"])
+        self.assertFalse(passing["serving_run_authorized"])
+        self.assertEqual(passing["effective_non_layer_budget_seconds"], 90.0)
+        self.assertEqual(passing["serving_target_seconds"], 300.0)
+        self.assertAlmostEqual(
+            passing["required_layer_seconds"], 210.0 / 43
+        )
+        with self.assertRaisesRegex(ValueError, "layer_seconds"):
+            bench.checkpoint_load_prediction(math.inf)
+        self.assertEqual(bench.parse_sha256("A" * 64), "a" * 64)
+        with self.assertRaisesRegex(Exception, "64-character"):
+            bench.parse_sha256("not-a-digest")
+
+    def test_layer_staging_memory_contract_is_bounded_and_exact(self) -> None:
+        shape = bench.Dsv4Shape()
+        self.assertEqual(
+            bench.expected_layer_staging_bytes(shape, prepare_cutlass=True),
+            1_811_945_472,
+        )
+        self.assertEqual(
+            bench.expected_layer_staging_bytes(shape, prepare_cutlass=False),
+            1_811_942_400,
+        )
+        self.assertLess(
+            bench.expected_layer_staging_bytes(shape, prepare_cutlass=True),
+            1.7 * (1 << 30),
+        )
+
+    def test_checkpoint_load_memory_contract_rejects_swap_or_cuda_peak(self) -> None:
+        before = {
+            "available": True,
+            "process_rss_kib": 100,
+            "process_hwm_kib": 100,
+            "mem_available_kib": 10_000_000,
+            "swap_free_kib": 1_000,
+        }
+        healthy = before | {
+            "process_rss_kib": 200,
+            "process_hwm_kib": 300,
+            "mem_available_kib": 9_000_000,
+        }
+        passing = bench.checkpoint_load_memory_contract(
+            before,
+            {"host_and_cuda_resident": healthy},
+            healthy,
+            cuda_peak_allocated_bytes=3 << 30,
+            staged_host_bytes=1_811_945_472,
+        )
+        swapped = bench.checkpoint_load_memory_contract(
+            before,
+            {"host_and_cuda_resident": healthy | {"swap_free_kib": 999}},
+            healthy,
+            cuda_peak_allocated_bytes=3 << 30,
+            staged_host_bytes=1_811_945_472,
+        )
+        oversized = bench.checkpoint_load_memory_contract(
+            before,
+            {"host_and_cuda_resident": healthy},
+            healthy,
+            cuda_peak_allocated_bytes=4 << 30,
+            staged_host_bytes=1_811_945_472,
+        )
+        self.assertTrue(passing["passed"])
+        self.assertFalse(swapped["passed"])
+        self.assertFalse(oversized["passed"])
+        self.assertEqual(passing["minimum_mem_available_kib"], 9_000_000)
+
+    def test_checkpoint_reference_gate_compares_semantic_invariants(self) -> None:
+        candidate = {
+            "checkpoint_load_strategy": "per-expert",
+            "config_sha256": "config",
+            "index_sha256": "index",
+            "layer_idx": 0,
+            "tp_offset": 0,
+            "sample_fingerprints": {"w13": "abc", "w2": "def"},
+            "checkpoint_input_scale_stats": {"w13_global_max": 1.0},
+            "checkpoint_input_scale_tensor_count": 768,
+            "w1_w3_scale2_max_mismatch": 0.0,
+            "w13_layout": "w13 (up/w3, gate/w1; B12X up_gate)",
+            "checkpoint_cache_evidence": {
+                "method": "POSIX_FADV_DONTNEED",
+                "layer_idx": 0,
+            },
+        }
+        self.assertEqual(
+            bench.checkpoint_reference_failures(
+                candidate,
+                {
+                    "checkpoint": candidate.copy(),
+                    "settings": {"checkpoint_load_strategy": "per-expert"},
+                },
+            ),
+            [],
+        )
+        corrupt = candidate.copy()
+        corrupt["sample_fingerprints"] = {"w13": "wrong", "w2": "def"}
+        failures = bench.checkpoint_reference_failures(
+            corrupt,
+            {
+                "checkpoint": candidate.copy(),
+                "settings": {"checkpoint_load_strategy": "per-expert"},
+            },
+        )
+        self.assertEqual(failures[0]["kind"], "reference_mismatch")
+        self.assertEqual(failures[0]["field"], "sample_fingerprints")
+
+        staged_reference = candidate.copy()
+        staged_reference["checkpoint_load_strategy"] = "layer-staged"
+        failures = bench.checkpoint_reference_failures(
+            candidate,
+            {
+                "checkpoint": staged_reference,
+                "settings": {"checkpoint_load_strategy": "layer-staged"},
+            },
+        )
+        self.assertEqual(failures[0]["kind"], "reference_contract")
+        self.assertEqual(failures[0]["field"], "checkpoint_load_strategy")
+
+    def test_checkpoint_page_advice_targets_only_selected_layer_shards(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "a.safetensors").write_bytes(b"a" * 11)
+            (root / "b.safetensors").write_bytes(b"b" * 13)
+            (root / "c.safetensors").write_bytes(b"c" * 17)
+            (root / "model.safetensors.index.json").write_text(
+                json.dumps(
+                    {
+                        "weight_map": {
+                            "layers.0.ffn.a": "a.safetensors",
+                            "layers.0.ffn.b": "b.safetensors",
+                            "layers.1.ffn.c": "c.safetensors",
+                        }
+                    }
+                )
+            )
+            advised: list[tuple[int, int, int, int]] = []
+            with (
+                mock.patch.object(
+                    bench.os,
+                    "posix_fadvise",
+                    side_effect=lambda *args: advised.append(args),
+                    create=True,
+                ),
+                mock.patch.object(
+                    bench.os,
+                    "POSIX_FADV_DONTNEED",
+                    4,
+                    create=True,
+                ),
+            ):
+                evidence = bench.evict_checkpoint_layer_pages(root, layer_idx=0)
+
+        self.assertEqual(evidence["shards"], ["a.safetensors", "b.safetensors"])
+        self.assertEqual(evidence["shard_bytes"], 24)
+        self.assertEqual(len(advised), 2)
+        self.assertTrue(all(call[1:] == (0, 0, 4) for call in advised))
+
+    def test_load_strategy_contract_preserves_fused_up_gate_order(self) -> None:
+        source = inspect.getsource(bench.load_checkpoint_weights)
+        self.assertEqual(
+            bench.CHECKPOINT_LOAD_STRATEGIES,
+            ("per-expert", "layer-staged"),
+        )
+        self.assertIn('(\"w3\", w13_host[expert_id, :intermediate])', source)
+        self.assertIn('(\"w1\", w13_host[expert_id, intermediate:])', source)
+        self.assertIn("w13 = torch.cat((w3, w1), dim=1)", source)
+        self.assertIn('copy_profile["bulk_device_transfer"]', source)
+
+    def test_tiny_cuda_checkpoint_staged_and_per_expert_are_bit_exact(self) -> None:
+        try:
+            import torch
+            from safetensors.torch import save_file
+        except ImportError:
+            self.skipTest("PyTorch/safetensors are not installed")
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA is not available")
+
+        def values(shape: tuple[int, ...], offset: int) -> object:
+            count = math.prod(shape)
+            return (
+                torch.arange(count, dtype=torch.int64).add(offset).remainder(251)
+                .to(torch.uint8)
+                .reshape(shape)
+            )
+
+        rank_outputs: dict[int, object] = {}
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            tensors: dict[str, object] = {}
+            for expert_id in range(2):
+                prefix = f"layers.0.ffn.experts.{expert_id}"
+                for projection_id, projection in enumerate(("w1", "w3", "w2")):
+                    base = 10_000 * expert_id + 1_000 * projection_id
+                    weight_shape = (256, 64) if projection != "w2" else (128, 128)
+                    scale_shape = (256, 8) if projection != "w2" else (128, 16)
+                    tensors[f"{prefix}.{projection}.weight"] = values(
+                        weight_shape, base
+                    )
+                    tensors[f"{prefix}.{projection}.weight_scale"] = (
+                        values(scale_shape, base + 17)
+                        .remainder(31)
+                        .add(1)
+                        .to(torch.float32)
+                        .mul(2.0**-7)
+                        .to(torch.float8_e4m3fn)
+                    )
+                    tensors[f"{prefix}.{projection}.weight_scale_2"] = torch.tensor(
+                        0.25 + expert_id * 0.01 + projection_id * 0.001,
+                        dtype=torch.float32,
+                    )
+                    tensors[f"{prefix}.{projection}.input_scale"] = torch.tensor(
+                        2.0 + expert_id * 0.1 + projection_id * 0.01,
+                        dtype=torch.float32,
+                    )
+            shard = "model-00001-of-00001.safetensors"
+            save_file(tensors, root / shard)
+            (root / "model.safetensors.index.json").write_text(
+                json.dumps({"weight_map": {key: shard for key in tensors}})
+            )
+
+            for tp_rank in (0, 1):
+                shape = bench.Dsv4Shape(
+                    hidden_size=128,
+                    intermediate_size=256,
+                    num_experts=2,
+                    top_k=1,
+                    tp_size=2,
+                    tp_rank=tp_rank,
+                )
+                captures: dict[str, dict[str, object]] = {}
+
+                def capture_finish(torch_module: object, **kwargs: object) -> object:
+                    strategy = str(kwargs["metadata"]["checkpoint_load_strategy"])
+                    captures[strategy] = {
+                        key: kwargs[key].detach().cpu().clone()
+                        for key in (
+                            "w13",
+                            "w13_scale",
+                            "w13_scale_2",
+                            "w13_input_scale",
+                            "w2",
+                            "w2_scale",
+                            "w2_scale_2",
+                            "w2_input_scale",
+                        )
+                    }
+                    return SimpleNamespace(metadata=kwargs["metadata"])
+
+                with mock.patch.object(
+                    bench,
+                    "_finish_scale_preparation",
+                    side_effect=capture_finish,
+                ):
+                    for strategy in bench.CHECKPOINT_LOAD_STRATEGIES:
+                        bench.load_checkpoint_weights(
+                            torch,
+                            root,
+                            shape,
+                            layer_idx=0,
+                            checkpoint_metadata={"layer_idx": 0},
+                            prepare_cutlass=True,
+                            load_strategy=strategy,
+                        )
+                        torch.cuda.empty_cache()
+
+                baseline = captures["per-expert"]
+                staged = captures["layer-staged"]
+                self.assertEqual(set(baseline), set(staged))
+                for key in baseline:
+                    left = baseline[key]
+                    right = staged[key]
+                    if left.element_size() == 1:
+                        left = left.view(torch.uint8)
+                        right = right.view(torch.uint8)
+                    self.assertTrue(torch.equal(left, right), f"mismatch in {key}")
+                rank_outputs[tp_rank] = staged["w13"]
+
+        self.assertFalse(torch.equal(rank_outputs[0], rank_outputs[1]))
+
+    def test_load_predictor_cli_requires_load_only_real_checkpoint(self) -> None:
+        parser = bench.build_parser()
+        args = parser.parse_args(
+            ["--dry-run", "--synthetic", "--require-load-predictor"]
+        )
+        with self.assertRaisesRegex(ValueError, "requires --load-only"):
+            bench.validate_args(args)
+
+        args = parser.parse_args(["--dry-run", "--synthetic", "--load-only"])
+        with self.assertRaisesRegex(ValueError, "real --model-path"):
+            bench.validate_args(args)
+
+        args = parser.parse_args(
+            [
+                "--dry-run",
+                "--model-path",
+                "/does/not-matter-for-validation",
+                "--load-only",
+                "--require-load-predictor",
+            ]
+        )
+        with self.assertRaisesRegex(ValueError, "backend flashinfer_cutlass"):
+            bench.validate_args(args)
+
+        args = parser.parse_args(
+            [
+                "--dry-run",
+                "--model-path",
+                "/does/not-matter-for-validation",
+                "--load-only",
+                "--require-load-predictor",
+                "--backend",
+                bench.FLASHINFER_CUTLASS_MODE,
+                "--checkpoint-load-strategy",
+                "layer-staged",
+                "--reference-load-json",
+                "/immutable/reference.json",
+                "--reference-load-sha256",
+                "0" * 64,
+                "--evict-checkpoint-pages",
+            ]
+        )
+        bench.validate_args(args)
+
     def test_b12x_timing_mirrors_serving_adapter_output_copy(self) -> None:
         source = inspect.getsource(bench.run_benchmark)
         self.assertIn("output_local.copy_(wrapper_output)", source)
@@ -545,6 +879,14 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertEqual(
             report["checkpoint"]["quantizer"],
             "vllm._custom_ops.scaled_fp4_quant",
+        )
+        self.assertEqual(
+            report["checkpoint_loading"]["strategy"], "per-expert"
+        )
+        self.assertFalse(report["checkpoint_loading"]["load_only"])
+        self.assertEqual(
+            report["checkpoint_loading"]["predictor_contract"]["routed_layers"],
+            43,
         )
         self.assertEqual(report["activation_contract"]["input_rms"], 1.0)
         self.assertEqual(
