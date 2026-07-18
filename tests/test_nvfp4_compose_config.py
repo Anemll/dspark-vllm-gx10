@@ -36,6 +36,22 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
             )
         self.assertEqual(values, ["flashinfer_b12x", "flashinfer_b12x"])
 
+    def test_staged_nvfp4_loader_is_reversible_and_defaults_off(self) -> None:
+        self.assertIn(
+            'VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD: '
+            '"${VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD:-0}"',
+            self.compose,
+        )
+        values = []
+        for relative_path in ("config/head.env.example", "config/worker.env.example"):
+            lines = (REPO_ROOT / relative_path).read_text().splitlines()
+            values.extend(
+                line.split("=", 1)[1]
+                for line in lines
+                if line.startswith("VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD=")
+            )
+        self.assertEqual(values, ["0", "0"])
+
     def test_speculation_mode_is_propagated_with_a_dspark_default(self) -> None:
         self.assertIn(
             'DSPARK_SPECULATION_MODE: "${DSPARK_SPECULATION_MODE:-dspark}"',
