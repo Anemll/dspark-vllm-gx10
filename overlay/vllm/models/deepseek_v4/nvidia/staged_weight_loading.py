@@ -120,6 +120,25 @@ def _expected_checkpoint_dtype(torch_module: Any, suffix: str) -> Any:
     raise ValueError(f"Unsupported staged NVFP4 checkpoint suffix: {suffix!r}")
 
 
+def _expected_checkpoint_shape(
+    projection: str,
+    suffix: str,
+) -> tuple[int, ...]:
+    """Return the exact pre-TP source shape proven from the 46 headers."""
+
+    if projection not in ("w1", "w2", "w3"):
+        raise ValueError(
+            f"Unsupported staged NVFP4 checkpoint projection: {projection!r}"
+        )
+    if suffix == "weight":
+        return (2_048, 2_048) if projection in ("w1", "w3") else (4_096, 1_024)
+    if suffix == "weight_scale":
+        return (2_048, 256) if projection in ("w1", "w3") else (4_096, 128)
+    if suffix in ("weight_scale_2", "input_scale"):
+        return ()
+    raise ValueError(f"Unsupported staged NVFP4 checkpoint suffix: {suffix!r}")
+
+
 def _reviewed_parameter_relative_names(
     expert_mapping_index: Any,
 ) -> dict[str, str]:
@@ -213,12 +232,29 @@ class Nvfp4LayerStager:
         expected_source_keys: frozenset[str],
         expected_stage_bytes: int = EXPECTED_STAGE_BYTES,
         expected_commit_calls: int = EXPECTED_COMMIT_CALLS,
+        expected_checkpoint_shapes: dict[tuple[str, str], tuple[int, ...]]
+        | None = None,
     ) -> None:
         self._torch = torch_module
         self._eligible_parameters = eligible_parameters
         self._expected_source_keys = expected_source_keys
         self._expected_stage_bytes = expected_stage_bytes
         self._expected_commit_calls = expected_commit_calls
+        if expected_checkpoint_shapes is not None:
+            expected_shape_keys = {
+                (projection, suffix)
+                for projection in ("w1", "w2", "w3")
+                for suffix in _CHECKPOINT_SUFFIXES
+            }
+            if set(expected_checkpoint_shapes) != expected_shape_keys:
+                raise RuntimeError(
+                    "Synthetic NVFP4 checkpoint-shape override is incomplete"
+                )
+            if expected_stage_bytes == EXPECTED_STAGE_BYTES:
+                raise RuntimeError(
+                    "Official NVFP4 staging cannot override checkpoint shapes"
+                )
+        self._expected_checkpoint_shapes = expected_checkpoint_shapes
         self._active: _ActiveLayer | None = None
         self._pending: StagedSource | None = None
         self._completed_layers: set[int] = set()
@@ -266,6 +302,18 @@ class Nvfp4LayerStager:
             raise RuntimeError(
                 f"NVFP4 staged source {name!r} has dtype {loaded_weight.dtype}; "
                 f"expected {expected_dtype}"
+            )
+        projection = str(expert_name_match.projection)
+        expected_shape = (
+            self._expected_checkpoint_shapes[(projection, suffix)]
+            if self._expected_checkpoint_shapes is not None
+            else _expected_checkpoint_shape(projection, suffix)
+        )
+        observed_shape = tuple(loaded_weight.shape)
+        if observed_shape != expected_shape:
+            raise RuntimeError(
+                f"NVFP4 staged source {name!r} has shape {observed_shape}; "
+                f"expected {expected_shape} for {projection}.{suffix}"
             )
         key = f"{expert_name_match.mapping_key}{suffix}"
         if key not in self._expected_source_keys:
@@ -459,6 +507,108 @@ class Nvfp4LayerStager:
             self._total_commit_calls,
             time.perf_counter() - self._started_at,
         )
+
+    def abort(self) -> None:
+        """Release active host staging storage after an outer load failure."""
+
+        if self._active is not None:
+            for staged in self._active.parameters.values():
+                try:
+                    source = staged.proxy.data
+                    staged.proxy.data = self._torch.empty(
+                        (0,), dtype=source.dtype, device="cpu"
+                    )
+                except Exception:
+                    logger.exception(
+                        "Failed to release NVFP4 staged proxy %s during abort",
+                        staged.name,
+                    )
+            self._active.parameters.clear()
+            self._active.seen.clear()
+        self._pending = None
+        self._active = None
+
+
+class Nvfp4LayerStagedLoadSession:
+    """Own one stager across every nested target-model loader invocation."""
+
+    def __init__(self) -> None:
+        self._active = False
+        self._stager: Nvfp4LayerStager | None = None
+        self._staged_requested = False
+        self._nested_load_calls = 0
+        self._finish_calls = 0
+
+    @property
+    def active(self) -> bool:
+        return self._active
+
+    @property
+    def nested_load_calls(self) -> int:
+        return self._nested_load_calls
+
+    @property
+    def finish_calls(self) -> int:
+        return self._finish_calls
+
+    def begin(
+        self,
+        stager: Nvfp4LayerStager | None,
+        *,
+        staged_requested: bool,
+    ) -> None:
+        if self._active:
+            raise RuntimeError("NVFP4 staged-load session reentry is not allowed")
+        if (stager is not None) != staged_requested:
+            raise RuntimeError(
+                "NVFP4 staged-load session request/stager contract drifted"
+            )
+        self._active = True
+        self._stager = stager
+        self._staged_requested = staged_requested
+        self._nested_load_calls = 0
+
+    def stager_for_nested_load(
+        self,
+        *,
+        staged_requested: bool,
+    ) -> Nvfp4LayerStager | None:
+        if not self._active:
+            if staged_requested:
+                raise RuntimeError(
+                    "NVFP4 staged nested load requires an active outer session"
+                )
+            return None
+        if staged_requested != self._staged_requested:
+            raise RuntimeError(
+                "NVFP4 staged-load opt-in changed during an active session"
+            )
+        self._nested_load_calls += 1
+        return self._stager
+
+    def finish(self) -> None:
+        if not self._active:
+            raise RuntimeError("No active NVFP4 staged-load session to finish")
+        if self._stager is not None:
+            self._stager.finish()
+        self._finish_calls += 1
+        self._reset()
+
+    def abort(self) -> None:
+        """Drop any active CPU proxies after an outer load failure."""
+
+        try:
+            if self._stager is not None:
+                self._stager.abort()
+        except Exception:
+            logger.exception("Failed to abort the active NVFP4 layer stager")
+        finally:
+            self._reset()
+
+    def _reset(self) -> None:
+        self._active = False
+        self._stager = None
+        self._staged_requested = False
 
 
 def maybe_create_nvfp4_layer_stager(

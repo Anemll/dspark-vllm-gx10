@@ -287,11 +287,14 @@ class DeepseekV4NvFp4WeightLoadingTest(unittest.TestCase):
         )
 
     def test_mtp_name_is_not_claimed(self) -> None:
-        self.assertIsNone(
-            self.helper.parse_expert_name(
-                "mtp.0.ffn.experts.0.w1.weight_scale_2"
-            )
-        )
+        for name in (
+            "mtp.0.ffn.experts.0.w1.weight",
+            "model.mtp.0.ffn.experts.0.w1.weight",
+            "mtp.0.ffn.experts.0.w1.scale",
+            "model.mtp.0.ffn.experts.0.w1.weight_scale",
+        ):
+            with self.subTest(name=name):
+                self.assertIsNone(self.helper.parse_expert_name(name))
 
     def test_optional_model_prefix_is_preserved(self) -> None:
         match = self.helper.parse_expert_name(

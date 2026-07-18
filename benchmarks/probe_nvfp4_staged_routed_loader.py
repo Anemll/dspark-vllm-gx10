@@ -76,18 +76,48 @@ MAIN_TARGET_SOURCE_CONTRACT = {
     "weight_scale_2": {"dtype": "torch.float32", "rank": 0, "shape": []},
     "input_scale": {"dtype": "torch.float32", "rank": 0, "shape": []},
 }
+OFFICIAL_CHECKPOINT_SOURCE_SHAPES = {
+    (projection, suffix): (
+        (2_048, 2_048)
+        if suffix == "weight" and projection in ("w1", "w3")
+        else (4_096, 1_024)
+        if suffix == "weight"
+        else (2_048, 256)
+        if suffix == "weight_scale" and projection in ("w1", "w3")
+        else (4_096, 128)
+        if suffix == "weight_scale"
+        else ()
+    )
+    for projection in PROJECTIONS
+    for suffix in SUFFIXES
+}
 CHECKPOINT_LAYOUT_CONTRACT = {
     "main_target": {
         "checkpoint_shards": 46,
         "layers": OFFICIAL_LAYERS,
         "tensors_per_layer": OFFICIAL_TENSORS_PER_LAYER,
         "layers_contiguous": True,
-        "one_layer_per_shard": True,
+        "each_routed_layer_wholly_in_one_shard": True,
+        "layer_to_shard": {
+            str(layer): f"model-{layer + 2:05d}-of-00046.safetensors"
+            for layer in range(OFFICIAL_LAYERS)
+        },
         "source_tensors": MAIN_TARGET_SOURCE_CONTRACT,
     },
     "mtp_excluded": {
+        "total_tensors": 1_575,
+        "routed_tensors": 1_536,
+        "shard": "model-00046-of-00046.safetensors",
         "weight_dtype": "torch.int8",
         "weight_scale_dtype": "torch.float8_e8m0fnu",
+        "weight_shapes": {
+            "w1_w3": [2_048, 2_048],
+            "w2": [4_096, 1_024],
+        },
+        "weight_scale_shapes": {
+            "w1_w3": [2_048, 128],
+            "w2": [4_096, 64],
+        },
     },
 }
 
@@ -106,15 +136,40 @@ EXPECTED_ROUTED_SOURCE_SHA256 = {
     "_narrow_expert_data_for_padding": "5560edc5321ed0115dfaa4f1cbded5029bc19b1ab13dd08267af7e7773ce4997",
 }
 EXPECTED_STAGER_SOURCE_SHA256 = {
-    "begin_source": "179e8faeffde8c908cea0f54d9c83bf2babd1071ed00cc442d1c8e7f6182a438",
+    "__init__": "3355f7700c9f57be16beef0b956e4a11e0ba33c1223e891ebb6e75e9eb9d60b0",
+    "begin_source": "2e21bd619b7e52513e398a52890e8950c52bc5fd2aba918ec4843c1d3360c492",
     "destination": "fac2ea53e6ebb5cf1ed5ae3a6e896d20527e78d47a08bb102ee8394b87c39642",
     "complete_source": "897eab1b9737b51cba4103f9e641422bf995322527220b6183f110a58fd17883",
     "_commit_active_layer": "3a17a7c696c56a10566df91ff5859c091b5abeaa5445e1504193402f4e46d3b7",
     "finish": "53c071f9a95d43b45a6ce857f35e699e3563c8ac08047409965abe94753c9739",
+    "abort": "edb1f76910dceee5f6660c4fa421d82a947862632d4fc4f21153efbdf326df21",
+}
+EXPECTED_SESSION_SOURCE_SHA256 = {
+    "__init__": "b954f631e4e929cb679ccf719744d9f3839990ae1cede4467d8d80078bdf4713",
+    "begin": "e129a8991c917921cdf7ec1fe1c165f09fc50e41b1154f2ffa591f82ea8422c4",
+    "stager_for_nested_load": "d09928906bab1872ca146b18e3c6d2f6d869ab7b000f0487ca916b4e4ffdc297",
+    "finish": "bd5516ee2742562400a8b2c654a65dcc9edc9d7c4a6c279516fa06d464ef336d",
+    "abort": "b7363e52f72050478b7ddc06b179da09cd2f4ee66d71fe003d1799cec2faceb5",
+    "_reset": "32bd9307b217e908e0aeca112de5bd55a41918aa44d506965215443f25dfd0df",
+}
+EXPECTED_MODEL_SOURCE_SHA256 = {
+    "__init__": "2b5b5c4ed87199e4fba96d03f613827be5dc529ea0c61fda2b3789fbeafa9e50",
+    "begin_nvfp4_layer_staged_load": "3207b4b8a85408ba2882f4fc92c5b86e3fbd2fe673082684a99310c1d1e6e85a",
+    "finish_nvfp4_layer_staged_load": "eb908dd213c91d0b039f9004b99e8a707352cc37b6f1c53d44007011939132d9",
+    "abort_nvfp4_layer_staged_load": "c51bf1ecee797965a429d9486cf470bf945dca262f9d4bb7098a6c072182bfc1",
+    "load_weights": "14f9c2f787c86354fbce5c3f6e2d368979805c3d634c3de2fc9a09a9aecbdba6",
+}
+EXPECTED_CAUSAL_MODEL_SOURCE_SHA256 = {
+    "load_weights": "6db76fea1575c92e6baa571433d36ca5da715da1d47b97ac0b7604dbc1d8863c",
 }
 EXPECTED_STAGER_FACTORY_SOURCE_SHA256 = (
     "e0f14123b9d205d7b9239671b949808e74a36cbe0c4a0244317bec2dada42a50"
 )
+EXPECTED_STAGER_HELPER_SOURCE_SHA256 = {
+    "_expected_checkpoint_shape": (
+        "7fe6dd6c9c4479a36393277e5f4a39d73f2d3e50e4610f7e391e28456e6e79df"
+    ),
+}
 EXPECTED_PARAM_ATTRIBUTE_CHAINS = {
     "weight_loader": [
         "param.data",
@@ -309,7 +364,11 @@ def _proxy_copied_attrs(source: str) -> list[str]:
 def _audit_runtime_sources(
     routed_experts_class: Any,
     stager_class: Any,
+    staged_session_class: Any,
     stager_factory: Any,
+    expected_checkpoint_shape: Any,
+    model_class: Any,
+    causal_model_class: Any,
 ) -> dict[str, Any]:
     routed: dict[str, Any] = {}
     all_param_contracts: dict[str, Any] = {}
@@ -371,6 +430,58 @@ def _audit_runtime_sources(
             f"observed {factory_sha}, expected "
             f"{EXPECTED_STAGER_FACTORY_SOURCE_SHA256}"
         )
+    helper_source = _normalized_callable_source(expected_checkpoint_shape)
+    helper_sha = _source_sha256(helper_source)
+    expected_helper_sha = EXPECTED_STAGER_HELPER_SOURCE_SHA256[
+        "_expected_checkpoint_shape"
+    ]
+    if helper_sha != expected_helper_sha:
+        raise RuntimeError(
+            "_expected_checkpoint_shape source drifted: observed "
+            f"{helper_sha}, expected {expected_helper_sha}"
+        )
+    observed_checkpoint_shapes = {
+        (projection, suffix): tuple(expected_checkpoint_shape(projection, suffix))
+        for projection in PROJECTIONS
+        for suffix in SUFFIXES
+    }
+    if observed_checkpoint_shapes != OFFICIAL_CHECKPOINT_SOURCE_SHAPES:
+        raise RuntimeError(
+            "official NVFP4 checkpoint source-shape contract drifted: "
+            f"{observed_checkpoint_shapes!r}"
+        )
+    session_methods: dict[str, Any] = {}
+    for name, expected_sha in EXPECTED_SESSION_SOURCE_SHA256.items():
+        source = _normalized_callable_source(getattr(staged_session_class, name))
+        observed_sha = _source_sha256(source)
+        if observed_sha != expected_sha:
+            raise RuntimeError(
+                f"Nvfp4LayerStagedLoadSession.{name} source drifted: "
+                f"observed {observed_sha}, expected {expected_sha}"
+            )
+        session_methods[name] = {"sha256": observed_sha}
+
+    model_methods: dict[str, Any] = {}
+    for name, expected_sha in EXPECTED_MODEL_SOURCE_SHA256.items():
+        source = _normalized_callable_source(getattr(model_class, name))
+        observed_sha = _source_sha256(source)
+        if observed_sha != expected_sha:
+            raise RuntimeError(
+                f"DeepseekV4Model.{name} source drifted: observed "
+                f"{observed_sha}, expected {expected_sha}"
+            )
+        model_methods[name] = {"sha256": observed_sha}
+
+    causal_model_methods: dict[str, Any] = {}
+    for name, expected_sha in EXPECTED_CAUSAL_MODEL_SOURCE_SHA256.items():
+        source = _normalized_callable_source(getattr(causal_model_class, name))
+        observed_sha = _source_sha256(source)
+        if observed_sha != expected_sha:
+            raise RuntimeError(
+                f"DeepseekV4ForCausalLM.{name} source drifted: observed "
+                f"{observed_sha}, expected {expected_sha}"
+            )
+        causal_model_methods[name] = {"sha256": observed_sha}
     return {
         "passed": True,
         "routed_experts_module": routed_experts_class.__module__,
@@ -379,9 +490,23 @@ def _audit_runtime_sources(
         "stager_file": str(inspect.getsourcefile(stager_class)),
         "routed_methods": routed,
         "stager_methods": staged,
+        "staged_session_methods": session_methods,
+        "model_lifecycle_methods": model_methods,
+        "causal_model_lifecycle_methods": causal_model_methods,
         "stager_factory": {
             "name": stager_factory.__name__,
             "sha256": factory_sha,
+        },
+        "stager_helpers": {
+            "_expected_checkpoint_shape": {
+                "sha256": helper_sha,
+                "shapes": {
+                    f"{projection}.{suffix}": list(shape)
+                    for (projection, suffix), shape in sorted(
+                        observed_checkpoint_shapes.items()
+                    )
+                },
+            }
         },
         "param_attribute_chains": all_param_contracts,
         "optional_param_attrs": loader_contract["optional_attrs"],
@@ -592,11 +717,7 @@ def _source_tensor(
     projection_lane = PROJECTIONS.index(projection)
     seed = 17 + expert * 71 + projection_lane * 23 + SUFFIXES.index(suffix) * 11
     if suffix == "weight":
-        shape = (
-            (TP_SIZE * INTERMEDIATE_PER_RANK, HIDDEN // 2)
-            if projection in ("w1", "w3")
-            else (HIDDEN, TP_SIZE * PACKED_INTERMEDIATE_PER_RANK)
-        )
+        shape = _tiny_checkpoint_shape(projection, suffix)
         count = 1
         for size in shape:
             count *= size
@@ -609,11 +730,7 @@ def _source_tensor(
             .reshape(shape)
         )
     if suffix == "weight_scale":
-        shape = (
-            (TP_SIZE * INTERMEDIATE_PER_RANK, W13_SCALE_COLUMNS)
-            if projection in ("w1", "w3")
-            else (HIDDEN, TP_SIZE * W2_SCALE_COLUMNS_PER_RANK)
-        )
+        shape = _tiny_checkpoint_shape(projection, suffix)
         count = 1
         for size in shape:
             count *= size
@@ -634,6 +751,24 @@ def _source_tensor(
         0.125 if suffix == "weight_scale_2" else 1.5
     )
     return torch.tensor(value, dtype=torch.float32)
+
+
+def _tiny_checkpoint_shape(projection: str, suffix: str) -> tuple[int, ...]:
+    if suffix == "weight":
+        return (
+            (TP_SIZE * INTERMEDIATE_PER_RANK, HIDDEN // 2)
+            if projection in ("w1", "w3")
+            else (HIDDEN, TP_SIZE * PACKED_INTERMEDIATE_PER_RANK)
+        )
+    if suffix == "weight_scale":
+        return (
+            (TP_SIZE * INTERMEDIATE_PER_RANK, W13_SCALE_COLUMNS)
+            if projection in ("w1", "w3")
+            else (HIDDEN, TP_SIZE * W2_SCALE_COLUMNS_PER_RANK)
+        )
+    if suffix in ("weight_scale_2", "input_scale"):
+        return ()
+    raise ValueError(f"unsupported tiny checkpoint suffix {suffix!r}")
 
 
 def _oracle_load(
@@ -719,6 +854,7 @@ def _run_rank(
     torch: Any,
     routed_experts_class: Any,
     stager_class: Any,
+    staged_session_class: Any,
     *,
     tp_rank: int,
     device: str,
@@ -745,7 +881,19 @@ def _run_rank(
         expected_source_keys=expected_keys,
         expected_stage_bytes=staged_bytes,
         expected_commit_calls=len(PARAMETER_ORDER),
+        expected_checkpoint_shapes={
+            (projection, suffix): _tiny_checkpoint_shape(projection, suffix)
+            for projection in PROJECTIONS
+            for suffix in SUFFIXES
+        },
     )
+    staged_session = staged_session_class()
+    staged_session.begin(stager, staged_requested=True)
+    first_nested_stager = staged_session.stager_for_nested_load(
+        staged_requested=True
+    )
+    if first_nested_stager is not stager:
+        raise RuntimeError("first nested load did not receive the shared stager")
 
     loader_calls = 0
     observed_source_contract: dict[str, dict[str, Any]] = {
@@ -804,7 +952,7 @@ def _run_rank(
                     raise RuntimeError(
                         f"direct loader rejected {mapping_key}{suffix}"
                     )
-                source = stager.begin_source(
+                source = first_nested_stager.begin_source(
                     f"layers.{LAYER}.ffn.{mapping_key}{suffix}",
                     loaded,
                     _ExpertMatch(LAYER, mapping_key, suffix, projection),
@@ -835,7 +983,9 @@ def _run_rank(
                 dispatched["raw_identity"] = (
                     dispatched["raw_identity"] and raw_identity
                 )
-                proxy = stager.destination(source, mapped_name, staged[basename])
+                proxy = first_nested_stager.destination(
+                    source, mapped_name, staged[basename]
+                )
                 staged_success = loader(
                     proxy,
                     source.loaded_weight,
@@ -856,9 +1006,35 @@ def _run_rank(
                     tp_rank=tp_rank,
                     raw_bytes=suffix == "weight_scale",
                 )
-                stager.complete_source(source)
+                first_nested_stager.complete_source(source)
                 loader_calls += 2
-    stager.finish()
+    second_nested_stager = staged_session.stager_for_nested_load(
+        staged_requested=True
+    )
+    if second_nested_stager is not first_nested_stager:
+        raise RuntimeError("second nested load did not reuse the shared stager")
+    duplicate_expert_rejected = False
+    try:
+        second_nested_stager.begin_source(
+            "layers.0.ffn.experts.0.w1.weight",
+            _source_tensor(
+                torch,
+                expert=0,
+                projection="w1",
+                suffix="weight",
+            ),
+            _ExpertMatch(LAYER, "experts.0.w1.", "weight", "w1"),
+        )
+    except RuntimeError as exc:
+        if "appeared again after its staging commit" not in str(exc):
+            raise
+        duplicate_expert_rejected = True
+    if not duplicate_expert_rejected:
+        raise RuntimeError("second nested load accepted a repeated expert tensor")
+    nested_load_calls = staged_session.nested_load_calls
+    staged_session.finish()
+    if staged_session.finish_calls != 1 or staged_session.active:
+        raise RuntimeError("staged session did not finish exactly once")
     if device == "cuda":
         torch.cuda.synchronize()
 
@@ -943,6 +1119,13 @@ def _run_rank(
         "loader_calls": loader_calls,
         "source_tensors": stager.total_source_tensors,
         "commit_calls": stager.total_commit_calls,
+        "multi_invocation_lifecycle": {
+            "nested_load_calls": nested_load_calls,
+            "shared_stager_identity": second_nested_stager is first_nested_stager,
+            "duplicate_expert_rejected": duplicate_expert_rejected,
+            "finish_calls": staged_session.finish_calls,
+            "active_after_finish": staged_session.active,
+        },
         "staged_destination_bytes": staged_bytes,
         "checkpoint_source_contract": serialized_source_contract,
         "stager_dispatch_contract": serialized_dispatch_contract,
@@ -950,13 +1133,114 @@ def _run_rank(
     }
 
 
+def _run_auto_loader_grouping_proof(
+    torch: Any,
+    auto_weights_loader_class: Any,
+    mapper_factory: Any,
+    parse_expert_name: Any,
+) -> dict[str, Any]:
+    """Prove the exact target root re-entry and MTP filtering semantics."""
+
+    mtp_names = [f"mtp.0.synthetic.{index}.weight" for index in range(1_575)]
+    original_names = [
+        "layers.0.ffn.experts.0.w1.weight",
+        "head.weight",
+        "norm.weight",
+        *mtp_names,
+    ]
+    mapper = mapper_factory("fp4")
+    mapped = list(mapper.apply((name, None) for name in original_names))
+    mapped_mtp = [name for name, _value in mapped if "mtp." in name]
+    if len(mapped_mtp) != 1_575 or any(
+        not name.startswith("model.mtp.") for name in mapped_mtp
+    ):
+        raise RuntimeError("target mapper MTP contract drifted")
+
+    events: list[str] = []
+
+    class _TargetModelSpy(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls: list[list[str]] = []
+
+        def load_weights(self, weights: Any) -> set[str]:
+            names = [name for name, _value in weights]
+            self.calls.append(names)
+            events.append("model")
+            return set(names)
+
+    class _CausalModelSpy(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.model = _TargetModelSpy()
+
+            class _LmHeadSpy(torch.nn.Module):
+                def __init__(self) -> None:
+                    super().__init__()
+                    self.weight = torch.nn.Parameter(
+                        torch.zeros(1, dtype=torch.float32),
+                        requires_grad=False,
+                    )
+
+                    def load_lm_head(param: Any, loaded_weight: Any) -> None:
+                        events.append("lm_head")
+                        param.data.copy_(loaded_weight)
+
+                    self.weight.weight_loader = load_lm_head
+
+            self.lm_head = _LmHeadSpy()
+
+    target = _CausalModelSpy()
+    loader = auto_weights_loader_class(target, skip_substrs=["mtp."])
+    loaded = loader.load_weights(
+        ((name, torch.zeros(1, dtype=torch.float32)) for name in original_names),
+        mapper=mapper,
+    )
+    if events != ["model", "lm_head", "model"]:
+        raise RuntimeError(
+            f"target AutoWeightsLoader invocation order drifted: {events!r}"
+        )
+    if len(target.model.calls) != 2:
+        raise RuntimeError("target child was not invoked exactly twice")
+    retained_names = {name for call in target.model.calls for name in call}
+    retained_names.update(loaded)
+    if any("mtp." in name for name in retained_names):
+        raise RuntimeError("target AutoWeightsLoader retained an MTP tensor")
+    mtp_parse_names = (
+        "mtp.0.ffn.experts.0.w1.weight",
+        "model.mtp.0.ffn.experts.0.w1.weight",
+        "mtp.0.ffn.experts.0.w1.scale",
+        "model.mtp.0.ffn.experts.0.w1.weight_scale",
+    )
+    if any(parse_expert_name(name) is not None for name in mtp_parse_names):
+        raise RuntimeError("target expert-name parser claimed an MTP tensor")
+    return {
+        "passed": True,
+        "root_runs": events,
+        "nested_model_invocations": len(target.model.calls),
+        "nested_model_names": target.model.calls,
+        "mapped_mtp_tensors": len(mapped_mtp),
+        "retained_mtp_tensors": 0,
+        "mtp_parser_rejections": list(mtp_parse_names),
+    }
+
+
 def run_probe(device: str = "cpu") -> dict[str, Any]:
     import torch
     from vllm.model_executor.layers.fused_moe.routed_experts import RoutedExperts
+    from vllm.model_executor.models.utils import AutoWeightsLoader
+    from vllm.models.deepseek_v4.nvidia.model import (
+        DeepseekV4ForCausalLM,
+        DeepseekV4Model,
+        _make_deepseek_v4_weights_mapper,
+    )
     from vllm.models.deepseek_v4.nvidia.staged_weight_loading import (
         Nvfp4LayerStager,
+        Nvfp4LayerStagedLoadSession,
+        _expected_checkpoint_shape,
         maybe_create_nvfp4_layer_stager,
     )
+    from vllm.models.deepseek_v4.nvidia.weight_loading import parse_expert_name
 
     if device not in ("cpu", "cuda"):
         raise ValueError(f"unsupported probe device {device!r}")
@@ -965,7 +1249,17 @@ def run_probe(device: str = "cpu") -> dict[str, Any]:
     source_audit = _audit_runtime_sources(
         RoutedExperts,
         Nvfp4LayerStager,
+        Nvfp4LayerStagedLoadSession,
         maybe_create_nvfp4_layer_stager,
+        _expected_checkpoint_shape,
+        DeepseekV4Model,
+        DeepseekV4ForCausalLM,
+    )
+    auto_loader_grouping = _run_auto_loader_grouping_proof(
+        torch,
+        AutoWeightsLoader,
+        _make_deepseek_v4_weights_mapper,
+        parse_expert_name,
     )
     factory_preflight = _run_factory_preflight(
         torch,
@@ -977,6 +1271,7 @@ def run_probe(device: str = "cpu") -> dict[str, Any]:
             torch,
             RoutedExperts,
             Nvfp4LayerStager,
+            Nvfp4LayerStagedLoadSession,
             tp_rank=tp_rank,
             device=device,
         )
@@ -999,6 +1294,7 @@ def run_probe(device: str = "cpu") -> dict[str, Any]:
         "torch_version": torch.__version__,
         "cuda_available": bool(torch.cuda.is_available()),
         "source_audit": source_audit,
+        "auto_loader_grouping": auto_loader_grouping,
         "factory_preflight": factory_preflight,
         "settings": {
             "tp_size": TP_SIZE,

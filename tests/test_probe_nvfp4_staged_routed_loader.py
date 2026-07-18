@@ -3,14 +3,109 @@
 
 from __future__ import annotations
 
+import ast
+import hashlib
 import importlib
+import inspect
 from pathlib import Path
+import textwrap
 import unittest
 
 from benchmarks import probe_nvfp4_staged_routed_loader as probe
 
 
+def _method_source_sha256(path: Path, class_name: str, method_name: str) -> str:
+    source = path.read_text()
+    lines = source.splitlines(keepends=True)
+    tree = ast.parse(source)
+    class_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == class_name
+    )
+    method_node = next(
+        node
+        for node in class_node.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == method_name
+    )
+    start = min(
+        [
+            method_node.lineno,
+            *(decorator.lineno for decorator in method_node.decorator_list),
+        ]
+    ) - 1
+    block = "".join(inspect.getblock(lines[start:]))
+    normalized = textwrap.dedent(block).strip() + "\n"
+    return hashlib.sha256(normalized.encode()).hexdigest()
+
+
+def _function_source_sha256(path: Path, function_name: str) -> str:
+    source = path.read_text()
+    lines = source.splitlines(keepends=True)
+    tree = ast.parse(source)
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name == function_name
+    )
+    start = min(
+        [
+            function_node.lineno,
+            *(decorator.lineno for decorator in function_node.decorator_list),
+        ]
+    ) - 1
+    block = "".join(inspect.getblock(lines[start:]))
+    normalized = textwrap.dedent(block).strip() + "\n"
+    return hashlib.sha256(normalized.encode()).hexdigest()
+
+
 class Nvfp4StagedRoutedLoaderProbeTest(unittest.TestCase):
+    def test_pinned_overlay_method_hashes_match_source_tree(self) -> None:
+        root = Path(__file__).parents[1]
+        staged_path = (
+            root
+            / "overlay/vllm/models/deepseek_v4/nvidia/staged_weight_loading.py"
+        )
+        model_path = root / "overlay/vllm/models/deepseek_v4/nvidia/model.py"
+        contracts = (
+            (
+                staged_path,
+                "Nvfp4LayerStager",
+                probe.EXPECTED_STAGER_SOURCE_SHA256,
+            ),
+            (
+                staged_path,
+                "Nvfp4LayerStagedLoadSession",
+                probe.EXPECTED_SESSION_SOURCE_SHA256,
+            ),
+            (
+                model_path,
+                "DeepseekV4Model",
+                probe.EXPECTED_MODEL_SOURCE_SHA256,
+            ),
+            (
+                model_path,
+                "DeepseekV4ForCausalLM",
+                probe.EXPECTED_CAUSAL_MODEL_SOURCE_SHA256,
+            ),
+        )
+        for path, class_name, methods in contracts:
+            for method_name, expected in methods.items():
+                with self.subTest(class_name=class_name, method=method_name):
+                    self.assertEqual(
+                        _method_source_sha256(path, class_name, method_name),
+                        expected,
+                    )
+        for function_name, expected in (
+            probe.EXPECTED_STAGER_HELPER_SOURCE_SHA256.items()
+        ):
+            self.assertEqual(
+                _function_source_sha256(staged_path, function_name),
+                expected,
+            )
+
     def test_probe_is_copied_into_immutable_candidate_image(self) -> None:
         root = Path(__file__).parents[1]
         dockerfile = (
@@ -53,11 +148,13 @@ class Nvfp4StagedRoutedLoaderProbeTest(unittest.TestCase):
         self.assertEqual(
             set(probe.EXPECTED_STAGER_SOURCE_SHA256),
             {
+                "__init__",
                 "begin_source",
                 "destination",
                 "complete_source",
                 "_commit_active_layer",
                 "finish",
+                "abort",
             },
         )
         self.assertIn(
@@ -72,6 +169,14 @@ class Nvfp4StagedRoutedLoaderProbeTest(unittest.TestCase):
             len(probe.EXPECTED_STAGER_FACTORY_SOURCE_SHA256),
             64,
         )
+        for contracts in (
+            probe.EXPECTED_SESSION_SOURCE_SHA256,
+            probe.EXPECTED_MODEL_SOURCE_SHA256,
+            probe.EXPECTED_CAUSAL_MODEL_SOURCE_SHA256,
+            probe.EXPECTED_STAGER_HELPER_SOURCE_SHA256,
+        ):
+            self.assertTrue(contracts)
+            self.assertTrue(all(len(value) == 64 for value in contracts.values()))
 
     def test_factory_preflight_descriptors_are_shape_only_and_exact_size(self) -> None:
         shapes = probe._official_factory_parameter_shapes()
@@ -115,11 +220,27 @@ class Nvfp4StagedRoutedLoaderProbeTest(unittest.TestCase):
         self.assertEqual(layout["main_target"]["layers"], 43)
         self.assertEqual(layout["main_target"]["tensors_per_layer"], 3_072)
         self.assertTrue(layout["main_target"]["layers_contiguous"])
-        self.assertTrue(layout["main_target"]["one_layer_per_shard"])
+        self.assertTrue(
+            layout["main_target"]["each_routed_layer_wholly_in_one_shard"]
+        )
+        self.assertEqual(
+            layout["main_target"]["layer_to_shard"]["42"],
+            "model-00044-of-00046.safetensors",
+        )
+        self.assertEqual(layout["mtp_excluded"]["total_tensors"], 1_575)
+        self.assertEqual(layout["mtp_excluded"]["routed_tensors"], 1_536)
         self.assertEqual(layout["mtp_excluded"]["weight_dtype"], "torch.int8")
         self.assertEqual(
             layout["mtp_excluded"]["weight_scale_dtype"],
             "torch.float8_e8m0fnu",
+        )
+        self.assertEqual(
+            probe.OFFICIAL_CHECKPOINT_SOURCE_SHAPES[("w1", "weight_scale_2")],
+            (),
+        )
+        self.assertEqual(
+            probe.OFFICIAL_CHECKPOINT_SOURCE_SHAPES[("w2", "weight_scale")],
+            (4_096, 128),
         )
 
     def test_proxy_contract_copies_every_optional_loader_attribute(self) -> None:
@@ -175,6 +296,19 @@ def destination(proxy, actual_parameter):
         self.assertTrue(report["default_cpu_proof"])
         self.assertFalse(report["model_loaded"])
         self.assertFalse(report["checkpoint_opened"])
+        self.assertEqual(
+            report["auto_loader_grouping"]["root_runs"],
+            ["model", "lm_head", "model"],
+        )
+        self.assertEqual(
+            report["auto_loader_grouping"]["nested_model_invocations"], 2
+        )
+        self.assertEqual(
+            report["auto_loader_grouping"]["mapped_mtp_tensors"], 1_575
+        )
+        self.assertEqual(
+            report["auto_loader_grouping"]["retained_mtp_tensors"], 0
+        )
         self.assertTrue(report["factory_preflight"]["passed"])
         self.assertTrue(
             report["factory_preflight"]["shape_only_cuda_descriptors"]
@@ -195,6 +329,16 @@ def destination(proxy, actual_parameter):
         for rank in report["ranks"]:
             self.assertEqual(set(rank["storages"]), set(probe.PARAMETER_ORDER))
             self.assertTrue(rank["passed"])
+            self.assertEqual(
+                rank["multi_invocation_lifecycle"],
+                {
+                    "nested_load_calls": 2,
+                    "shared_stager_identity": True,
+                    "duplicate_expert_rejected": True,
+                    "finish_calls": 1,
+                    "active_after_finish": False,
+                },
+            )
             for suffix in ("weight_scale_2", "input_scale"):
                 self.assertEqual(
                     rank["checkpoint_source_contract"][suffix]["shapes"],

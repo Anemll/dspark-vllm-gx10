@@ -51,6 +51,22 @@ single-layer result is never an end-to-end serving result.
   rank-0 `F32` scalars. The separate `mtp.0` routed tensors use `I8` weights
   and `F8_E8M0` scales. The preflight read only the declared safetensors JSON
   headers, never payload ranges.
+- A separate worker inventory proved that the exact same checkpoint is already
+  fully resident at `/mnt/xfsflash/models/DeepSeek-V4-Flash-NVFP4`: all 46
+  direct regular shards are present, the three metadata hashes match HEAD,
+  apparent shard bytes are `168,281,985,176`, and no unexpected shard exists.
+  This removes both a bulk-copy prerequisite and a `roce_tp` dependency for
+  the current direct TP=2 A4W4 experiment; it does not authorize another copy.
+- The exact index contains 1,575 `mtp.0.*` tensors: 1,536 routed expert
+  tensors (`weight` plus `scale`) and 39 non-routed tensors. Target loading
+  filters every `mtp.*` key before the NVFP4 target stager; the MTP draft uses
+  its separate native loader and representation.
+- With the pinned mapper and safetensors order, `AutoWeightsLoader` enters the
+  target child twice: one 133,658-tensor `model` run, then `lm_head`, then a
+  one-tensor `model` run for `norm.weight`. Layer staging must therefore be
+  owned by the outer causal-model load, reused across both nested target calls,
+  and finished exactly once. A fresh per-nested-call stager is invalid even
+  though all routed layers are contiguous inside the first run.
 - One `mtp.0` stage is not a runnable three-stage DSpark checkpoint. It must
   not be described or tested as one.
 - The native DSpark source has three draft stages: 1,568 `mtp.0.*`, 1,565
@@ -1035,9 +1051,12 @@ Protocol for every GX10 window:
    process/I/O state. Do not assume release merely because a command ended.
 7. Before any later GX10 operation, request and receive a fresh ACK.
 
-The head-only checkpoint policy remains in force: one payload copy on the head
-SSD, metadata only on the worker, and `roce_tp` for TP=2 loading. A full worker
-copy is a separate scope expansion requiring explicit authorization.
+The no-duplicate-copy policy remains in force for new checkpoint staging. For
+this exact NVIDIA checkpoint, read-only inventory proved a complete matching
+payload was already present on both nodes, so the direct staged TP=2 lane may
+reuse those files without copying. Any future bulk model copy remains a
+separate scope expansion requiring explicit authorization; `roce_tp` remains
+paused and is not a dependency of the current A4W4 lane.
 
 ## Definition of done
 

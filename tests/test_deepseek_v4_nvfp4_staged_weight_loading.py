@@ -136,6 +136,21 @@ class DeepseekV4FP8Config:
     target_num_hidden_layers = 43
 
 
+class _FinishSpy:
+    def __init__(self, *, fail: bool = False):
+        self.calls = 0
+        self.abort_calls = 0
+        self.fail = fail
+
+    def finish(self):
+        self.calls += 1
+        if self.fail:
+            raise RuntimeError("injected finish failure")
+
+    def abort(self):
+        self.abort_calls += 1
+
+
 _PARAMETER_SHAPES = {
     "w13_weight": (256, 2_048, 2_048),
     "w2_weight": (256, 4_096, 512),
@@ -210,6 +225,32 @@ def _source_dtype(suffix: str):
         "weight_scale_2": _FakeTorch.float32,
         "input_scale": _FakeTorch.float32,
     }[suffix]
+
+
+def _source_shape(projection: str, suffix: str):
+    if suffix == "weight":
+        return (2_048, 2_048) if projection in ("w1", "w3") else (4_096, 1_024)
+    if suffix == "weight_scale":
+        return (2_048, 256) if projection in ("w1", "w3") else (4_096, 128)
+    if suffix in ("weight_scale_2", "input_scale"):
+        return ()
+    raise AssertionError(f"unexpected suffix {suffix!r}")
+
+
+def _source_tensor(
+    projection: str,
+    suffix: str,
+    *,
+    device: str = "cpu",
+    dtype=None,
+    source_bytes: bytes = b"",
+):
+    return _FakeTensor(
+        _source_shape(projection, suffix),
+        dtype=_source_dtype(suffix) if dtype is None else dtype,
+        device=device,
+        source_bytes=source_bytes,
+    )
 
 
 def _destination_basename(projection: str, suffix: str) -> str:
@@ -299,6 +340,39 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
                     {self.helper.STAGED_LOAD_ENV: value}
                 )
 
+    def test_outer_session_reuses_one_stager_across_two_nested_loads(self):
+        session = self.helper.Nvfp4LayerStagedLoadSession()
+        stager = _FinishSpy()
+        session.begin(stager, staged_requested=True)
+        first = session.stager_for_nested_load(staged_requested=True)
+        second = session.stager_for_nested_load(staged_requested=True)
+        self.assertIs(first, stager)
+        self.assertIs(second, stager)
+        self.assertEqual(session.nested_load_calls, 2)
+        session.finish()
+        self.assertEqual(stager.calls, 1)
+        self.assertEqual(session.finish_calls, 1)
+        self.assertFalse(session.active)
+
+    def test_outer_session_reentry_drift_and_failure_clear_fail_closed(self):
+        session = self.helper.Nvfp4LayerStagedLoadSession()
+        with self.assertRaisesRegex(RuntimeError, "active outer session"):
+            session.stager_for_nested_load(staged_requested=True)
+
+        stager = _FinishSpy(fail=True)
+        session.begin(stager, staged_requested=True)
+        with self.assertRaisesRegex(RuntimeError, "reentry"):
+            session.begin(stager, staged_requested=True)
+        with self.assertRaisesRegex(RuntimeError, "opt-in changed"):
+            session.stager_for_nested_load(staged_requested=False)
+        with self.assertRaisesRegex(RuntimeError, "injected finish failure"):
+            session.finish()
+        self.assertTrue(session.active)
+        session.abort()
+        self.assertFalse(session.active)
+        self.assertEqual(stager.calls, 1)
+        self.assertEqual(stager.abort_calls, 1)
+
     def test_factory_default_off_does_not_inspect_model(self):
         self.assertIsNone(
             self.helper.maybe_create_nvfp4_layer_stager(
@@ -377,9 +451,7 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
 
     def test_e4m3_scale_source_is_reinterpreted_to_raw_bytes(self):
         stager = _factory(self.helper, _make_params(0))
-        e4m3 = _FakeTensor(
-            (8,), dtype=_FakeTorch.float8_e4m3fn, device="cpu"
-        )
+        e4m3 = _source_tensor("w1", "weight_scale")
         source = stager.begin_source(
             "layers.0.ffn.experts.0.w1.weight_scale",
             e4m3,
@@ -389,8 +461,8 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
         self.assertEqual(source.loaded_weight.dtype, _FakeTorch.uint8)
 
         other = _factory(self.helper, _make_params(0))
-        e8m0 = _FakeTensor(
-            (8,), dtype=_FakeTorch.float8_e8m0fnu, device="cpu"
+        e8m0 = _source_tensor(
+            "w1", "weight_scale", dtype=_FakeTorch.float8_e8m0fnu
         )
         with self.assertRaisesRegex(RuntimeError, "has dtype"):
             other.begin_source(
@@ -415,9 +487,7 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
                 "input_scale",
             ):
                 match = _match(0, mapping_key, suffix)
-                loaded = _FakeTensor(
-                    (1,), dtype=_source_dtype(suffix), device="cpu"
-                )
+                loaded = _source_tensor(projection, suffix)
                 name = f"layers.0.ffn.{mapping_key}{suffix}"
                 source = stager.begin_source(name, loaded, match)
                 self.assertIsNotNone(source)
@@ -493,10 +563,9 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
                     for suffix in suffixes:
                         length = 16 if suffix in ("weight", "weight_scale") else 4
                         seed = expert * 37 + int(projection[-1]) * 11 + len(suffix)
-                        loaded = _FakeTensor(
-                            (length,),
-                            dtype=_source_dtype(suffix),
-                            device="cpu",
+                        loaded = _source_tensor(
+                            projection,
+                            suffix,
                             source_bytes=bytes(
                                 (seed + offset) % 256 for offset in range(length)
                             ),
@@ -543,7 +612,7 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
         match = _match(1, "experts.0.w1.", "weight")
         source = stager.begin_source(
             "layers.1.ffn.experts.0.w1.weight",
-            _FakeTensor((1,), dtype=_FakeTorch.uint8, device="cpu"),
+            _source_tensor("w1", "weight"),
             match,
         )
         self.assertIsNone(source)
@@ -551,7 +620,7 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
     def test_duplicate_interleaved_and_incomplete_layers_fail_closed(self):
         params = _make_params(0, 1)
         stager = _factory(self.helper, params, start=0, end=2)
-        loaded = _FakeTensor((1,), dtype=_FakeTorch.uint8, device="cpu")
+        loaded = _source_tensor("w1", "weight")
         first_match = _match(0, "experts.0.w1.", "weight")
         first = stager.begin_source(
             "layers.0.ffn.experts.0.w1.weight", loaded, first_match
@@ -578,26 +647,60 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
         match = _match(0, "experts.0.w1.", "weight")
         with self.assertRaisesRegex(RuntimeError, "CPU checkpoint tensors only"):
             stager.begin_source(
-                "gpu", _FakeTensor((1,), dtype=_FakeTorch.uint8, device="cuda"), match
+                "gpu", _source_tensor("w1", "weight", device="cuda"), match
             )
         with self.assertRaisesRegex(RuntimeError, "has dtype"):
             stager.begin_source(
                 "wrong-dtype",
-                _FakeTensor((1,), dtype=_FakeTorch.float32, device="cpu"),
+                _source_tensor("w1", "weight", dtype=_FakeTorch.float32),
                 match,
             )
+        with self.assertRaisesRegex(RuntimeError, "has shape"):
+            stager.begin_source(
+                "wrong-weight-shape",
+                _FakeTensor((1,), dtype=_FakeTorch.uint8, device="cpu"),
+                match,
+            )
+        for suffix in ("weight_scale_2", "input_scale"):
+            with self.subTest(suffix=suffix), self.assertRaisesRegex(
+                RuntimeError, "has shape"
+            ):
+                stager.begin_source(
+                    f"vector-{suffix}",
+                    _FakeTensor((1,), dtype=_FakeTorch.float32, device="cpu"),
+                    _match(0, "experts.0.w1.", suffix),
+                )
         source = stager.begin_source(
-            "good", _FakeTensor((1,), dtype=_FakeTorch.uint8, device="cpu"), match
+            "good", _source_tensor("w1", "weight"), match
         )
         with self.assertRaisesRegex(RuntimeError, "before completing"):
             stager.begin_source(
                 "second",
-                _FakeTensor((1,), dtype=_FakeTorch.uint8, device="cpu"),
+                _source_tensor("w2", "weight"),
                 _match(0, "experts.0.w2.", "weight"),
             )
         with self.assertRaisesRegex(RuntimeError, "was not completed"):
             stager.finish()
         self.assertIsNotNone(source)
+
+    def test_abort_releases_proxy_storage_even_if_proxy_is_still_referenced(self):
+        params = _make_params(0)
+        stager = _factory(self.helper, params)
+        loaded = _source_tensor("w1", "weight")
+        source = stager.begin_source(
+            "layers.0.ffn.experts.0.w1.weight",
+            loaded,
+            _match(0, "experts.0.w1.", "weight"),
+        )
+        proxy = stager.destination(
+            source,
+            _parameter_name(0, "w13_weight"),
+            params[_parameter_name(0, "w13_weight")],
+        )
+        self.assertGreater(proxy.data.numel(), 0)
+        stager.abort()
+        self.assertEqual(proxy.data.shape, (0,))
+        self.assertEqual(proxy.data.numel(), 0)
 
     def test_roce_mega_wrong_quant_and_unsafe_mapping_are_rejected(self):
         params = _make_params(0)
@@ -757,10 +860,25 @@ class DeepseekV4NvFp4StagedWeightLoadingTest(unittest.TestCase):
         proxy_release = body.index("del param", completion)
         self.assertLess(failure_gate, completion)
         self.assertLess(completion, proxy_release)
-        self.assertIn("expert_stager.finish()", body)
+        self.assertNotIn("expert_stager.finish()", body)
+        self.assertIn("stager_for_nested_load(", body)
         reinterpret = body.index("loaded_weight = loaded_weight.view(torch.uint8)")
         staged_begin = body.index("expert_stager.begin_source(")
         self.assertLess(reinterpret, staged_begin)
+
+        outer_start = source.index(
+            "    def load_weights(", source.index("class DeepseekV4ForCausalLM")
+        )
+        outer_end = source.index("    def get_expert_mapping(", outer_start)
+        outer = source[outer_start:outer_end]
+        begin = outer.index("self.model.begin_nvfp4_layer_staged_load()")
+        load = outer.index("loader.load_weights(")
+        finish = outer.index("self.model.finish_nvfp4_layer_staged_load()")
+        abort = outer.index("self.model.abort_nvfp4_layer_staged_load()")
+        self.assertLess(begin, load)
+        self.assertLess(load, finish)
+        self.assertGreater(abort, finish)
+        self.assertIn('skip_substrs=["mtp."]', outer)
 
 
 if __name__ == "__main__":

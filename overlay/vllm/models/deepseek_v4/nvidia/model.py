@@ -72,7 +72,9 @@ from vllm.models.deepseek_v4.nvidia.flashinfer_sparse import (
 from vllm.models.deepseek_v4.nvidia.flashmla import DeepseekV4FlashMLAAttention
 from vllm.models.deepseek_v4.nvidia.ops.prepare_megamoe import prepare_megamoe_inputs
 from vllm.models.deepseek_v4.nvidia.staged_weight_loading import (
+    Nvfp4LayerStagedLoadSession,
     maybe_create_nvfp4_layer_stager,
+    staged_load_requested,
 )
 from vllm.models.deepseek_v4.nvidia.weight_loading import (
     build_expert_mapping_index,
@@ -956,6 +958,7 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         self.quant_config = quant_config
         self.parallel_config = vllm_config.parallel_config
         self.load_format = str(vllm_config.load_config.load_format)
+        self._nvfp4_layer_staged_load_session = Nvfp4LayerStagedLoadSession()
         self.use_mega_moe = (
             vllm_config.kernel_config.moe_backend == "deep_gemm_mega_moe"
         )
@@ -1138,6 +1141,47 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
             return hidden_states, aux_hidden_states
         return hidden_states
 
+    def begin_nvfp4_layer_staged_load(self) -> None:
+        """Create one stager for the complete outer target-model load."""
+
+        session = self._nvfp4_layer_staged_load_session
+        if session.active:
+            raise RuntimeError("NVFP4 staged-load session is already active")
+        requested = staged_load_requested()
+        stager = None
+        if requested:
+            params_dict = dict(self.named_parameters())
+            expert_mapping = self.get_expert_mapping()
+            expert_mapping_index = build_expert_mapping_index(expert_mapping)
+            stager = maybe_create_nvfp4_layer_stager(
+                torch_module=torch,
+                params_dict=params_dict,
+                expert_mapping_index=expert_mapping_index,
+                start_layer=self.start_layer,
+                end_layer=self.end_layer,
+                num_hidden_layers=self.config.num_hidden_layers,
+                num_routed_experts=self.config.n_routed_experts,
+                tp_size=get_tensor_model_parallel_world_size(),
+                use_mega_moe=self.use_mega_moe,
+                enable_expert_parallel=self.parallel_config.enable_expert_parallel,
+                num_redundant_experts=(
+                    self.parallel_config.eplb_config.num_redundant_experts
+                ),
+                load_format=self.load_format,
+                quant_config=self.quant_config,
+            )
+            if stager is None:
+                raise RuntimeError(
+                    "NVFP4 staged-load factory declined an enabled outer session"
+                )
+        session.begin(stager, staged_requested=requested)
+
+    def finish_nvfp4_layer_staged_load(self) -> None:
+        self._nvfp4_layer_staged_load_session.finish()
+
+    def abort_nvfp4_layer_staged_load(self) -> None:
+        self._nvfp4_layer_staged_load_session.abort()
+
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
         stacked_params_mapping = [
             # (param_name, shard_name, shard_id)
@@ -1150,6 +1194,11 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         ]
         params_dict = dict(self.named_parameters())
         loaded_params: set[str] = set()
+        expert_stager = (
+            self._nvfp4_layer_staged_load_session.stager_for_nested_load(
+                staged_requested=staged_load_requested()
+            )
+        )
 
         # TP for attention
         tp_size = get_tensor_model_parallel_world_size()
@@ -1162,23 +1211,6 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         # Pre-compute expert mapping ONCE.
         expert_mapping = self.get_expert_mapping()
         expert_mapping_index = build_expert_mapping_index(expert_mapping)
-        expert_stager = maybe_create_nvfp4_layer_stager(
-            torch_module=torch,
-            params_dict=params_dict,
-            expert_mapping_index=expert_mapping_index,
-            start_layer=self.start_layer,
-            end_layer=self.end_layer,
-            num_hidden_layers=self.config.num_hidden_layers,
-            num_routed_experts=self.config.n_routed_experts,
-            tp_size=tp_size,
-            use_mega_moe=self.use_mega_moe,
-            enable_expert_parallel=self.parallel_config.enable_expert_parallel,
-            num_redundant_experts=(
-                self.parallel_config.eplb_config.num_redundant_experts
-            ),
-            load_format=self.load_format,
-            quant_config=self.quant_config,
-        )
 
         # Block-FP8 shared experts: pad the intermediate up to the TP-uniform
         # block count so the standard loaders below slice it evenly (trailing
@@ -1310,8 +1342,6 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
                     loaded_params.add(name)
                     continue
 
-        if expert_stager is not None:
-            expert_stager.finish()
         return loaded_params
 
     def _pad_shared_expert_weight(
@@ -1514,7 +1544,15 @@ class DeepseekV4ForCausalLM(
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
         loader = AutoWeightsLoader(self, skip_substrs=["mtp."])
-        loaded_params = loader.load_weights(weights, mapper=self.hf_to_vllm_mapper)
+        try:
+            self.model.begin_nvfp4_layer_staged_load()
+            loaded_params = loader.load_weights(
+                weights, mapper=self.hf_to_vllm_mapper
+            )
+            self.model.finish_nvfp4_layer_staged_load()
+        except BaseException:
+            self.model.abort_nvfp4_layer_staged_load()
+            raise
         self.model.finalize_mega_moe_weights()
         return loaded_params
 
