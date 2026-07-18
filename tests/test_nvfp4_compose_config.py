@@ -52,6 +52,37 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
             )
         self.assertEqual(values, ["0", "0"])
 
+    def test_prepared_nvfp4_loader_and_manifest_pin_are_propagated_off(self) -> None:
+        self.assertIn(
+            'VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD: '
+            '"${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD:-0}"',
+            self.compose,
+        )
+        self.assertIn(
+            'VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256: '
+            '"${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256:-}"',
+            self.compose,
+        )
+        for name, expected in (
+            ("VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD", ["0", "0"]),
+            (
+                "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256",
+                ["", ""],
+            ),
+        ):
+            values = []
+            for relative_path in (
+                "config/head.env.example",
+                "config/worker.env.example",
+            ):
+                lines = (REPO_ROOT / relative_path).read_text().splitlines()
+                values.extend(
+                    line.split("=", 1)[1]
+                    for line in lines
+                    if line.startswith(name + "=")
+                )
+            self.assertEqual(values, expected)
+
     def test_speculation_mode_is_propagated_with_a_dspark_default(self) -> None:
         self.assertIn(
             'DSPARK_SPECULATION_MODE: "${DSPARK_SPECULATION_MODE:-dspark}"',

@@ -66,6 +66,11 @@ services:
       # the exact DeepSeek-V4 W4A4 checkpoint contract has passed its cold
       # one-layer gate on both the source revision and candidate image.
       VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD: "${VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD:-0}"
+      # Offline-prepared CUTLASS checkpoint.  The checkpoint self-declares
+      # this incompatible format and the loader additionally requires the
+      # exact immutable manifest digest; both gates default off/empty.
+      VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD:-0}"
+      VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256:-}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE:-0}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT:-0}"
 
