@@ -52,7 +52,14 @@ B12X_SAMPLE_FINGERPRINTS = frozenset(
     ("w13_scale_b12x_baked_swizzled", "w2_scale_b12x_baked_swizzled")
 )
 CUTLASS_SAMPLE_FINGERPRINTS = frozenset(
-    ("w13_scale_modelopt_swizzled", "w2_scale_modelopt_swizzled")
+    (
+        "w13_scale_modelopt_swizzled",
+        "w2_scale_modelopt_swizzled",
+        "cutlass_a1_gscale",
+        "cutlass_a2_gscale",
+        "cutlass_g1_alphas",
+        "cutlass_g2_alphas",
+    )
 )
 LOAD_PREDICTOR_ROUTED_LAYERS = 43
 LOAD_PREDICTOR_FIXED_SECONDS = 60.0
@@ -351,6 +358,27 @@ def checkpoint_reference_failures(
             }
         )
         return failures
+    if requested_backend == FLASHINFER_CUTLASS_MODE and (
+        prepare_b12x is not False or prepare_cutlass is not True
+    ):
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "weight_preparation_contract",
+                "reason": (
+                    "CUTLASS-only load prediction requires exactly "
+                    "flashinfer_b12x=false and flashinfer_cutlass=true"
+                ),
+                "expected": {
+                    "flashinfer_b12x": False,
+                    FLASHINFER_CUTLASS_MODE: True,
+                },
+                "observed": {
+                    "flashinfer_b12x": prepare_b12x,
+                    FLASHINFER_CUTLASS_MODE: prepare_cutlass,
+                },
+            }
+        )
     required_fingerprints = set(COMMON_SAMPLE_FINGERPRINTS)
     if prepare_b12x:
         required_fingerprints.update(B12X_SAMPLE_FINGERPRINTS)
@@ -1269,6 +1297,13 @@ def _sample_tensor_digest(torch: Any, tensor: Any, sample_bytes: int = 4096) -> 
     return digest.hexdigest()
 
 
+def _full_tensor_digest(torch: Any, tensor: Any) -> str:
+    """Fingerprint every byte of a small prepared global-scale tensor."""
+
+    tensor_bytes = int(tensor.numel()) * int(tensor.element_size())
+    return _sample_tensor_digest(torch, tensor, sample_bytes=max(1, tensor_bytes))
+
+
 def _finish_scale_preparation(
     torch: Any,
     *,
@@ -1399,6 +1434,21 @@ def _finish_scale_preparation(
                 ),
                 "w2_scale_modelopt_swizzled": _sample_tensor_digest(
                     torch, w2_sf_modelopt
+                ),
+                # Keep complete expert-global payloads in the reference
+                # contract: the g-alpha values include weight_scale_2, which
+                # raw block-scale fingerprints do not.
+                "cutlass_a1_gscale": _full_tensor_digest(
+                    torch, cutlass_a1_gscale
+                ),
+                "cutlass_a2_gscale": _full_tensor_digest(
+                    torch, cutlass_a2_gscale
+                ),
+                "cutlass_g1_alphas": _full_tensor_digest(
+                    torch, cutlass_g1_alphas
+                ),
+                "cutlass_g2_alphas": _full_tensor_digest(
+                    torch, cutlass_g2_alphas
                 ),
             }
         )

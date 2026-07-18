@@ -147,6 +147,10 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                 "w2": "def",
                 "w13_scale_modelopt_swizzled": "ghi",
                 "w2_scale_modelopt_swizzled": "jkl",
+                "cutlass_a1_gscale": "a1",
+                "cutlass_a2_gscale": "a2",
+                "cutlass_g1_alphas": "g1",
+                "cutlass_g2_alphas": "g2",
             },
             "weight_preparation_contract": {
                 "flashinfer_b12x": False,
@@ -215,6 +219,36 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
             ),
             [],
         )
+        pre_global_reference = legacy_reference.copy()
+        pre_global_reference["sample_fingerprints"] = {
+            name: digest
+            for name, digest in legacy_reference["sample_fingerprints"].items()
+            if name
+            not in {
+                "cutlass_a1_gscale",
+                "cutlass_a2_gscale",
+                "cutlass_g1_alphas",
+                "cutlass_g2_alphas",
+            }
+        }
+        failures = bench.checkpoint_reference_failures(
+            candidate,
+            {
+                "checkpoint": pre_global_reference,
+                "settings": {
+                    "checkpoint_load_strategy": "per-expert",
+                    "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                },
+            },
+        )
+        self.assertTrue(
+            any(
+                failure["kind"] == "reference_contract"
+                and failure.get("field")
+                == "sample_fingerprints.cutlass_g1_alphas"
+                for failure in failures
+            )
+        )
         unexpected_candidate = candidate.copy()
         unexpected_candidate["sample_fingerprints"] = legacy_reference[
             "sample_fingerprints"
@@ -231,6 +265,61 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         )
         self.assertEqual(failures[0]["kind"], "reference_contract")
         self.assertEqual(failures[0]["field"], "sample_fingerprints.keys")
+
+        corrupt_global = candidate.copy()
+        corrupt_global["sample_fingerprints"] = candidate[
+            "sample_fingerprints"
+        ] | {"cutlass_g1_alphas": "wrong"}
+        failures = bench.checkpoint_reference_failures(
+            corrupt_global,
+            {
+                "checkpoint": candidate.copy(),
+                "settings": {
+                    "checkpoint_load_strategy": "per-expert",
+                    "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                },
+            },
+        )
+        self.assertEqual(failures[0]["kind"], "reference_mismatch")
+        self.assertEqual(
+            failures[0]["field"], "sample_fingerprints.cutlass_g1_alphas"
+        )
+
+        dual_candidate = candidate.copy()
+        dual_candidate["sample_fingerprints"] = candidate[
+            "sample_fingerprints"
+        ] | {
+            "w13_scale_b12x_baked_swizzled": "dual-w13",
+            "w2_scale_b12x_baked_swizzled": "dual-w2",
+        }
+        dual_candidate["weight_preparation_contract"] = {
+            "flashinfer_b12x": True,
+            bench.FLASHINFER_CUTLASS_MODE: True,
+            "required_sample_fingerprints": sorted(
+                bench.COMMON_SAMPLE_FINGERPRINTS
+                | bench.B12X_SAMPLE_FINGERPRINTS
+                | bench.CUTLASS_SAMPLE_FINGERPRINTS
+            ),
+        }
+        failures = bench.checkpoint_reference_failures(
+            dual_candidate,
+            {
+                "checkpoint": dual_candidate.copy(),
+                "settings": {
+                    "checkpoint_load_strategy": "per-expert",
+                    "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                },
+            },
+        )
+        self.assertEqual(failures[0]["kind"], "reference_contract")
+        self.assertEqual(failures[0]["field"], "weight_preparation_contract")
+        self.assertEqual(
+            failures[0]["expected"],
+            {
+                "flashinfer_b12x": False,
+                bench.FLASHINFER_CUTLASS_MODE: True,
+            },
+        )
 
         failures = bench.checkpoint_reference_failures(
             candidate,
