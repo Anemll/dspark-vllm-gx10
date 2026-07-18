@@ -74,13 +74,19 @@ def main() -> None:
     parser.add_argument("before")
     parser.add_argument("after")
     parser.add_argument("--output")
+    parser.add_argument(
+        "--allow-unmatched-prompts",
+        action="store_true",
+        help="render an explicitly caveated aggregate comparison when prompt fingerprints differ",
+    )
     args = parser.parse_args()
 
     before = load_report(args.before)
     after = load_report(args.after)
     before_rows = rows_by_shape(before)
     after_rows = rows_by_shape(after)
-    if request_prompt_fingerprints(before) != request_prompt_fingerprints(after):
+    matching_prompts = request_prompt_fingerprints(before) == request_prompt_fingerprints(after)
+    if not matching_prompts and not args.allow_unmatched_prompts:
         parser.error("reports did not use identical token prompts")
     shapes = sorted(before_rows.keys() & after_rows.keys())
     if not shapes:
@@ -93,6 +99,14 @@ def main() -> None:
         f"Before: `{before_label}` / `{before.get('version', 'unknown')}`  ",
         f"After: `{after_label}` / `{after.get('version', 'unknown')}`",
     ]
+    if not matching_prompts:
+        lines.extend(
+            [
+                "",
+                "Comparison caveat: prompt fingerprints and/or trial counts differ; "
+                "this is a same-size aggregate comparison, not a paired prompt-matched A/B.",
+            ]
+        )
     artifact = before.get("model_artifact")
     if isinstance(artifact, dict):
         lines.extend(
@@ -205,13 +219,20 @@ def main() -> None:
         )
     else:
         # Preserve the legacy concurrency-1 rendering verbatim.
-        footer = (
-            "Warmed steady-state comparison on two GX10 nodes (TP=2): "
-            f"{before.get('trials_per_size', 'unknown')} trials per size, "
-            f"seed {before.get('seed', 'unknown')}, one output token, zero "
-            "prefix-cache hits, no overlapping requests, and matching prompt "
-            "hashes across versions."
-        )
+        if matching_prompts:
+            footer = (
+                "Warmed steady-state comparison on two GX10 nodes (TP=2): "
+                f"{before.get('trials_per_size', 'unknown')} trials per size, "
+                f"seed {before.get('seed', 'unknown')}, one output token, zero "
+                "prefix-cache hits, no overlapping requests, and matching prompt "
+                "hashes across versions."
+            )
+        else:
+            footer = (
+                "Same-size aggregate comparison on two GX10 nodes (TP=2). "
+                "Each report retains its own seed, trial count, cache-isolation, "
+                "and exact-token validity checks; see the caveat above."
+            )
     lines.extend(["", footer])
     rendered = "\n".join(lines) + "\n"
     print(rendered, end="")
