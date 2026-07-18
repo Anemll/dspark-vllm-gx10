@@ -200,10 +200,72 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                     )
                 )
 
+        self.assertFalse(
+            bench.numeric_metrics_pass(
+                passing | {"nonzero_activity": False},
+                min_cosine=0.98,
+                max_normalized_rmse=0.25,
+            )
+        )
+
+    def test_tensor_comparison_handles_zero_and_tiny_vectors_without_underflow(self) -> None:
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("PyTorch is not installed")
+
+        zeros = torch.zeros(8, dtype=torch.float32)
+        zero_metrics = bench.compare_tensors(torch, zeros, zeros.clone())
+        self.assertEqual(zero_metrics["cosine"], 1.0)
+        self.assertEqual(zero_metrics["normalized_rmse"], 0.0)
+        self.assertFalse(zero_metrics["nonzero_activity"])
+        self.assertFalse(
+            bench.numeric_metrics_pass(
+                zero_metrics,
+                min_cosine=0.98,
+                max_normalized_rmse=0.25,
+            )
+        )
+
+        tiny = torch.full((8,), 1.0e-30, dtype=torch.float32)
+        tiny_metrics = bench.compare_tensors(torch, tiny, tiny.clone())
+        self.assertAlmostEqual(float(tiny_metrics["cosine"]), 1.0, places=6)
+        self.assertEqual(tiny_metrics["normalized_rmse"], 0.0)
+        self.assertTrue(tiny_metrics["nonzero_activity"])
+        self.assertTrue(
+            bench.numeric_metrics_pass(
+                tiny_metrics,
+                min_cosine=0.98,
+                max_normalized_rmse=0.25,
+            )
+        )
+
+        mismatch = bench.compare_tensors(torch, zeros, torch.ones_like(zeros))
+        self.assertEqual(mismatch["cosine"], 0.0)
+        self.assertFalse(mismatch["nonzero_activity"])
+
+    def test_output_activity_rejects_zero_and_nan_poison(self) -> None:
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("PyTorch is not installed")
+
+        zeros = bench.tensor_activity(torch, torch.zeros(4))
+        active = bench.tensor_activity(torch, torch.tensor([0.0, 1.0, -2.0]))
+        poisoned = bench.tensor_activity(torch, torch.full((4,), math.nan))
+        self.assertFalse(zeros["passed"])
+        self.assertEqual(zeros["nonzero_count"], 0)
+        self.assertTrue(active["passed"])
+        self.assertFalse(poisoned["passed"])
+        self.assertEqual(poisoned["nonfinite_count"], 4)
+
     def test_graph_vs_eager_metrics_are_enforced_as_numeric_failures(self) -> None:
         source = inspect.getsource(bench.run_benchmark)
         self.assertIn('"comparison": "graph_vs_eager"', source)
         self.assertIn('mode_result["graph_numeric_gate_passed"]', source)
+        self.assertIn("output.fill_(math.nan)", source)
+        self.assertIn("graph_output.fill_(math.nan)", source)
+        self.assertIn('"kind": "output_activity"', source)
 
     def test_workspace_storage_summary_deduplicates_tensor_views(self) -> None:
         class _Storage:

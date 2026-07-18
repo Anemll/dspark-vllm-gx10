@@ -1184,25 +1184,86 @@ def make_routes(
     return x.contiguous(), ids.contiguous(), weights.contiguous()
 
 
+def _scaled_rms(torch: Any, value: Any) -> float:
+    """Compute RMS without squaring tiny values before normalizing them."""
+
+    maximum = float(value.abs().max().item())
+    if maximum == 0.0:
+        return 0.0
+    if not math.isfinite(maximum):
+        return math.nan
+    scaled = value / maximum
+    return maximum * float(scaled.square().mean().sqrt().item())
+
+
+def tensor_activity(torch: Any, value: Any) -> dict[str, float | int | bool]:
+    """Prove a kernel wrote a finite, nonzero result into its output buffer."""
+
+    value_f = value.float()
+    finite = torch.isfinite(value_f)
+    nonzero_count = int(torch.count_nonzero(value_f).item())
+    return {
+        "passed": bool(finite.all().item()) and nonzero_count > 0,
+        "finite": bool(finite.all().item()),
+        "nonfinite_count": int((~finite).sum().item()),
+        "nonzero_count": nonzero_count,
+        "numel": int(value_f.numel()),
+        "max_abs": float(value_f.abs().max().item()),
+        "rms": _scaled_rms(torch, value_f),
+    }
+
+
 def compare_tensors(torch: Any, actual: Any, reference: Any) -> dict[str, float | int | bool]:
     actual_f = actual.float()
     reference_f = reference.float()
     diff = actual_f - reference_f
     abs_diff = diff.abs()
-    rmse = diff.square().mean().sqrt()
-    reference_rms = reference_f.square().mean().sqrt()
-    denominator = actual_f.norm() * reference_f.norm()
-    cosine = (actual_f.flatten().dot(reference_f.flatten()) / denominator.clamp_min(1e-20))
+    actual_max_abs = float(actual_f.abs().max().item())
+    reference_max_abs = float(reference_f.abs().max().item())
+    diff_max_abs = float(abs_diff.max().item())
+    rmse = _scaled_rms(torch, diff)
+    reference_rms = _scaled_rms(torch, reference_f)
+    actual_nonzero_count = int(torch.count_nonzero(actual_f).item())
+    reference_nonzero_count = int(torch.count_nonzero(reference_f).item())
+    actual_finite = torch.isfinite(actual_f)
+    reference_finite = torch.isfinite(reference_f)
+    finite = bool(actual_finite.all().item()) and bool(reference_finite.all().item())
+
+    if not finite:
+        cosine = math.nan
+    elif actual_max_abs == 0.0 or reference_max_abs == 0.0:
+        # Cosine is undefined for zero vectors.  Equality comparisons should
+        # still report perfect agreement, while the independent output-
+        # activity gate below prevents an all-zero/no-op kernel from passing.
+        cosine = 1.0 if actual_max_abs == reference_max_abs == diff_max_abs == 0.0 else 0.0
+    else:
+        actual_scaled = actual_f.flatten() / actual_max_abs
+        reference_scaled = reference_f.flatten() / reference_max_abs
+        denominator = actual_scaled.norm() * reference_scaled.norm()
+        cosine = float((actual_scaled.dot(reference_scaled) / denominator).item())
+
+    if not finite:
+        normalized_rmse = math.nan
+    elif reference_rms == 0.0:
+        normalized_rmse = 0.0 if rmse == 0.0 else sys.float_info.max
+    else:
+        normalized_rmse = rmse / reference_rms
     relative = abs_diff / reference_f.abs().clamp_min(1e-5)
-    finite = torch.isfinite(actual_f)
     return {
-        "finite": bool(finite.all().item()),
-        "nonfinite_count": int((~finite).sum().item()),
-        "max_abs": float(abs_diff.max().item()),
+        "finite": finite,
+        "actual_nonfinite_count": int((~actual_finite).sum().item()),
+        "reference_nonfinite_count": int((~reference_finite).sum().item()),
+        "nonfinite_count": int((~actual_finite).sum().item()),
+        "actual_nonzero_count": actual_nonzero_count,
+        "reference_nonzero_count": reference_nonzero_count,
+        "nonzero_activity": actual_nonzero_count > 0 and reference_nonzero_count > 0,
+        "actual_max_abs": actual_max_abs,
+        "reference_max_abs": reference_max_abs,
+        "max_abs": diff_max_abs,
         "mean_abs": float(abs_diff.mean().item()),
-        "rmse": float(rmse.item()),
-        "normalized_rmse": float((rmse / reference_rms.clamp_min(1e-20)).item()),
-        "cosine": float(cosine.item()),
+        "rmse": rmse,
+        "normalized_rmse": normalized_rmse,
+        "cosine": cosine,
         "relative_p50": float(torch.quantile(relative, 0.50).item()),
         "relative_p95": float(torch.quantile(relative, 0.95).item()),
         "relative_p99": float(torch.quantile(relative, 0.99).item()),
@@ -1221,6 +1282,7 @@ def numeric_metrics_pass(
     normalized_rmse = float(metrics["normalized_rmse"])
     return (
         bool(metrics["finite"])
+        and bool(metrics.get("nonzero_activity", True))
         and math.isfinite(cosine)
         and math.isfinite(normalized_rmse)
         and cosine >= min_cosine
@@ -1845,6 +1907,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                 "topk_weights": int(topk_weights.data_ptr()),
             },
             "modes": {},
+            "eager_output_activity": {},
         }
         if not input_rms_contract["passed"]:
             report["failures"].append(
@@ -1916,6 +1979,23 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             output = launch()
             torch.cuda.synchronize()
             if m in args.correctness_m:
+                # Poison the persistent destination, then require the kernel to
+                # replace every stale/non-finite value with an active result.
+                output.fill_(math.nan)
+                output = launch()
+                torch.cuda.synchronize()
+                activity = tensor_activity(torch, output)
+                row["eager_output_activity"][mode] = activity
+                if not activity["passed"]:
+                    report["failures"].append(
+                        {
+                            "kind": "output_activity",
+                            "stage": "eager",
+                            "m": m,
+                            "mode": mode,
+                            "activity": activity,
+                        }
+                    )
                 eager_outputs[mode] = output.clone()
 
         if "w4a4" in eager_outputs and "w4a16" in eager_outputs:
@@ -1937,6 +2017,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                         "m": m,
                         "cosine": metrics["cosine"],
                         "normalized_rmse": metrics["normalized_rmse"],
+                        "nonzero_activity": metrics["nonzero_activity"],
                     }
                 )
 
@@ -1964,6 +2045,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                         "m": m,
                         "cosine": metrics["cosine"],
                         "normalized_rmse": metrics["normalized_rmse"],
+                        "nonzero_activity": metrics["nonzero_activity"],
                     }
                 )
 
@@ -2029,8 +2111,21 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                     mode_result["cuda_graph"] = graph_stats
                     mode_result["cuda_graph_status"] = "captured"
                     if mode in eager_outputs:
+                        graph_output.fill_(math.nan)
                         replay()
                         torch.cuda.synchronize()
+                        graph_activity = tensor_activity(torch, graph_output)
+                        mode_result["graph_output_activity"] = graph_activity
+                        if not graph_activity["passed"]:
+                            report["failures"].append(
+                                {
+                                    "kind": "output_activity",
+                                    "stage": "cuda_graph",
+                                    "m": m,
+                                    "mode": mode,
+                                    "activity": graph_activity,
+                                }
+                            )
                         graph_metrics = compare_tensors(
                             torch, graph_output, eager_outputs[mode]
                         )
@@ -2053,6 +2148,9 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                                     "cosine": graph_metrics["cosine"],
                                     "normalized_rmse": graph_metrics[
                                         "normalized_rmse"
+                                    ],
+                                    "nonzero_activity": graph_metrics[
+                                        "nonzero_activity"
                                     ],
                                 }
                             )
