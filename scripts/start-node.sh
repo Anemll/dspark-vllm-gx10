@@ -20,6 +20,18 @@ for name in NODE_RANK MASTER_ADDR MASTER_PORT VLLM_HOST_IP NCCL_IB_HCA NCCL_SOCK
 done
 [[ -d "$DSPARK_MODEL_HOST" ]] || { echo "Model directory is missing: $DSPARK_MODEL_HOST" >&2; exit 1; }
 
+# Preserve the released single-checkpoint behavior unless a candidate opts in
+# to a separate native DSpark draft checkpoint. Exporting the resolved value
+# ensures Compose interpolation sees it even when an older node env file does
+# not yet contain DSPARK_DRAFT_MODEL_HOST.
+export DSPARK_DRAFT_MODEL_HOST="${DSPARK_DRAFT_MODEL_HOST:-$DSPARK_MODEL_HOST}"
+if [[ "${DSPARK_SPECULATION_MODE:-dspark}" == "dspark" ]]; then
+  [[ -d "$DSPARK_DRAFT_MODEL_HOST" ]] || {
+    echo "Draft model directory is missing: $DSPARK_DRAFT_MODEL_HOST" >&2
+    exit 1
+  }
+fi
+
 ids="$(sudo docker ps -aq --filter label=com.docker.compose.service=vllm-dspark)"
 if [[ -n "$ids" ]]; then
   # shellcheck disable=SC2086

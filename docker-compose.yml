@@ -22,6 +22,11 @@ services:
     volumes:
       - ${HF_CACHE:-${HOME}/.cache/huggingface}:/cache/huggingface
       - ${DSPARK_MODEL_HOST:-${HOME}/models/dsv4-flash-dspark-abliterated}:/models/dsv4-abliterated:ro
+      # The explicit speculative-model path lets a prepared target keep its
+      # incompatible physical layout while the DSpark draft reads the native
+      # mtp.0/1/2 checkpoint. start-node.sh defaults this host path to the
+      # target path, preserving the released single-checkpoint deployment.
+      - ${DSPARK_DRAFT_MODEL_HOST:-${HOME}/models/dsv4-flash-dspark-abliterated}:/models/dspark-draft:ro
       # A boot-time selector bind-mounts XFlash here when available; otherwise
       # this remains a root-filesystem directory, so /tmp always has a safe fallback.
       - ${DSPARK_TMP_HOST:-/var/lib/dspark-tmp}:/tmp
@@ -112,6 +117,7 @@ services:
       MASTER_PORT: "${MASTER_PORT:-25000}"
       DSPARK_SPECULATION_MODE: "${DSPARK_SPECULATION_MODE:-dspark}"
       MTP_NUM_TOKENS: "${MTP_NUM_TOKENS:-3}"
+      KV_CACHE_MEMORY_BYTES: "${KV_CACHE_MEMORY_BYTES:-}"
 
     command:
       - bash
@@ -126,10 +132,18 @@ services:
         if [[ "$${DSPARK_WEIGHT_LOAD_FORMAT:-auto}" == "roce_tp" ]]; then
           MODEL_LOADER_EXTRA_CONFIG="{\"buffer_size_mb\":$${DSPARK_ROCE_LOAD_BUFFER_MB:-256}}";
         fi;
+        KV_CACHE_ARGS=();
+        if [[ -n "$${KV_CACHE_MEMORY_BYTES:-}" ]]; then
+          if [[ ! "$${KV_CACHE_MEMORY_BYTES}" =~ ^[1-9][0-9]*$$ ]]; then
+            printf 'Invalid KV_CACHE_MEMORY_BYTES=%q; expected a positive integer\n' "$${KV_CACHE_MEMORY_BYTES}" >&2;
+            exit 64;
+          fi;
+          KV_CACHE_ARGS=(--kv-cache-memory-bytes "$${KV_CACHE_MEMORY_BYTES}");
+        fi;
         SPECULATIVE_ARGS=();
         case "$${DSPARK_SPECULATION_MODE:-dspark}" in
           dspark)
-            SPECULATIVE_CONFIG="{\"method\":\"dspark\",\"num_speculative_tokens\":${MTP_NUM_TOKENS:-3},\"draft_sample_method\":\"probabilistic\"}";
+            SPECULATIVE_CONFIG="{\"method\":\"dspark\",\"model\":\"/models/dspark-draft\",\"num_speculative_tokens\":${MTP_NUM_TOKENS:-3},\"draft_sample_method\":\"probabilistic\"}";
             SPECULATIVE_ARGS=(--speculative-config "$${SPECULATIVE_CONFIG}");
             MAX_CUDAGRAPH_CAPTURE_SIZE=$$(( ${MAX_NUM_SEQS:-6} * (${MTP_NUM_TOKENS:-3} + 1) ));
             ;;
@@ -157,6 +171,7 @@ services:
         --max-num-batched-tokens ${MAX_NUM_BATCHED_TOKENS:-8192}
         --max-cudagraph-capture-size "$${MAX_CUDAGRAPH_CAPTURE_SIZE}"
         --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.80}
+        "$${KV_CACHE_ARGS[@]}"
         --enable-prefix-caching
         --async-scheduling
         --enable-chunked-prefill
