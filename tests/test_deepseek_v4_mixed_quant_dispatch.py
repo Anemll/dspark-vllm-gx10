@@ -16,8 +16,8 @@ QUANT_CONFIG_PATH = ROOT / "overlay/vllm/models/deepseek_v4/quant_config.py"
 
 
 class _RoutedExperts:
-    def __init__(self) -> None:
-        self.moe_config = SimpleNamespace()
+    def __init__(self, moe_backend: str = "auto") -> None:
+        self.moe_config = SimpleNamespace(moe_backend=moe_backend)
 
 
 class _UnquantizedFusedMoEMethod:
@@ -98,6 +98,9 @@ class DeepseekV4MixedQuantDispatchTest(unittest.TestCase):
                 "vllm.model_executor.layers",
                 "vllm.model_executor.layers.quantization",
                 "vllm.model_executor.layers.quantization.utils",
+                "vllm.models",
+                "vllm.models.deepseek_v4",
+                "vllm.models.deepseek_v4.nvidia",
             )
         }
         modules.update(
@@ -134,6 +137,12 @@ class DeepseekV4MixedQuantDispatchTest(unittest.TestCase):
                     _module(
                         "vllm.model_executor.layers.quantization.utils.quant_utils",
                         is_layer_skipped=_is_layer_skipped,
+                    )
+                ),
+                "vllm.models.deepseek_v4.nvidia.prepared_weight_loading": (
+                    _module(
+                        "vllm.models.deepseek_v4.nvidia.prepared_weight_loading",
+                        prepared_load_requested=lambda: False,
                     )
                 ),
             }
@@ -218,6 +227,54 @@ class DeepseekV4MixedQuantDispatchTest(unittest.TestCase):
 
                 self.assertIsInstance(method, _Mxfp4MoEMethod)
                 self.assertTrue(config.is_mxfp4_quant(prefix, _RoutedExperts()))
+
+    def test_prepared_target_scopes_cutlass_without_mutating_auto_draft(
+        self,
+    ) -> None:
+        config = self._new_config()
+        target = _RoutedExperts("auto")
+        draft = _RoutedExperts("auto")
+
+        with patch.object(
+            self.module, "_prepared_nvfp4_load_requested", return_value=True
+        ):
+            target_method = config.get_quant_method(
+                target, "model.layers.0.ffn.experts"
+            )
+            draft_method = config.get_quant_method(
+                draft, "model.layers.43.ffn.experts"
+            )
+
+        self.assertIsInstance(target_method, _ModelOptNvFp4FusedMoE)
+        self.assertEqual(target.moe_config.moe_backend, "flashinfer_cutlass")
+        self.assertIsInstance(draft_method, _Mxfp4MoEMethod)
+        self.assertEqual(draft.moe_config.moe_backend, "auto")
+
+    def test_prepared_target_keeps_target_only_explicit_cutlass_compatible(
+        self,
+    ) -> None:
+        target = _RoutedExperts("flashinfer_cutlass")
+        with patch.object(
+            self.module, "_prepared_nvfp4_load_requested", return_value=True
+        ):
+            method = self._new_config().get_quant_method(
+                target, "model.layers.42.ffn.experts"
+            )
+
+        self.assertIsInstance(method, _ModelOptNvFp4FusedMoE)
+        self.assertEqual(target.moe_config.moe_backend, "flashinfer_cutlass")
+
+    def test_prepared_target_rejects_other_runner_wide_backends(self) -> None:
+        target = _RoutedExperts("flashinfer_b12x")
+        with (
+            patch.object(
+                self.module, "_prepared_nvfp4_load_requested", return_value=True
+            ),
+            self.assertRaisesRegex(ValueError, "requires runner moe_backend"),
+        ):
+            self._new_config().get_quant_method(
+                target, "model.layers.0.ffn.experts"
+            )
 
     def test_standard_mtp_layer_uses_native_mxfp4(self) -> None:
         config = self._new_config()

@@ -231,6 +231,55 @@ Phase C consumed its one authorized attempt and is closed as a rejected run.
 Its authorization does not permit a retry; the backend-scoping correction
 needs in-image draft-conversion evidence and fresh outage approval.
 
+### Backend-scoping correction for a future Phase C rerun
+
+The archived logs sharpen the diagnosis. Production does **not** use native
+MXFP4 auto-selection: both production ranks explicitly report
+`B12X_MXFP4`, inherited from production's global B12X pin. The failed
+candidate reports `FLASHINFER_CUTLASS_MXFP4_MXFP8`, inherited from its global
+CUTLASS pin. The latter reaches the native draft converter's unsupported
+backend guard exactly as designed.
+
+A config-only switch to global `auto` is insufficient by itself. In the
+pinned NVFP4 oracle, auto-selection tries TRTLLM before CUTLASS, while the
+prepared target format requires CUTLASS exactly. The selected correction is
+therefore per-quantization scoping:
+
+- render the split candidate with runner-wide `DSPARK_MOE_BACKEND=auto`;
+- when and only when the prepared loader dispatches a target NVFP4 routed
+  layer, change that layer's private `FusedMoEConfig.moe_backend` to
+  `flashinfer_cutlass` before constructing `ModelOptNvFp4FusedMoE`;
+- leave every separately constructed native-MXFP4 draft layer at `auto`, whose
+  pinned DeepSeek-V4 priority begins with
+  `FLASHINFER_TRTLLM_MXFP4_MXFP8`;
+- retain explicit global CUTLASS compatibility for the already-proven
+  target-only prepared configuration, and reject any other explicit backend
+  when prepared target loading is requested.
+
+The immutable-image CPU probe now source-pins this scoping helper, the native
+auto-priority function, the converter, and the two real
+`Mxfp4MoEMethod` post-load methods. It constructs tiny CPU draft tensors and
+executes the real `Mxfp4MoEMethod.process_weights_after_loading` TRTLLM
+conversion path. Only FlashInfer's GPU-only permutation/interleave primitives
+are replaced with deterministic shape-preserving CPU equivalents. The probe
+also calls the old CUTLASS converter path and requires the same unsupported
+backend rejection that ended the first Phase C attempt.
+
+No hardware claim is made by this local change. Before another outage, a new
+immutable image must pass the in-image CPU probe and rendered-role proof on
+both nodes while production stays live. A corrected Phase C rerun otherwise
+keeps the reviewed 1,800-second ceiling, gate order, parity speculation
+settings, bank-first evidence, no-retry rule, and unconditional rollback. The
+only role-setting change is:
+
+```text
+before: DSPARK_MOE_BACKEND=flashinfer_cutlass
+after:  DSPARK_MOE_BACKEND=auto
+```
+
+That rerun requires fresh GX10 coordination and fresh outage approval; this
+document does not authorize it.
+
 ## C2 — matched confidence-enabled recheck
 
 C2 is a separate configuration experiment after Phase C. It must not replace,

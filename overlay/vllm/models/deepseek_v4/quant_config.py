@@ -19,11 +19,49 @@ from vllm.model_executor.layers.quantization.utils.quant_utils import (
 )
 
 _DEEPSEEK_V4_EXPERT_DTYPES = ("fp4", "fp8")
+_PREPARED_NVFP4_TARGET_BACKENDS = ("auto", "flashinfer_cutlass")
 
 if TYPE_CHECKING:
     from vllm.model_executor.layers.quantization.modelopt import (
         ModelOptNvFp4Config,
     )
+
+
+def _prepared_nvfp4_load_requested() -> bool:
+    """Defer the NVIDIA loader import until a routed target is dispatched."""
+
+    from vllm.models.deepseek_v4.nvidia.prepared_weight_loading import (
+        prepared_load_requested,
+    )
+
+    return prepared_load_requested()
+
+
+def _scope_prepared_nvfp4_target_backend(layer: RoutedExperts) -> str | None:
+    """Pin CUTLASS on a prepared target layer without touching draft layers.
+
+    ``--moe-backend`` initializes every routed layer with the same runner-wide
+    value.  A split prepared-target/native-draft process cannot use one global
+    explicit backend: prepared NVFP4 requires FlashInfer CUTLASS, while the
+    native MXFP4 draft must retain its own supported dispatch.  This helper is
+    called only from the target-NVFP4 branch below, so a runner-wide ``auto``
+    value remains unchanged on the separately constructed draft layers.
+
+    Explicit CUTLASS remains accepted for the already-proven target-only
+    serving configuration.  Any other explicit backend is incompatible with
+    the prepared artifact and fails before ModelOpt constructs its kernel.
+    """
+
+    if not _prepared_nvfp4_load_requested():
+        return None
+    runner_backend = layer.moe_config.moe_backend
+    if runner_backend not in _PREPARED_NVFP4_TARGET_BACKENDS:
+        raise ValueError(
+            "Prepared DeepSeek-V4 NVFP4 target requires runner moe_backend "
+            f"'auto' or 'flashinfer_cutlass'; got {runner_backend!r}"
+        )
+    layer.moe_config.moe_backend = "flashinfer_cutlass"
+    return runner_backend
 
 
 def _extract_deepseek_v4_layer_index(prefix: str) -> int | None:
@@ -187,6 +225,8 @@ class DeepseekV4FP8Config(Fp8Config):
                     from vllm.model_executor.layers.quantization.modelopt import (
                         ModelOptNvFp4FusedMoE,
                     )
+
+                    _scope_prepared_nvfp4_target_backend(layer)
 
                     # The pinned FlashInfer wrapper owns roughly 0.6 GiB of
                     # graph workspace at the DSv4 8K shape. A wrapper per one

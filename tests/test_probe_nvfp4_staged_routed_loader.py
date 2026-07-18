@@ -106,6 +106,28 @@ class Nvfp4StagedRoutedLoaderProbeTest(unittest.TestCase):
                 expected,
             )
 
+        function_contracts = (
+            (
+                root / "overlay/vllm/models/deepseek_v4/quant_config.py",
+                "_scope_prepared_nvfp4_target_backend",
+            ),
+            (
+                root
+                / "overlay/vllm/model_executor/layers/fused_moe/oracle/mxfp4.py",
+                "_get_priority_backends",
+            ),
+            (
+                root
+                / "overlay/vllm/model_executor/layers/fused_moe/oracle/mxfp4.py",
+                "convert_weight_to_mxfp4_moe_kernel_format",
+            ),
+        )
+        for path, function_name in function_contracts:
+            self.assertEqual(
+                _function_source_sha256(path, function_name),
+                probe.EXPECTED_DRAFT_BACKEND_SOURCE_SHA256[function_name],
+            )
+
     def test_probe_is_copied_into_immutable_candidate_image(self) -> None:
         root = Path(__file__).parents[1]
         dockerfile = (
@@ -174,6 +196,8 @@ class Nvfp4StagedRoutedLoaderProbeTest(unittest.TestCase):
             probe.EXPECTED_MODEL_SOURCE_SHA256,
             probe.EXPECTED_CAUSAL_MODEL_SOURCE_SHA256,
             probe.EXPECTED_STAGER_HELPER_SOURCE_SHA256,
+            probe.EXPECTED_DRAFT_BACKEND_SOURCE_SHA256,
+            probe.EXPECTED_DRAFT_METHOD_SOURCE_SHA256,
         ):
             self.assertTrue(contracts)
             self.assertTrue(all(len(value) == 64 for value in contracts.values()))
@@ -310,6 +334,32 @@ def destination(proxy, actual_parameter):
             report["auto_loader_grouping"]["retained_mtp_tensors"], 0
         )
         self.assertTrue(report["factory_preflight"]["passed"])
+        self.assertEqual(
+            report["draft_backend_proof"]["runner_backend"], "auto"
+        )
+        self.assertEqual(
+            report["draft_backend_proof"]["prepared_target_backend"],
+            "flashinfer_cutlass",
+        )
+        self.assertEqual(
+            report["draft_backend_proof"]["native_draft_backend"], "auto"
+        )
+        self.assertEqual(
+            report["draft_backend_proof"]["intended_native_draft_backend"],
+            "FLASHINFER_TRTLLM_MXFP4_MXFP8",
+        )
+        self.assertTrue(
+            report["draft_backend_proof"]["converter_executed"]
+        )
+        self.assertTrue(
+            report["draft_backend_proof"]["postload_method_executed"]
+        )
+        self.assertTrue(
+            report["draft_backend_proof"]["old_global_cutlass_rejected"]
+        )
+        self.assertTrue(
+            all(report["draft_backend_proof"]["checks"].values())
+        )
         self.assertTrue(
             report["factory_preflight"]["shape_only_cuda_descriptors"]
         )

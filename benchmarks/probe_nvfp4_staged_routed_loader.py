@@ -17,8 +17,10 @@ from __future__ import annotations
 import argparse
 import ast
 import hashlib
+import importlib
 import inspect
 import json
+import os
 import pathlib
 import textwrap
 import traceback
@@ -168,6 +170,25 @@ EXPECTED_STAGER_FACTORY_SOURCE_SHA256 = (
 EXPECTED_STAGER_HELPER_SOURCE_SHA256 = {
     "_expected_checkpoint_shape": (
         "7fe6dd6c9c4479a36393277e5f4a39d73f2d3e50e4610f7e391e28456e6e79df"
+    ),
+}
+EXPECTED_DRAFT_BACKEND_SOURCE_SHA256 = {
+    "_scope_prepared_nvfp4_target_backend": (
+        "44cc99e153381347a1705accb603f5d915b60f1bf779397639387e45550dbd8a"
+    ),
+    "_get_priority_backends": (
+        "e1e98d64b484cd682455102d2ecb1f816623904538c74784887d3504d9014183"
+    ),
+    "convert_weight_to_mxfp4_moe_kernel_format": (
+        "1a63cdb9aa0209ce35b1fc0104df0087c0881e3ef4127aadca9ad6ea5b220094"
+    ),
+}
+EXPECTED_DRAFT_METHOD_SOURCE_SHA256 = {
+    "_setup_kernel": (
+        "54890a5ec8d8613675f6a45c786801bb1365e9a22115a661437a7a2acc1236fe"
+    ),
+    "process_weights_after_loading": (
+        "b9a6f5f980e63031e9c05ea36e941291ed088f08ba5975e94f42f90290324994"
     ),
 }
 EXPECTED_PARAM_ATTRIBUTE_CHAINS = {
@@ -369,6 +390,10 @@ def _audit_runtime_sources(
     expected_checkpoint_shape: Any,
     model_class: Any,
     causal_model_class: Any,
+    prepared_backend_scope: Any,
+    draft_backend_priority: Any,
+    draft_converter: Any,
+    draft_method_class: Any,
 ) -> dict[str, Any]:
     routed: dict[str, Any] = {}
     all_param_contracts: dict[str, Any] = {}
@@ -482,6 +507,33 @@ def _audit_runtime_sources(
                 f"{observed_sha}, expected {expected_sha}"
             )
         causal_model_methods[name] = {"sha256": observed_sha}
+
+    draft_backend_sources: dict[str, Any] = {}
+    for name, candidate in (
+        ("_scope_prepared_nvfp4_target_backend", prepared_backend_scope),
+        ("_get_priority_backends", draft_backend_priority),
+        ("convert_weight_to_mxfp4_moe_kernel_format", draft_converter),
+    ):
+        source = _normalized_callable_source(candidate)
+        observed_sha = _source_sha256(source)
+        expected_sha = EXPECTED_DRAFT_BACKEND_SOURCE_SHA256[name]
+        if observed_sha != expected_sha:
+            raise RuntimeError(
+                f"DeepSeek-V4 draft backend source drifted for {name}: "
+                f"observed {observed_sha}, expected {expected_sha}"
+            )
+        draft_backend_sources[name] = {"sha256": observed_sha}
+    for name, expected_sha in EXPECTED_DRAFT_METHOD_SOURCE_SHA256.items():
+        source = _normalized_callable_source(getattr(draft_method_class, name))
+        observed_sha = _source_sha256(source)
+        if observed_sha != expected_sha:
+            raise RuntimeError(
+                f"Mxfp4MoEMethod.{name} source drifted: observed "
+                f"{observed_sha}, expected {expected_sha}"
+            )
+        draft_backend_sources[f"Mxfp4MoEMethod.{name}"] = {
+            "sha256": observed_sha
+        }
     return {
         "passed": True,
         "routed_experts_module": routed_experts_class.__module__,
@@ -493,6 +545,7 @@ def _audit_runtime_sources(
         "staged_session_methods": session_methods,
         "model_lifecycle_methods": model_methods,
         "causal_model_lifecycle_methods": causal_model_methods,
+        "draft_backend_sources": draft_backend_sources,
         "stager_factory": {
             "name": stager_factory.__name__,
             "sha256": factory_sha,
@@ -516,6 +569,185 @@ def _audit_runtime_sources(
         "all_optional_param_attrs_available": (
             copied_attrs == loader_contract["optional_attrs"]
         ),
+    }
+
+
+def _run_draft_postload_backend_proof(
+    torch: Any,
+    *,
+    prepared_backend_scope: Any,
+    draft_backend_priority: Any,
+    draft_converter: Any,
+    backend_enum: Any,
+    draft_method_class: Any,
+) -> dict[str, Any]:
+    """Exercise the real native-MXFP4 conversion branch on tiny CPU tensors.
+
+    FlashInfer's permutation helpers are GPU-only implementation details, so
+    this CPU gate replaces only those two primitives with shape-preserving
+    deterministic equivalents.  The actual pinned vLLM converter still owns
+    backend dispatch, w1/w3 reordering, tensor views, reshape contracts, and
+    the old unsupported-CUTLASS rejection.  This is the free pre-outage proof
+    for the exact failure boundary observed in Phase C.
+    """
+
+    target = SimpleNamespace(moe_config=SimpleNamespace(moe_backend="auto"))
+    draft = SimpleNamespace(moe_config=SimpleNamespace(moe_backend="auto"))
+    flag = "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD"
+    old_flag = os.environ.get(flag)
+    os.environ[flag] = "1"
+    try:
+        runner_backend = prepared_backend_scope(target)
+    finally:
+        if old_flag is None:
+            os.environ.pop(flag, None)
+        else:
+            os.environ[flag] = old_flag
+    if runner_backend != "auto":
+        raise RuntimeError("prepared target scope did not observe runner auto")
+    if target.moe_config.moe_backend != "flashinfer_cutlass":
+        raise RuntimeError("prepared target was not scoped to CUTLASS")
+    if draft.moe_config.moe_backend != "auto":
+        raise RuntimeError("native draft runner backend was mutated")
+
+    priority = list(draft_backend_priority())
+    intended = backend_enum.FLASHINFER_TRTLLM_MXFP4_MXFP8
+    if not priority or priority[0] != intended:
+        raise RuntimeError(
+            "native DeepSeek-V4 MXFP4 auto priority no longer begins with "
+            "FLASHINFER_TRTLLM_MXFP4_MXFP8"
+        )
+
+    fp4_quantization = importlib.import_module("flashinfer.fp4_quantization")
+    fused_moe_core = importlib.import_module("flashinfer.fused_moe.core")
+    real_interleave = fp4_quantization.nvfp4_block_scale_interleave
+    real_permute = fused_moe_core.get_w2_permute_indices_with_cache
+
+    def cpu_interleave(value: Any) -> Any:
+        return value.contiguous()
+
+    def cpu_permute(
+        cache: dict[Any, Any],
+        value: Any,
+        epilogue_tile_m: int,
+        num_elts_per_sf: int | None = None,
+    ) -> Any:
+        key = (tuple(value.shape), epilogue_tile_m, num_elts_per_sf)
+        if key not in cache:
+            cache[key] = torch.arange(value.shape[0], device=value.device)
+        return cache[key]
+
+    experts = 1
+    hidden = 32
+    intermediate = 32
+    w1 = torch.full(
+        (experts, intermediate, hidden // 2),
+        0x11,
+        dtype=torch.uint8,
+    )
+    w3 = torch.full_like(w1, 0x33)
+    w13 = torch.cat((w1, w3), dim=1)
+    w2 = torch.full(
+        (experts, hidden, intermediate // 2),
+        0x55,
+        dtype=torch.uint8,
+    )
+    s1 = torch.full((experts, intermediate, 1), 0x22, dtype=torch.uint8)
+    s3 = torch.full_like(s1, 0x44)
+    w13_scale = torch.cat((s1, s3), dim=1)
+    w2_scale = torch.full((experts, hidden, 1), 0x66, dtype=torch.uint8)
+
+    fp4_quantization.nvfp4_block_scale_interleave = cpu_interleave
+    fused_moe_core.get_w2_permute_indices_with_cache = cpu_permute
+    try:
+        draft_layer = torch.nn.Module()
+        for name, value in (
+            ("w13_weight", w13),
+            ("w2_weight", w2),
+            ("w13_weight_scale", w13_scale),
+            ("w2_weight_scale", w2_scale),
+        ):
+            draft_layer.register_parameter(
+                name, torch.nn.Parameter(value.clone(), requires_grad=False)
+            )
+        draft_method = draft_method_class.__new__(draft_method_class)
+        draft_method.num_experts = experts
+        draft_method.intermediate_size = intermediate
+        draft_method.hidden_size = hidden
+        draft_method.mxfp4_backend = intended
+        draft_method.experts_cls = None
+        draft_method._cache_permute_indices = {}
+        draft_method.moe_quant_config = None
+        draft_method.moe_kernel = None
+        draft_method.w13_precision_config = None
+        draft_method.w2_precision_config = None
+        draft_method.process_weights_after_loading(draft_layer)
+    finally:
+        fp4_quantization.nvfp4_block_scale_interleave = real_interleave
+        fused_moe_core.get_w2_permute_indices_with_cache = real_permute
+
+    converted_w13 = draft_layer.w13_weight.data
+    converted_w2 = draft_layer.w2_weight.data
+    converted_s13 = draft_layer.w13_weight_scale.data
+    converted_s2 = draft_layer.w2_weight_scale.data
+    raw_s13 = converted_s13.view(torch.uint8)
+    raw_s2 = converted_s2.view(torch.uint8)
+    checks = {
+        "w13_w3_rows_first": bool(
+            torch.equal(converted_w13[:, 0::2], torch.full_like(w1, 0x33))
+        ),
+        "w13_w1_rows_second": bool(
+            torch.equal(converted_w13[:, 1::2], torch.full_like(w1, 0x11))
+        ),
+        "w2_preserved": bool(torch.equal(converted_w2, w2)),
+        "w13_scale_w3_rows_first": bool(
+            torch.equal(raw_s13[:, 0::2], torch.full_like(s1, 0x44))
+        ),
+        "w13_scale_w1_rows_second": bool(
+            torch.equal(raw_s13[:, 1::2], torch.full_like(s1, 0x22))
+        ),
+        "w2_scale_preserved": bool(torch.equal(raw_s2, w2_scale)),
+        "quant_config_created": draft_method.moe_quant_config is not None,
+        "kernel_skipped_for_cpu_probe": draft_method.moe_kernel is None,
+    }
+    if not all(checks.values()):
+        raise RuntimeError(f"native draft TRTLLM conversion drifted: {checks!r}")
+
+    old_failure = backend_enum.FLASHINFER_CUTLASS_MXFP4_MXFP8
+    try:
+        draft_converter(
+            mxfp4_backend=old_failure,
+            layer=SimpleNamespace(),
+            w13_weight=w13,
+            w2_weight=w2,
+            w13_weight_scale=w13_scale,
+            w2_weight_scale=w2_scale,
+            _cache_permute_indices={},
+        )
+    except ValueError as error:
+        if "Unsupported mxfp4_backend for Mxfp4MoEMethod" not in str(error):
+            raise RuntimeError("old draft CUTLASS rejection message drifted") from error
+        old_cutlass_rejected = True
+    else:
+        raise RuntimeError("old unsupported draft CUTLASS path was accepted")
+
+    return {
+        "passed": True,
+        "runner_backend": runner_backend,
+        "prepared_target_backend": target.moe_config.moe_backend,
+        "native_draft_backend": draft.moe_config.moe_backend,
+        "native_draft_priority": [backend.value for backend in priority],
+        "intended_native_draft_backend": intended.value,
+        "converter": draft_converter.__name__,
+        "converter_executed": True,
+        "postload_method": (
+            f"{draft_method_class.__name__}.process_weights_after_loading"
+        ),
+        "postload_method_executed": True,
+        "cpu_flashinfer_primitives": "deterministic_shape_preserving_stubs",
+        "checks": checks,
+        "old_global_cutlass_backend": old_failure.value,
+        "old_global_cutlass_rejected": old_cutlass_rejected,
     }
 
 
@@ -1227,7 +1459,13 @@ def _run_auto_loader_grouping_proof(
 
 def run_probe(device: str = "cpu") -> dict[str, Any]:
     import torch
+    from vllm.model_executor.layers.fused_moe.oracle.mxfp4 import (
+        Mxfp4MoeBackend,
+        _get_priority_backends,
+        convert_weight_to_mxfp4_moe_kernel_format,
+    )
     from vllm.model_executor.layers.fused_moe.routed_experts import RoutedExperts
+    from vllm.model_executor.layers.quantization.mxfp4 import Mxfp4MoEMethod
     from vllm.model_executor.models.utils import AutoWeightsLoader
     from vllm.models.deepseek_v4.nvidia.model import (
         DeepseekV4ForCausalLM,
@@ -1241,6 +1479,9 @@ def run_probe(device: str = "cpu") -> dict[str, Any]:
         maybe_create_nvfp4_layer_stager,
     )
     from vllm.models.deepseek_v4.nvidia.weight_loading import parse_expert_name
+    from vllm.models.deepseek_v4.quant_config import (
+        _scope_prepared_nvfp4_target_backend,
+    )
 
     if device not in ("cpu", "cuda"):
         raise ValueError(f"unsupported probe device {device!r}")
@@ -1254,6 +1495,10 @@ def run_probe(device: str = "cpu") -> dict[str, Any]:
         _expected_checkpoint_shape,
         DeepseekV4Model,
         DeepseekV4ForCausalLM,
+        _scope_prepared_nvfp4_target_backend,
+        _get_priority_backends,
+        convert_weight_to_mxfp4_moe_kernel_format,
+        Mxfp4MoEMethod,
     )
     auto_loader_grouping = _run_auto_loader_grouping_proof(
         torch,
@@ -1265,6 +1510,14 @@ def run_probe(device: str = "cpu") -> dict[str, Any]:
         torch,
         Nvfp4LayerStager,
         maybe_create_nvfp4_layer_stager,
+    )
+    draft_backend_proof = _run_draft_postload_backend_proof(
+        torch,
+        prepared_backend_scope=_scope_prepared_nvfp4_target_backend,
+        draft_backend_priority=_get_priority_backends,
+        draft_converter=convert_weight_to_mxfp4_moe_kernel_format,
+        backend_enum=Mxfp4MoeBackend,
+        draft_method_class=Mxfp4MoEMethod,
     )
     ranks = [
         _run_rank(
@@ -1285,7 +1538,12 @@ def run_probe(device: str = "cpu") -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "ok": source_audit["passed"] and factory_preflight["passed"] and not failures,
+        "ok": (
+            source_audit["passed"]
+            and factory_preflight["passed"]
+            and draft_backend_proof["passed"]
+            and not failures
+        ),
         "probe": "real_routed_experts_nvfp4_layer_stager_parity",
         "model_loaded": False,
         "checkpoint_opened": False,
@@ -1296,6 +1554,7 @@ def run_probe(device: str = "cpu") -> dict[str, Any]:
         "source_audit": source_audit,
         "auto_loader_grouping": auto_loader_grouping,
         "factory_preflight": factory_preflight,
+        "draft_backend_proof": draft_backend_proof,
         "settings": {
             "tp_size": TP_SIZE,
             "experts": EXPERTS,
