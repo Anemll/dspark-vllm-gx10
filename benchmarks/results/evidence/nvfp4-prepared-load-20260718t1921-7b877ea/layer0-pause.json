@@ -1,0 +1,12 @@
+{
+  "build_state_sha256": "a7edfed24d539fc25b4f48fc4f84e0b4476e75d20ccbb66240235dd5ef69e2e2",
+  "complete": false,
+  "ok": true,
+  "partial_checkpoint": "/Volumes/SN8100/.DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1.prepared-partial",
+  "paused_after_layer": 0,
+  "resumable": true,
+  "routed_file": "model-layer-00000.safetensors",
+  "routed_file_sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+  "routed_file_size": 3623888352,
+  "source_revision": "80ab0f2274b60d324930d036ac9929ce255a2b28"
+}

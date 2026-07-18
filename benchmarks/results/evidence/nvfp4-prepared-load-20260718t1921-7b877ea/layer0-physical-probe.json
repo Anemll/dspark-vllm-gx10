@@ -1,0 +1,158 @@
+{
+  "build_state": {
+    "after": {
+      "ctime_ns": 1784387958284649203,
+      "device": 16777256,
+      "inode": 55550,
+      "mtime_ns": 1784387958284517246,
+      "path": "/Volumes/SN8100/.DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1.prepared-partial/.dspark-nvfp4-prepared-build-state.json",
+      "sha256": "a7edfed24d539fc25b4f48fc4f84e0b4476e75d20ccbb66240235dd5ef69e2e2",
+      "size": 45910
+    },
+    "before": {
+      "ctime_ns": 1784387958284649203,
+      "device": 16777256,
+      "inode": 55550,
+      "mtime_ns": 1784387958284517246,
+      "path": "/Volumes/SN8100/.DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1.prepared-partial/.dspark-nvfp4-prepared-build-state.json",
+      "sha256": "a7edfed24d539fc25b4f48fc4f84e0b4476e75d20ccbb66240235dd5ef69e2e2",
+      "size": 45910
+    },
+    "expected_sha256": "a7edfed24d539fc25b4f48fc4f84e0b4476e75d20ccbb66240235dd5ef69e2e2",
+    "layer0_row": {
+      "layer": 0,
+      "path": "model-layer-00000.safetensors",
+      "sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+      "size": 3623888352
+    },
+    "unchanged": true
+  },
+  "created_at": "2026-07-18T15:19:39.333909+00:00",
+  "gpu_required": false,
+  "layer_file": {
+    "after": {
+      "ctime_ns": 1784387958129125435,
+      "device": 16777256,
+      "inode": 55547,
+      "mtime_ns": 1784387958127392275,
+      "path": "/Volumes/SN8100/.DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1.prepared-partial/model-layer-00000.safetensors",
+      "sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+      "size": 3623888352
+    },
+    "before": {
+      "ctime_ns": 1784387958129125435,
+      "device": 16777256,
+      "inode": 55547,
+      "mtime_ns": 1784387958127392275,
+      "path": "/Volumes/SN8100/.DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1.prepared-partial/model-layer-00000.safetensors",
+      "sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+      "size": 3623888352
+    },
+    "expected_sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+    "unchanged": true
+  },
+  "model_loaded": false,
+  "ok": true,
+  "physical_validation": {
+    "dtypes": {
+      "a1_gscale": "F32",
+      "a2_gscale": "F32",
+      "g1_alphas": "F32",
+      "g2_alphas": "F32",
+      "w13.weight": "U8",
+      "w13.weight_scale": "F8_E4M3",
+      "w2.weight": "U8",
+      "w2.weight_scale": "F8_E4M3"
+    },
+    "families": [
+      "w13.weight",
+      "w2.weight",
+      "w13.weight_scale",
+      "w2.weight_scale",
+      "a1_gscale",
+      "a2_gscale",
+      "g1_alphas",
+      "g2_alphas"
+    ],
+    "file_size": 3623888352,
+    "fingerprints_match": true,
+    "header_metadata": {
+      "dspark_layer": "0",
+      "dspark_loader_contract": "deepseek_v4_nvfp4_tp2_cutlass_prepared_v1",
+      "dspark_namespace": "__dspark_tp2_nvfp4_cutlass_v1__",
+      "dspark_payload_stage": "flashinfer_cutlass_prepared_v1",
+      "dspark_required_backend": "FLASHINFER_CUTLASS",
+      "dspark_schema": "dspark.deepseek_v4.nvfp4.tp2_cutlass_prepared.v1",
+      "dspark_standard_loader_compatible": "false",
+      "format": "pt"
+    },
+    "layer": 0,
+    "ok": true,
+    "path": "/Volumes/SN8100/.DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1.prepared-partial/model-layer-00000.safetensors",
+    "rank0_fingerprints": {
+      "a1_gscale": "ca75efb8ecb87d5b545fb8e0acdbe4db69c2683b34073738ed3132c7fed8755a",
+      "a2_gscale": "4fe0db93441a8df2f59f74d196fdf5511db258c02dababb9bd9cd95a0b6f2887",
+      "g1_alphas": "42fd9084021adf41c496f6696244ac24c853d114ece6143660b428a5c4a1e193",
+      "g2_alphas": "e67aa7dc665954c5a922e9a74d645ef903240c935e9bc2b09f37770ac5ed0615",
+      "w13.weight": "f02bb1c5778d151fbc210d57fe14c232a3dcb5b3ef213366a466ddf8ce875e55",
+      "w13.weight_scale": "b76d300f85af4d71e6df85b2910cd1f6da319c97d7875d022c08c62e67ae8a0a",
+      "w2.weight": "24b3299b6f60cd66f9b9209294503d7d8c18f5565790c52b1f2b5012270b586d",
+      "w2.weight_scale": "4a2c3041d99597af244183af181d3ca99edf738df4563f2c06a3b65fa67b7156"
+    },
+    "rank_bytes": {
+      "0": 1811943424,
+      "1": 1811943424
+    },
+    "rank_slices_contiguous": {
+      "0": true,
+      "1": true
+    },
+    "reference_json_sha256": "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6",
+    "source_shapes": {
+      "a1_gscale": [
+        2,
+        256
+      ],
+      "a2_gscale": [
+        2,
+        256
+      ],
+      "g1_alphas": [
+        2,
+        256
+      ],
+      "g2_alphas": [
+        2,
+        256
+      ],
+      "w13.weight": [
+        2,
+        256,
+        2048,
+        2048
+      ],
+      "w13.weight_scale": [
+        2,
+        256,
+        2048,
+        256
+      ],
+      "w2.weight": [
+        2,
+        256,
+        4096,
+        512
+      ],
+      "w2.weight_scale": [
+        2,
+        256,
+        4096,
+        64
+      ]
+    },
+    "tensor_count": 8,
+    "tp_size": 2
+  },
+  "probe": "deepseek_v4_nvfp4_prepared_physical_layer0",
+  "schema_version": 1
+}

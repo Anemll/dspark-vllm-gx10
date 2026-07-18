@@ -1,0 +1,1004 @@
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_BUILD_URL
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_CONFIDENCE_SCHEDULER
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_REPLICATE_MARKOV_W1
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_SKIP_INIT_MEMORY_CHECK
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_IMAGE_TAG
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_B12X_COMPRESSED_MLA
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_USE_B12X_WO_PROJECTION
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_HARDWARE_SCHEDULER_EARLY_STOP
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_FUSED_MARKOV_ARGMAX
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_TRITON_MLA_SPARSE
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_REFERENCE_KV_QUANT_DEQUANT
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_BUILD_PIPELINE
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_CONFIDENCE_THRESHOLD
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_LOCAL_ARGMAX
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_BUILD_COMMIT
+WARNING 07-18 19:23:57 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_GPU_REJECTED_CONTEXT_MASK
+INFO 07-18 19:23:57 [config.py:742] Detected quantization_config.scale_fmt=ue8m0; enabling UE8M0 for DeepGEMM.
+INFO 07-18 19:24:02 [model.py:619] Resolved architecture: DeepseekV4ForCausalLM
+INFO 07-18 19:24:02 [model.py:1776] Using max model len 350000
+INFO 07-18 19:24:02 [cache.py:287] Using nvfp4_ds_mla data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor
+INFO 07-18 19:24:02 [arg_utils.py:2026] Inferred data_parallel_rank 0 from node_rank 1
+INFO 07-18 19:24:02 [scheduler.py:252] Chunked prefill is enabled with max_num_batched_tokens=8192.
+INFO 07-18 19:24:02 [vllm.py:1042] Asynchronous scheduling is enabled.
+INFO 07-18 19:24:02 [vllm.py:1128] Auto-enabling VLLM_USE_BREAKABLE_CUDAGRAPH=1. Set VLLM_USE_BREAKABLE_CUDAGRAPH=0 to opt out.
+WARNING 07-18 19:24:02 [vllm.py:1134] VLLM_USE_BREAKABLE_CUDAGRAPH is set, disabling vLLM's torch.compile pipeline. Equivalent to -cc.mode=none.
+WARNING 07-18 19:24:02 [vllm.py:1144] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 07-18 19:24:02 [kernel.py:292] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'])
+WARNING 07-18 19:24:02 [vllm.py:1804] Truncating max_cudagraph_capture_size to 8
+INFO 07-18 19:24:03 [compilation.py:312] Enabled custom fusions: norm_quant, act_quant
+INFO 07-18 19:24:03 [serve.py:212] Launching vLLM (v0.25.2.dev0+g752a3a504.d20260714) headless multiproc executor, with head node address 10.200.0.1:25000 for torch.distributed process group.
+WARNING 07-18 19:24:03 [multiproc_executor.py:1067] Reducing Torch parallelism from 20 threads to 1 to avoid unnecessary CPU contention. Set OMP_NUM_THREADS in the external environment to tune this value as needed.
+(Worker pid=263) INFO 07-18 19:24:06 [parallel_state.py:1607] world_size=2 rank=1 local_rank=0 distributed_init_method=tcp://10.200.0.1:25000 backend=nccl
+gx10-3fe8:263:263 [0] NCCL INFO ncclOsDlopen(libnccl-env.so) failed: libnccl-env.so: cannot open shared object file: No such file or directory
+gx10-3fe8:263:263 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+gx10-3fe8:263:263 [0] NCCL INFO cudaDriverVersion 13000
+gx10-3fe8:263:263 [0] NCCL INFO NCCL_SOCKET_IFNAME set by environment to enp1s0f0np0
+gx10-3fe8:263:263 [0] NCCL INFO Bootstrap: Using enp1s0f0np0:10.200.0.0<0>
+gx10-3fe8:263:263 [0] NCCL INFO NCCL version 2.30.7+cuda13.3
+gx10-3fe8:263:263 [0] NCCL INFO NCCL git version HEAD a5187fa2e
+gx10-3fe8:263:263 [0] NCCL INFO ncclOsDlopen(libnccl-net.so) failed: libnccl-net.so: cannot open shared object file: No such file or directory
+gx10-3fe8:263:263 [0] NCCL INFO NET/Plugin: Could not find: libnccl-net.so
+gx10-3fe8:263:263 [0] NCCL INFO NCCL_IB_DISABLE set by environment to 0.
+gx10-3fe8:263:263 [0] NCCL INFO NCCL_SOCKET_IFNAME set by environment to enp1s0f0np0
+gx10-3fe8:263:263 [0] NCCL INFO NCCL_IB_HCA set to rocep1s0f0,roceP2p1s0f0
+gx10-3fe8:263:263 [0] NCCL INFO NET/IB : Using [0]rocep1s0f0:1/RoCE [1]roceP2p1s0f0:1/RoCE [RO]; OOB enp1s0f0np0:10.200.0.0<0>
+gx10-3fe8:263:263 [0] NCCL INFO Initialized NET plugin IB
+gx10-3fe8:263:263 [0] NCCL INFO Assigned NET plugin IB to comm
+gx10-3fe8:263:263 [0] NCCL INFO ncclOsDlopen(libnccl-rma.so) failed: libnccl-rma.so: cannot open shared object file: No such file or directory
+gx10-3fe8:263:263 [0] NCCL INFO RMA/Plugin: Could not find: libnccl-rma.so
+gx10-3fe8:263:263 [0] NCCL INFO RMA/Plugin: Failed to load external plugin libnccl-rma.so, dlHandle: (nil), ncclRma: (nil)
+gx10-3fe8:263:263 [0] NCCL INFO RMA/Plugin: Assigned plugin RMA_IB_PROXY to comm
+gx10-3fe8:263:263 [0] NCCL INFO ncclOsDlopen(libnccl-gin.so) failed: libnccl-gin.so: cannot open shared object file: No such file or directory
+gx10-3fe8:263:263 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+gx10-3fe8:263:263 [0] NCCL INFO GIN/Plugin: Failed to load external plugin libnccl-gin.so, dlHandle: (nil), ncclGin: (nil)
+gx10-3fe8:263:263 [0] NCCL INFO GIN/Plugin: Assigned plugin GIN_IB_GDAKI type 3 to comm
+gx10-3fe8:263:263 [0] NCCL INFO Using network IB
+gx10-3fe8:263:263 [0] NCCL INFO Loaded NVML from libnvidia-ml.so.1
+gx10-3fe8:263:263 [0] NCCL INFO [Rank 1] ncclCommInitRank comm 0x4143b3e0 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0x877d5309a83f9065 - Init START
+gx10-3fe8:263:263 [0] NCCL INFO Socket handshake magic 0x564ab9f2fc4b9d6c (built-in default)
+gx10-3fe8:263:263 [0] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+gx10-3fe8:263:263 [0] NCCL INFO Bootstrap timings total 0.020174 (create 0.000029, send 0.000684, recv 0.001786, ring 0.000878, delay 0.000000)
+gx10-3fe8:263:263 [0] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+gx10-3fe8:263:263 [0] NCCL INFO NCCL_CROSS_NIC set by environment to 1.
+gx10-3fe8:263:263 [0] NCCL INFO NCCL_IGNORE_CPU_AFFINITY set by environment to 1.
+gx10-3fe8:263:263 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is empty, ignoring. (GPU affinity = ).
+gx10-3fe8:263:263 [0] NCCL INFO NCCL_NVLS_ENABLE set by environment to 0.
+gx10-3fe8:263:263 [0] NCCL INFO Rank 1: 2 Net devices
+gx10-3fe8:263:263 [0] NCCL INFO Rank 1: 0 CollNet devices
+gx10-3fe8:263:263 [0] NCCL INFO comm 0x4143b3e0 rank 1 nRanks 2 nNodes 2 localRanks 1 localRank 0 MNNVL 0
+gx10-3fe8:263:263 [0] NCCL INFO Trees [0] -1/-1/-1->1->0 [1] -1/-1/-1->1->0 [2] -1/-1/-1->1->0 [3] -1/-1/-1->1->0 [4] -1/-1/-1->1->0 [5] -1/-1/-1->1->0 [6] -1/-1/-1->1->0 [7] -1/-1/-1->1->0 [8] -1/-1/-1->1->0 [9] -1/-1/-1->1->0 [10] -1/-1/-1->1->0 [11] -1/-1/-1->1->0 [12] -1/-1/-1->1->0 [13] -1/-1/-1->1->0 [14] -1/-1/-1->1->0 [15] -1/-1/-1->1->0 [16] -1/-1/-1->1->0 [17] -1/-1/-1->1->0 [18] -1/-1/-1->1->0 [19] -1/-1/-1->1->0 [20] -1/-1/-1->1->0 [21] -1/-1/-1->1->0 [22] -1/-1/-1->1->0 [23] -1/-1/-1->1->0 [24] -1/-1/-1->1->0 [25] -1/-1/-1->1->0 [26] -1/-1/-1->1->0 [27] -1/-1/-1->1->0 [28] -1/-1/-1->1->0 [29] -1/-1/-1->1->0 [30] -1/-1/-1->1->0 [31] -1/-1/-1->1->0 [32] 0/-1/-1->1->-1 [33] 0/-1/-1->1->-1 [34] 0/-1/-1->1->-1 [35] 0/-1/-1->1->-1 [36] 0/-1/-1->1->-1 [37] 0/-1/-1->1->-1 [38] 0/-1/-1->1->-1 [39] 0/-1/-1->1->-1 [40] 0/-1/-1->1->-1 [41] 0/-1/-1->1->-1 [42] 0/-1/-1->1->-1 [43] 0/-1/-1->1->-1 [44] 0/-1/-1->1->-1 [45] 0/-1/-1->1->-1 [46] 0/-1/-1->1->-1 [47] 0/-1/-1->1->-1 [48] 0/-1/-1->1->-1 [49] 0/-1/-1->1->-1 [50] 0/-1/-1->1->-1 [51] 0/-1/-
+gx10-3fe8:263:263 [0] NCCL INFO P2P Chunksize set to 262144
+gx10-3fe8:263:263 [0] NCCL INFO Tuning P2P operations with maxP2pPeers = 2
+gx10-3fe8:263:263 [0] NCCL INFO ncclOsDlopen(libnccl-profiler.so) failed: libnccl-profiler.so: cannot open shared object file: No such file or directory
+gx10-3fe8:263:263 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+gx10-3fe8:263:263 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+gx10-3fe8:263:310 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 9
+gx10-3fe8:263:309 [0] NCCL INFO [Proxy Service] Device 0 CPU core 18
+gx10-3fe8:263:309 [0] NCCL INFO proxy listening socket at 10.200.0.0<34143>
+gx10-3fe8:263:263 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 02/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 03/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 04/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 05/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 06/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 07/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 08/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 09/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:311 [0] NCCL INFO [Proxy Progress] Device 0 CPU core 16
+gx10-3fe8:263:263 [0] NCCL INFO Channel 10/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 11/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 12/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 13/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 14/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 15/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 16/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 17/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 18/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 19/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 20/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 21/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 22/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 23/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 24/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 25/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 26/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 27/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 28/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 29/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 30/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 31/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 32/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 33/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 34/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 35/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 36/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 37/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 38/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 39/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 40/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 41/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 42/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 43/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 44/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 45/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 46/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 47/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 48/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 49/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 50/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 51/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 52/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 53/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 54/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 55/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 56/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 57/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 58/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 59/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 60/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 61/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 62/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 63/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 00/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 01/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 02/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 03/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 04/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 05/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 06/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 07/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 08/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 09/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 10/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 11/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 12/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 13/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 14/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 15/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 16/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 17/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 18/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 19/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 20/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 21/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 22/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 23/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 24/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 25/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 26/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 27/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 28/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 29/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 30/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 31/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 32/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 33/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 34/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 35/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 36/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 37/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 38/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 39/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 40/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 41/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 42/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 43/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 44/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 45/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 46/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 47/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 48/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 49/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 50/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 51/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 52/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 53/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 54/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 55/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 56/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 57/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 58/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 59/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 60/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 61/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 62/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 63/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ROCE_VERSION_NUM set by environment to 2.
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set(Worker pid=263) WARNING 07-18 19:24:50 [symm_mem.py:66] SymmMemCommunicator: Device capability 12.1 not supported, communicator is not available.
+ by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:309 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:263 [0] NCCL INFO Connected all rings, use ring PXN 0 GDR 0
+gx10-3fe8:263:263 [0] NCCL INFO Connected all trees
+gx10-3fe8:263:263 [0] NCCL INFO Connected binomial trees
+gx10-3fe8:263:263 [0] NCCL INFO ncclOsDlopen(libnccl-tuner.so) failed: libnccl-tuner.so: cannot open shared object file: No such file or directory
+gx10-3fe8:263:263 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+gx10-3fe8:263:263 [0] NCCL INFO threadThresholds 8/8/64 | 16/8/64 | 512 | 512
+gx10-3fe8:263:263 [0] NCCL INFO 64 coll channels, 64 collnet channels, 0 nvls channels, 64 p2p channels, 2 p2p channels per peer
+gx10-3fe8:263:263 [0] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, cuMemGdrSupport 0
+gx10-3fe8:263:263 [0] NCCL INFO ncclCommInitRank comm 0x4143b3e0 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0x877d5309a83f9065 - Init COMPLETE
+gx10-3fe8:263:263 [0] NCCL INFO Init timings - ncclCommInitRank: rank 1 nranks 2 total 1.74 (kernels 0.21, alloc 0.02, bootstrap 0.02, allgathers 0.00, topo 0.01, graphs 0.00, connections 1.47, rest 0.00)
+gx10-3fe8:263:263 [0] NCCL INFO Initialized NET plugin IB
+gx10-3fe8:263:263 [0] NCCL INFO Assigned NET plugin IB to comm
+gx10-3fe8:263:263 [0] NCCL INFO RMA/Plugin: Assigned plugin RMA_IB_PROXY to comm
+gx10-3fe8:263:263 [0] NCCL INFO GIN/Plugin: Assigned plugin GIN_IB_GDAKI type 3 to comm
+gx10-3fe8:263:263 [0] NCCL INFO Using network IB
+gx10-3fe8:263:263 [0] NCCL INFO [Rank 1] ncclCommInitRank comm 0x45421c60 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0xef2a05411953e46f - Init START
+gx10-3fe8:263:263 [0] NCCL INFO Bootstrap timings total 0.001937 (create 0.000021, send 0.000343, recv 0.001047, ring 0.000301, delay 0.000000)
+gx10-3fe8:263:263 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is empty, ignoring. (GPU affinity = ).
+gx10-3fe8:263:263 [0] NCCL INFO Rank 1: 2 Net devices
+gx10-3fe8:263:263 [0] NCCL INFO Rank 1: 0 CollNet devices
+gx10-3fe8:263:263 [0] NCCL INFO comm 0x45421c60 rank 1 nRanks 2 nNodes 2 localRanks 1 localRank 0 MNNVL 0
+gx10-3fe8:263:263 [0] NCCL INFO Trees [0] -1/-1/-1->1->0 [1] -1/-1/-1->1->0 [2] -1/-1/-1->1->0 [3] -1/-1/-1->1->0 [4] -1/-1/-1->1->0 [5] -1/-1/-1->1->0 [6] -1/-1/-1->1->0 [7] -1/-1/-1->1->0 [8] -1/-1/-1->1->0 [9] -1/-1/-1->1->0 [10] -1/-1/-1->1->0 [11] -1/-1/-1->1->0 [12] -1/-1/-1->1->0 [13] -1/-1/-1->1->0 [14] -1/-1/-1->1->0 [15] -1/-1/-1->1->0 [16] -1/-1/-1->1->0 [17] -1/-1/-1->1->0 [18] -1/-1/-1->1->0 [19] -1/-1/-1->1->0 [20] -1/-1/-1->1->0 [21] -1/-1/-1->1->0 [22] -1/-1/-1->1->0 [23] -1/-1/-1->1->0 [24] -1/-1/-1->1->0 [25] -1/-1/-1->1->0 [26] -1/-1/-1->1->0 [27] -1/-1/-1->1->0 [28] -1/-1/-1->1->0 [29] -1/-1/-1->1->0 [30] -1/-1/-1->1->0 [31] -1/-1/-1->1->0 [32] 0/-1/-1->1->-1 [33] 0/-1/-1->1->-1 [34] 0/-1/-1->1->-1 [35] 0/-1/-1->1->-1 [36] 0/-1/-1->1->-1 [37] 0/-1/-1->1->-1 [38] 0/-1/-1->1->-1 [39] 0/-1/-1->1->-1 [40] 0/-1/-1->1->-1 [41] 0/-1/-1->1->-1 [42] 0/-1/-1->1->-1 [43] 0/-1/-1->1->-1 [44] 0/-1/-1->1->-1 [45] 0/-1/-1->1->-1 [46] 0/-1/-1->1->-1 [47] 0/-1/-1->1->-1 [48] 0/-1/-1->1->-1 [49] 0/-1/-1->1->-1 [50] 0/-1/-1->1->-1 [51] 0/-1/-
+gx10-3fe8:263:263 [0] NCCL INFO P2P Chunksize set to 262144
+gx10-3fe8:263:263 [0] NCCL INFO Tuning P2P operations with maxP2pPeers = 2
+gx10-3fe8:263:263 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+gx10-3fe8:263:340 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 16
+gx10-3fe8:263:339 [0] NCCL INFO [Proxy Service] Device 0 CPU core 1
+gx10-3fe8:263:339 [0] NCCL INFO proxy listening socket at 10.200.0.0<41495>
+gx10-3fe8:263:341 [0] NCCL INFO [Proxy Progress] Device 0 CPU core 16
+gx10-3fe8:263:263 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 02/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 03/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 04/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 05/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 06/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 07/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 08/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 09/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 10/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 11/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 12/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 13/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 14/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 15/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 16/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 17/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 18/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 19/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 20/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 21/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 22/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 23/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 24/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 25/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 26/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 27/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 28/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 29/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 30/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 31/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 32/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 33/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 34/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 35/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 36/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 37/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 38/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 39/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 40/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 41/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 42/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 43/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 44/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 45/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 46/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 47/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 48/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 49/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 50/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 51/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 52/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 53/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 54/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 55/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 56/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 57/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 58/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 59/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 60/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 61/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 62/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 63/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 00/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 01/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 02/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 03/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 04/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 05/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 06/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 07/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 08/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 09/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 10/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 11/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 12/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 13/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 14/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 15/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 16/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 17/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 18/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 19/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 20/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 21/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 22/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 23/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 24/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 25/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 26/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 27/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 28/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 29/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 30/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 31/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 32/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 33/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 34/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 35/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 36/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 37/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 38/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 39/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 40/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 41/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 42/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 43/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 44/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 45/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 46/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 47/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 48/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 49/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 50/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 51/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 52/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 53/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 54/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 55/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 56/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 57/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 58/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 59/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 60/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 61/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 62/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 63/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set(Worker pid=263) INFO 07-18 19:24:51 [parallel_state.py:1942] rank 1 in world size 2 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 1, EP rank 1, EPLB rank N/A
+(Worker_TP1 pid=263) INFO 07-18 19:24:52 [quant_config.py:93] DeepSeek V4 expert_dtype resolved to 'fp4'
+(Worker_TP1 pid=263) INFO 07-18 19:24:52 [deep_gemm.py:175] deep_gemm not found in site-packages, trying vendored vllm.third_party.deep_gemm
+(Worker_TP1 pid=263) INFO 07-18 19:24:52 [deep_gemm.py:202] DeepGEMM PDL enabled on vllm.third_party.deep_gemm.
+(Worker_TP1 pid=263) INFO 07-18 19:24:52 [deep_gemm.py:120] DeepGEMM E8M0 enabled on current platform.
+(Worker_TP1 pid=263) INFO 07-18 19:24:52 [attention.py:87] Using DeepSeek V4 padded nvfp4_ds_mla KV cache format.
+(Worker_TP1 pid=263) WARNING 07-18 19:24:52 [modelopt.py:1030] Detected ModelOpt NVFP4 checkpoint (quant_algo=NVFP4). Please note that the format is experimental and could change in future.
+(Worker_TP1 pid=263) INFO 07-18 19:24:52 [nvfp4.py:240] Using 'FLASHINFER_CUTLASS' NvFp4 MoE backend out of potential backends: ['FLASHINFER_TRTLLM', 'FLASHINFER_CUTLASS', 'MARLIN'].
+(Worker_TP1 pid=263) INFO 07-18 19:24:52 [attention.py:712] Using FP8 indexer cache for Lightning Indexer.
+(Worker_TP1 pid=263) INFO 07-18 19:24:55 [prepared_weight_loading.py:1267] NVFP4_PREPARED event=enabled layers=43 reads_per_layer=8 copies_per_layer=8 rank_bytes=1811943424 manifest_sha256=972ba797456da80e586324a5a8c29af42bac86510ceff983e674de41d31e6f26
+(Worker_TP1 pid=263) INFO 07-18 19:24:55 [weight_utils.py:849] Filesystem type for checkpoints: EXT4. Checkpoint size: 156.71 GiB. Available RAM: 30.11 GiB.
+(Worker_TP1 pid=263) INFO 07-18 19:24:55 [weight_utils.py:879] Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre) and the checkpoint size (156.71 GiB) exceeds 90% of available RAM (30.11 GiB).
+(Worker_TP1 pid=263) INFO 07-18 19:24:57 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=0 reads=8 copies=8 bytes=1811943424 seconds=1.033300
+(Worker_TP1 pid=263) INFO 07-18 19:24:58 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=1 reads=8 copies=8 bytes=1811943424 seconds=0.974423
+(Worker_TP1 pid=263) INFO 07-18 19:24:59 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=2 reads=8 copies=8 bytes=1811943424 seconds=1.012502
+(Worker_TP1 pid=263) INFO 07-18 19:25:01 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=3 reads=8 copies=8 bytes=1811943424 seconds=1.006227
+(Worker_TP1 pid=263) INFO 07-18 19:25:02 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=4 reads=8 copies=8 bytes=1811943424 seconds=0.941328
+(Worker_TP1 pid=263) INFO 07-18 19:25:03 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=5 reads=8 copies=8 bytes=1811943424 seconds=0.977555
+(Worker_TP1 pid=263) INFO 07-18 19:25:05 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=6 reads=8 copies=8 bytes=1811943424 seconds=0.926202
+(Worker_TP1 pid=263) INFO 07-18 19:25:06 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=7 reads=8 copies=8 bytes=1811943424 seconds=0.994563
+(Worker_TP1 pid=263) INFO 07-18 19:25:07 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=8 reads=8 copies=8 bytes=1811943424 seconds=0.967325
+(Worker_TP1 pid=263) INFO 07-18 19:25:10 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=9 reads=8 copies=8 bytes=1811943424 seconds=2.129659
+(Worker_TP1 pid=263) INFO 07-18 19:25:11 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=10 reads=8 copies=8 bytes=1811943424 seconds=1.068734
+(Worker_TP1 pid=263) INFO 07-18 19:25:13 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=11 reads=8 copies=8 bytes=1811943424 seconds=0.997614
+(Worker_TP1 pid=263) INFO 07-18 19:25:14 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=12 reads=8 copies=8 bytes=1811943424 seconds=1.054590
+(Worker_TP1 pid=263) INFO 07-18 19:25:17 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=13 reads=8 copies=8 bytes=1811943424 seconds=2.077971
+(Worker_TP1 pid=263) INFO 07-18 19:25:23 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=14 reads=8 copies=8 bytes=1811943424 seconds=5.702828
+(Worker_TP1 pid=263) INFO 07-18 19:25:24 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=15 reads=8 copies=8 bytes=1811943424 seconds=1.085126
+(Worker_TP1 pid=263) INFO 07-18 19:25:26 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=16 reads=8 copies=8 bytes=1811943424 seconds=1.068208
+(Worker_TP1 pid=263) INFO 07-18 19:25:27 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=17 reads=8 copies=8 bytes=1811943424 seconds=1.120540
+(Worker_TP1 pid=263) INFO 07-18 19:25:29 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=18 reads=8 copies=8 bytes=1811943424 seconds=1.107798
+(Worker_TP1 pid=263) INFO 07-18 19:25:30 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=19 reads=8 copies=8 bytes=1811943424 seconds=1.106648
+(Worker_TP1 pid=263) INFO 07-18 19:25:32 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=20 reads=8 copies=8 bytes=1811943424 seconds=1.116014
+(Worker_TP1 pid=263) INFO 07-18 19:25:34 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=21 reads=8 copies=8 bytes=1811943424 seconds=1.112592
+(Worker_TP1 pid=263) INFO 07-18 19:25:35 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=22 reads=8 copies=8 bytes=1811943424 seconds=1.101931
+(Worker_TP1 pid=263) INFO 07-18 19:25:37 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=23 reads=8 copies=8 bytes=1811943424 seconds=1.139125
+(Worker_TP1 pid=263) INFO 07-18 19:25:38 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=24 reads=8 copies=8 bytes=1811943424 seconds=1.196172
+(Worker_TP1 pid=263) INFO 07-18 19:25:40 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=25 reads=8 copies=8 bytes=1811943424 seconds=1.119246
+(Worker_TP1 pid=263) INFO 07-18 19:25:42 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=26 reads=8 copies=8 bytes=1811943424 seconds=1.096228
+(Worker_TP1 pid=263) INFO 07-18 19:25:43 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=27 reads=8 copies=8 bytes=1811943424 seconds=1.215543
+(Worker_TP1 pid=263) INFO 07-18 19:25:45 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=28 reads=8 copies=8 bytes=1811943424 seconds=1.067612
+(Worker_TP1 pid=263) INFO 07-18 19:25:47 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=29 reads=8 copies=8 bytes=1811943424 seconds=1.378038
+(Worker_TP1 pid=263) INFO 07-18 19:25:48 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=30 reads=8 copies=8 bytes=1811943424 seconds=1.100037
+(Worker_TP1 pid=263) INFO 07-18 19:25:50 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=31 reads=8 copies=8 bytes=1811943424 seconds=1.119951
+(Worker_TP1 pid=263) INFO 07-18 19:25:51 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=32 reads=8 copies=8 bytes=1811943424 seconds=1.139043
+(Worker_TP1 pid=263) INFO 07-18 19:25:53 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=33 reads=8 copies=8 bytes=1811943424 seconds=1.097815
+(Worker_TP1 pid=263) INFO 07-18 19:25:54 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=34 reads=8 copies=8 bytes=1811943424 seconds=1.058857
+(Worker_TP1 pid=263) INFO 07-18 19:25:56 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=35 reads=8 copies=8 bytes=1811943424 seconds=1.078356
+(Worker_TP1 pid=263) INFO 07-18 19:25:58 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=36 reads=8 copies=8 bytes=1811943424 seconds=1.096798
+(Worker_TP1 pid=263) INFO 07-18 19:25:59 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=37 reads=8 copies=8 bytes=1811943424 seconds=1.078450
+(Worker_TP1 pid=263) INFO 07-18 19:26:01 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=38 reads=8 copies=8 bytes=1811943424 seconds=1.273411
+(Worker_TP1 pid=263) INFO 07-18 19:26:02 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=39 reads=8 copies=8 bytes=1811943424 seconds=1.095482
+(Worker_TP1 pid=263) INFO 07-18 19:26:04 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=40 reads=8 copies=8 bytes=1811943424 seconds=1.168674
+(Worker_TP1 pid=263) INFO 07-18 19:26:05 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=41 reads=8 copies=8 bytes=1811943424 seconds=1.081651
+(Worker_TP1 pid=263) INFO 07-18 19:26:07 [prepared_weight_loading.py:1055] NVFP4_PREPARED event=layer_load layer=42 reads=8 copies=8 bytes=1811943424 seconds=1.179774
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:1085] NVFP4_PREPARED event=complete layers=43 reads=344 copies=344 elapsed_seconds=73.378866
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [default_loader.py:430] Loading weights took 73.38 seconds
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [nvfp4.py:544] Using MoEPrepareAndFinalizeNoDPEPModular
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=0 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=1 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=2 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=3 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=4 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=5 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=6 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=7 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=8 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=9 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=10 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=11 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=12 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=13 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=14 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=15 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=16 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=17 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=18 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=19 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=20 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=21 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=22 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=23 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=24 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=25 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=26 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=27 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=28 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=29 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=30 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=31 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=32 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=33 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=34 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=35 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=36 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=37 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=38 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=39 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=40 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=41 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:09 [prepared_weight_loading.py:873] NVFP4_PREPARED event=postload layer=42 transforms=0 backend=FLASHINFER_CUTLASS
+(Worker_TP1 pid=263) INFO 07-18 19:26:11 [gpu_model_runner.py:5306] Model loading took 78.11 GiB memory and 77.280961 seconds
+(Worker_TP1 pid=263) INFO 07-18 19:26:11 [breakable_cudagraph.py:288] Breakable CUDA graph enabled
+ by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:339 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:263 [0] NCCL INFO Connected all rings, use ring PXN 0 GDR 0
+gx10-3fe8:263:263 [0] NCCL INFO Connected all trees
+gx10-3fe8:263:263 [0] NCCL INFO Connected binomial trees
+gx10-3fe8:263:263 [0] NCCL INFO threadThresholds 8/8/64 | 16/8/64 | 512 | 512
+gx10-3fe8:263:263 [0] NCCL INFO 64 coll channels, 64 collnet channels, 0 nvls channels, 64 p2p channels, 2 p2p channels per peer
+gx10-3fe8:263:263 [0] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, cuMemGdrSupport 0
+gx10-3fe8:263:263 [0] NCCL INFO ncclCommInitRank comm 0x45421c60 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0xef2a05411953e46f - Init COMPLETE
+gx10-3fe8:263:263 [0] NCCL INFO Init timings - ncclCommInitRank: rank 1 nranks 2 total 1.44 (kernels 0.00, alloc 0.00, bootstrap 0.00, allgathers 0.00, topo 0.01, graphs 0.00, connections 1.43, rest 0.00)
+gx10-3fe8:263:263 [0] NCCL INFO Comm config Blocking set to 1
+gx10-3fe8:263:263 [0] NCCL INFO Initialized NET plugin IB
+gx10-3fe8:263:263 [0] NCCL INFO Assigned NET plugin IB to comm
+gx10-3fe8:263:263 [0] NCCL INFO RMA/Plugin: Assigned plugin RMA_IB_PROXY to comm
+gx10-3fe8:263:263 [0] NCCL INFO GIN/Plugin: Assigned plugin GIN_IB_GDAKI type 3 to comm
+gx10-3fe8:263:263 [0] NCCL INFO Using network IB
+gx10-3fe8:263:263 [0] NCCL INFO [Rank 1] ncclCommInitRankConfig comm 0x6a8c5700 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0xc3e1b1eb10e46afd - Init START
+gx10-3fe8:263:263 [0] NCCL INFO Bootstrap timings total 0.003423 (create 0.000053, send 0.000938, recv 0.001336, ring 0.000487, delay 0.000000)
+gx10-3fe8:263:263 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is empty, ignoring. (GPU affinity = ).
+gx10-3fe8:263:263 [0] NCCL INFO Rank 1: 2 Net devices
+gx10-3fe8:263:263 [0] NCCL INFO Rank 1: 0 CollNet devices
+gx10-3fe8:263:263 [0] NCCL INFO comm 0x6a8c5700 rank 1 nRanks 2 nNodes 2 localRanks 1 localRank 0 MNNVL 0
+gx10-3fe8:263:263 [0] NCCL INFO Trees [0] -1/-1/-1->1->0 [1] -1/-1/-1->1->0 [2] -1/-1/-1->1->0 [3] -1/-1/-1->1->0 [4] -1/-1/-1->1->0 [5] -1/-1/-1->1->0 [6] -1/-1/-1->1->0 [7] -1/-1/-1->1->0 [8] -1/-1/-1->1->0 [9] -1/-1/-1->1->0 [10] -1/-1/-1->1->0 [11] -1/-1/-1->1->0 [12] -1/-1/-1->1->0 [13] -1/-1/-1->1->0 [14] -1/-1/-1->1->0 [15] -1/-1/-1->1->0 [16] -1/-1/-1->1->0 [17] -1/-1/-1->1->0 [18] -1/-1/-1->1->0 [19] -1/-1/-1->1->0 [20] -1/-1/-1->1->0 [21] -1/-1/-1->1->0 [22] -1/-1/-1->1->0 [23] -1/-1/-1->1->0 [24] -1/-1/-1->1->0 [25] -1/-1/-1->1->0 [26] -1/-1/-1->1->0 [27] -1/-1/-1->1->0 [28] -1/-1/-1->1->0 [29] -1/-1/-1->1->0 [30] -1/-1/-1->1->0 [31] -1/-1/-1->1->0 [32] 0/-1/-1->1->-1 [33] 0/-1/-1->1->-1 [34] 0/-1/-1->1->-1 [35] 0/-1/-1->1->-1 [36] 0/-1/-1->1->-1 [37] 0/-1/-1->1->-1 [38] 0/-1/-1->1->-1 [39] 0/-1/-1->1->-1 [40] 0/-1/-1->1->-1 [41] 0/-1/-1->1->-1 [42] 0/-1/-1->1->-1 [43] 0/-1/-1->1->-1 [44] 0/-1/-1->1->-1 [45] 0/-1/-1->1->-1 [46] 0/-1/-1->1->-1 [47] 0/-1/-1->1->-1 [48] 0/-1/-1->1->-1 [49] 0/-1/-1->1->-1 [50] 0/-1/-1->1->-1 [51] 0/-1/-
+gx10-3fe8:263:263 [0] NCCL INFO P2P Chunksize set to 262144
+gx10-3fe8:263:263 [0] NCCL INFO Tuning P2P operations with maxP2pPeers = 2
+gx10-3fe8:263:263 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+gx10-3fe8:263:465 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 0
+gx10-3fe8:263:464 [0] NCCL INFO [Proxy Service] Device 0 CPU core 2
+gx10-3fe8:263:464 [0] NCCL INFO proxy listening socket at 10.200.0.0<47777>
+gx10-3fe8:263:466 [0] NCCL INFO [Proxy Progress] Device 0 CPU core 8
+gx10-3fe8:263:263 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 02/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 03/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 04/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 05/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 06/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 07/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 08/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 09/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 10/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 11/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 12/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 13/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 14/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 15/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 16/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 17/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 18/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 19/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 20/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 21/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 22/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 23/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 24/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 25/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 26/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 27/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 28/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 29/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 30/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 31/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 32/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 33/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 34/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 35/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 36/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 37/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 38/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 39/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 40/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 41/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 42/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 43/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 44/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 45/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 46/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 47/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 48/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 49/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 50/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 51/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 52/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 53/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 54/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 55/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 56/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 57/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 58/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 59/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 60/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 61/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 62/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 63/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 00/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 01/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 02/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 03/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 04/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 05/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 06/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 07/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 08/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 09/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 10/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 11/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 12/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 13/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 14/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 15/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 16/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 17/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 18/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 19/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 20/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 21/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 22/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 23/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 24/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 25/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 26/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 27/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 28/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 29/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 30/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 31/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 32/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 33/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 34/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 35/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 36/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 37/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 38/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 39/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 40/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 41/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 42/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 43/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 44/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 45/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 46/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 47/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 48/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 49/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 50/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 51/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 52/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 53/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 54/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 55/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 56/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 57/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 58/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 59/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 60/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 61/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:263 [0] NCCL INFO Channel 62/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:263:263 [0] NCCL INFO Channel 63/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:263:464 [0] NCCL INFO NCCL_IB_ADDR_FAMILY(Worker_TP1 pid=263) 2026-07-18 19:33:36  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=263) 2026-07-18 19:33:41  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=263) 2026-07-18 19:33:42  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_post_tilelang` with `out_idx=None`
+(Worker_TP1 pid=263) 2026-07-18 19:33:43  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_post_tilelang`
+(Worker_TP1 pid=263) 2026-07-18 19:33:47  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `hc_head_fuse_tilelang` with `out_idx=None`
+(Worker_TP1 pid=263) 2026-07-18 19:33:50  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `hc_head_fuse_tilelang`
+(Worker_TP1 pid=263) INFO 07-18 19:33:54 [indexer.py:297] DSA indexer decode path: use_flattening=False (next_n=1, use_fp4_indexer_cache=False)
+(Worker_TP1 pid=263) INFO 07-18 19:33:54 [gpu_model_runner.py:6534] Profiling CUDA graph memory: PIECEWISE=4 (largest=8), FULL=4 (largest=8)

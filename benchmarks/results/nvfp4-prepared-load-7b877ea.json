@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "run_id": "prepared-prefill-20260718t1921",
+  "decision": "pass",
+  "candidate_revision": "7b877eaae2a8e2b5800e84b585d7f14fb90f5294",
+  "repacker_revision": "80ab0f2274b60d324930d036ac9929ce255a2b28",
+  "candidate_image": "sha256:222c3295b804664f19442a953143fef45a7fdc3ed278ae5e82eab546f7519b99",
+  "prepared_checkpoint": {
+    "format": "dspark.deepseek_v4.nvfp4.tp2_cutlass_prepared.v1",
+    "manifest_sha256": "972ba797456da80e586324a5a8c29af42bac86510ceff983e674de41d31e6f26",
+    "physical_file_count": 101,
+    "physical_bytes": 168281460149,
+    "payload_file_count": 87,
+    "payload_bytes": 168266881608,
+    "tensor_count": 3483,
+    "routed_layers": 43,
+    "runtime_h2d_calls_per_layer": 8,
+    "layer0": {
+      "bytes": 3623888352,
+      "sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+      "fingerprints_match": true,
+      "rank_slices_contiguous": true
+    }
+  },
+  "rank0_head": {
+    "layers": 43,
+    "reads_per_layer": 8,
+    "copies_per_layer": 8,
+    "complete_reads": 344,
+    "complete_copies": 344,
+    "postload_zero_transform_rows": 43,
+    "backend": "FLASHINFER_CUTLASS",
+    "rank_bytes_per_layer": 1811943424,
+    "layer_seconds_sum": 475.234259,
+    "prepared_loader_elapsed_seconds": 514.633559,
+    "model_loading_seconds": 518.376028,
+    "model_memory_gib": 78.11
+  },
+  "rank1_worker": {
+    "layers": 43,
+    "reads_per_layer": 8,
+    "copies_per_layer": 8,
+    "complete_reads": 344,
+    "complete_copies": 344,
+    "postload_zero_transform_rows": 43,
+    "backend": "FLASHINFER_CUTLASS",
+    "rank_bytes_per_layer": 1811943424,
+    "layer_seconds_sum": 53.463941,
+    "prepared_loader_elapsed_seconds": 73.378866,
+    "model_loading_seconds": 77.280961,
+    "model_memory_gib": 78.11
+  },
+  "serving": {
+    "model": "deepseek-v4-flash-nvfp4-prepared",
+    "speculation": "off",
+    "deterministic_generation": "NVIDIA ready",
+    "prefill_benchmark_completed": true
+  },
+  "evidence": {
+    "directory": "benchmarks/results/evidence/nvfp4-prepared-load-20260718t1921-7b877ea",
+    "head_log_sha256": "e71445c3f89011cf64898b1f326f04f0ea8a4bd8f14502096a03aa4401b46cb7",
+    "worker_log_sha256": "0ca07a13720c1c3ff6e72d5adb9d50e0768b830cb60308162688dd7f3190faf2",
+    "head_inspect_sha256": "3b9731a65b7e795447994d6702d2c88a4604e592ef3f3604226f3065c7d144ea",
+    "worker_inspect_sha256": "f90c80a35d95496258e1e05236a1e0267898084d5feadfc4fe35fb36f245e22c"
+  }
+}

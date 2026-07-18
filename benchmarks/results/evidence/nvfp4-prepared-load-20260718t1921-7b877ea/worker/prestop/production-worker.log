@@ -1,0 +1,462 @@
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_BUILD_URL
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_CONFIDENCE_SCHEDULER
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_REPLICATE_MARKOV_W1
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_SKIP_INIT_MEMORY_CHECK
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_IMAGE_TAG
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_B12X_COMPRESSED_MLA
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_USE_B12X_WO_PROJECTION
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_HARDWARE_SCHEDULER_EARLY_STOP
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_FUSED_MARKOV_ARGMAX
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_TRITON_MLA_SPARSE
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_REFERENCE_KV_QUANT_DEQUANT
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_BUILD_PIPELINE
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_CONFIDENCE_THRESHOLD
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_LOCAL_ARGMAX
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_BUILD_COMMIT
+WARNING 07-18 13:29:29 [envs.py:2055] Unknown vLLM environment variable detected: VLLM_DSPARK_GPU_REJECTED_CONTEXT_MASK
+INFO 07-18 13:29:29 [config.py:742] Detected quantization_config.scale_fmt=ue8m0; enabling UE8M0 for DeepGEMM.
+INFO 07-18 13:29:29 [model.py:619] Resolved architecture: DeepseekV4ForCausalLM
+INFO 07-18 13:29:29 [model.py:1776] Using max model len 350000
+INFO 07-18 13:29:30 [cache.py:287] Using nvfp4_ds_mla data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor
+INFO 07-18 13:29:30 [arg_utils.py:2026] Inferred data_parallel_rank 0 from node_rank 1
+INFO 07-18 13:29:30 [model.py:619] Resolved architecture: DeepSeekV4MTPModel
+INFO 07-18 13:29:30 [model.py:1776] Using max model len 1048576
+INFO 07-18 13:29:30 [speculative.py:1040] Overriding draft model max model len from 1048576 to 350000
+INFO 07-18 13:29:30 [scheduler.py:252] Chunked prefill is enabled with max_num_batched_tokens=8192.
+INFO 07-18 13:29:30 [vllm.py:1042] Asynchronous scheduling is enabled.
+INFO 07-18 13:29:30 [vllm.py:1128] Auto-enabling VLLM_USE_BREAKABLE_CUDAGRAPH=1. Set VLLM_USE_BREAKABLE_CUDAGRAPH=0 to opt out.
+WARNING 07-18 13:29:30 [vllm.py:1134] VLLM_USE_BREAKABLE_CUDAGRAPH is set, disabling vLLM's torch.compile pipeline. Equivalent to -cc.mode=none.
+WARNING 07-18 13:29:30 [vllm.py:1144] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 07-18 13:29:30 [kernel.py:292] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'])
+WARNING 07-18 13:29:30 [vllm.py:1648] max_num_scheduled_tokens is set to 8144 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate the additional draft token slots, or decrease num_speculative_tokens or max_num_seqs.
+WARNING 07-18 13:29:30 [vllm.py:2149] Model Runner V2 does not yet support the thinking_token_budget request parameter. Set VLLM_USE_V2_MODEL_RUNNER=0 if this is required.
+INFO 07-18 13:29:30 [compilation.py:312] Enabled custom fusions: norm_quant, act_quant
+INFO 07-18 13:29:30 [serve.py:212] Launching vLLM (v0.25.2.dev0+g752a3a504.d20260714) headless multiproc executor, with head node address 10.200.0.1:25000 for torch.distributed process group.
+WARNING 07-18 13:29:30 [multiproc_executor.py:1067] Reducing Torch parallelism from 20 threads to 1 to avoid unnecessary CPU contention. Set OMP_NUM_THREADS in the external environment to tune this value as needed.
+(Worker pid=174) INFO 07-18 13:29:34 [parallel_state.py:1607] world_size=2 rank=1 local_rank=0 distributed_init_method=tcp://10.200.0.1:25000 backend=nccl
+(Worker pid=174) WARNING 07-18 13:29:40 [symm_mem.py:66] SymmMemCommunicator: Device capability 12.1 not supported, communicator is not available.
+(Worker pid=174) INFO 07-18 13:29:41 [parallel_state.py:1942] rank 1 in world size 2 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 1, EP rank 1, EPLB rank N/A
+(Worker pid=174) INFO 07-18 13:29:41 [gpu_worker.py:360] Using V2 Model Runner
+(Worker_TP1 pid=174) INFO 07-18 13:29:42 [model_runner.py:281] Loading model from scratch...
+(Worker_TP1 pid=174) INFO 07-18 13:29:42 [quant_config.py:75] DeepSeek V4 expert_dtype resolved to 'fp4'
+(Worker_TP1 pid=174) INFO 07-18 13:29:42 [deep_gemm.py:175] deep_gemm not found in site-packages, trying vendored vllm.third_party.deep_gemm
+(Worker_TP1 pid=174) INFO 07-18 13:29:42 [deep_gemm.py:202] DeepGEMM PDL enabled on vllm.third_party.deep_gemm.
+(Worker_TP1 pid=174) INFO 07-18 13:29:42 [deep_gemm.py:120] DeepGEMM E8M0 enabled on current platform.
+(Worker_TP1 pid=174) INFO 07-18 13:29:42 [attention.py:87] Using DeepSeek V4 padded nvfp4_ds_mla KV cache format.
+(Worker_TP1 pid=174) INFO 07-18 13:29:42 [mxfp4.py:426] Using 'B12X_MXFP4' Mxfp4 MoE backend.
+(Worker_TP1 pid=174) INFO 07-18 13:29:42 [attention.py:712] Using FP8 indexer cache for Lightning Indexer.
+(Worker_TP1 pid=174) INFO 07-18 13:29:45 [weight_utils.py:849] Filesystem type for checkpoints: EXT4. Checkpoint size: 155.43 GiB. Available RAM: 33.97 GiB.
+(Worker_TP1 pid=174) INFO 07-18 13:29:45 [weight_utils.py:879] Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre) and the checkpoint size (155.43 GiB) exceeds 90% of available RAM (33.97 GiB).
+(Worker_TP1 pid=174) INFO 07-18 13:31:22 [default_loader.py:430] Loading weights took 97.02 seconds
+(Worker_TP1 pid=174) INFO 07-18 13:31:22 [mxfp4.py:1733] Using MoEPrepareAndFinalizeNoDPEPModular
+(Worker_TP1 pid=174) INFO 07-18 13:31:22 [mxfp4.py:1734] Using B12xExperts
+(Worker_TP1 pid=174) INFO 07-18 13:31:32 [b12x_mxfp4_moe.py:465] Prewarmed B12X route-pack capacities (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192) on cuda:0 (experts=256, topk=6)
+(Worker_TP1 pid=174) INFO 07-18 13:31:44 [eagle3_utils.py:28] Using Eagle3 auxiliary layers from config: (41, 42, 43)
+(Worker_TP1 pid=174) INFO 07-18 13:31:44 [vllm.py:1042] Asynchronous scheduling is enabled.
+(Worker_TP1 pid=174) WARNING 07-18 13:31:44 [vllm.py:1134] VLLM_USE_BREAKABLE_CUDAGRAPH is set, disabling vLLM's torch.compile pipeline. Equivalent to -cc.mode=none.
+(Worker_TP1 pid=174) WARNING 07-18 13:31:44 [vllm.py:1144] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+(Worker_TP1 pid=174) INFO 07-18 13:31:44 [kernel.py:292] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'])
+(Worker_TP1 pid=174) WARNING 07-18 13:31:44 [vllm.py:1648] max_num_scheduled_tokens is set to 8144 based on the speculative decoding settings. This may lead to suboptimal performance. Consider increasing max_num_batched_tokens to accommodate the additional draft token slots, or decrease num_speculative_tokens or max_num_seqs.
+(Worker_TP1 pid=174) WARNING 07-18 13:31:44 [vllm.py:2149] Model Runner V2 does not yet support the thinking_token_budget request parameter. Set VLLM_USE_V2_MODEL_RUNNER=0 if this is required.
+(Worker_TP1 pid=174) INFO 07-18 13:31:45 [weight_utils.py:849] Filesystem type for checkpoints: EXT4. Checkpoint size: 155.43 GiB. Available RAM: 30.23 GiB.
+(Worker_TP1 pid=174) INFO 07-18 13:31:45 [weight_utils.py:879] Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre) and the checkpoint size (155.43 GiB) exceeds 90% of available RAM (30.23 GiB).
+(Worker_TP1 pid=174) INFO 07-18 13:32:11 [dspark.py:457] DSpark draft model loaded: 96 params
+(Worker_TP1 pid=174) INFO 07-18 13:32:11 [default_loader.py:430] Loading weights took 26.59 seconds
+(Worker_TP1 pid=174) INFO 07-18 13:32:14 [model_runner.py:302] Model loading took 79.17 GiB and 152.578286 seconds
+(Worker_TP1 pid=174) 2026-07-18 13:33:07  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:33:11  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 13:33:12  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_post_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:33:13  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_post_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 13:33:25  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `hc_head_fuse_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:33:27  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `hc_head_fuse_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 13:33:27  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:33:31  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) INFO 07-18 13:33:35 [gpu_worker.py:538] Available KV cache memory: 10.61 GiB
+(Worker_TP1 pid=174) INFO 07-18 13:33:35 [indexer.py:297] DSA indexer decode path: use_flattening=True (next_n=6, use_fp4_indexer_cache=False)
+(Worker_TP1 pid=174) INFO 07-18 13:33:42 [flashinfer_sparse_mla_warmup.py:233] Warming up DeepSeek V4 sparse MLA attention for mixed tokens=16.
+(Worker_TP1 pid=174) 2026-07-18 13:33:44  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_fused_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:33:45  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_fused_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 13:33:46  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:33:50  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 13:33:55  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_fused_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:33:56  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_fused_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 13:33:57  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:34:01  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) INFO 07-18 13:34:02 [flashinfer_sparse_mla_warmup.py:181] FlashInfer SM120 sparse MLA DSv4 decode autotune cache loaded on rank 1 from /cache/huggingface/vllm-cache/flashinfer_autotune_cache/0.6.15/121a/3a46569540fcecf509934c3fd80a068302dad5648b1055664d61a7a69ca4c47f/autotune_configs.json.
+(Worker_TP1 pid=174) 2026-07-18 13:34:02,082 - INFO - autotuner.py:2177 - flashinfer.jit: [Autotuner]: Loaded 24 configs from /cache/huggingface/vllm-cache/flashinfer_autotune_cache/0.6.15/121a/3a46569540fcecf509934c3fd80a068302dad5648b1055664d61a7a69ca4c47f/autotune_configs.json
+(Worker_TP1 pid=174) 2026-07-18 13:34:02,660 - INFO - autotuner.py:757 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+(Worker_TP1 pid=174) 2026-07-18 13:34:11,201 - INFO - autotuner.py:1226 - flashinfer.jit: [Autotuner]: Config cache hit for sparse_mla_sm120_decode_dsv4 (runner=SparseMlaDecodeV3Runner, source=config file)
+(Worker_TP1 pid=174) 2026-07-18 13:34:11,214 - INFO - autotuner.py:780 - flashinfer.jit: [Autotuner]: Autotuning process ends
+(Worker_TP1 pid=174) INFO 07-18 13:34:11 [cutedsl_warmup.py:97] Skipping CuTeDSL warmup because no compile units were requested.
+(Worker_TP1 pid=174) INFO 07-18 13:34:11 [breakable_cudagraph.py:288] Breakable CUDA graph enabled
+(Worker_TP1 pid=174) 2026-07-18 13:34:11  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 13:34:15  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) INFO 07-18 13:34:23 [speculator.py:101] Capturing model for DSpark speculator...
+(Worker_TP1 pid=174) INFO 07-18 13:34:23 [model_runner.py:722] Graph capturing finished in 13 secs, took 1.17 GiB
+(Worker_TP1 pid=174) INFO 07-18 13:34:31 [jit_monitor.py:73] Kernel JIT monitor activated; monitored JIT compilations during inference will use mode=warn.
+(Worker_TP1 pid=174) 2026-07-18 19:02:25  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 19:02:30  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) WARNING 07-18 19:02:32 [jit_monitor.py:126] CuTeDSL JIT compilation during inference: W4A16FusedMoeKernel. This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) 2026-07-18 19:02:54  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 19:02:59  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 19:04:00  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 19:04:04  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 19:06:04  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 19:06:08  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) 2026-07-18 19:06:42  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-18 19:06:46  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) WARNING 07-18 19:06:46 [jit_monitor.py:126] CuTeDSL JIT compilation during inference: W4A16FusedMoeKernel. This causes a latency spike; consider extending warmup to cover this shape/config.
+[rank1]:[W718 19:22:08.110441773 TCPStore.cpp:125] [c10d] recvValue failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Failed to recv, got 0 bytes. Connection was likely closed. Did the remote server shutdown or crash?
+Exception raised from recvBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:682 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f5c14 (0xe847c0ce5c14 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1c4 (0xe847c0cee2b4 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:08.122411534 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Failed to recv, got 0 bytes. Connection was likely closed. Did the remote server shutdown or crash?
+[rank1]:[W718 19:22:09.122801723 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:09.143675446 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:10.144508757 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:10.167978231 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:11.168076918 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:11.184828117 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:12.185688488 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:12.209214409 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:13.209710123 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:13.213595270 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:14.214453995 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:14.238582174 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:15.239573013 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:15.263213271 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:16.263349757 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:16.273180201 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:17.273865105 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:17.290888976 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:18.291736154 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:18.313231127 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:19.314198962 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:19.325131937 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:20.325985949 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:21.349497262 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:22.350240492 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:22.361083259 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:23.361940122 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:23.385732781 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:24.385862011 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:24.396823498 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:25.397687515 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:25.419666313 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:26.419789322 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:26.429610390 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:27.430531739 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:27.449833265 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:28.450458821 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:28.461153332 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:29.461630569 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:29.485497644 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:30.486363812 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:30.498991736 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:31.499824816 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:31.523338194 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:32.523575195 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:32.534707370 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:33.535551221 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:33.559273160 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:34.560140868 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:34.566637366 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:35.567222179 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:35.577070175 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:36.577443629 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:36.594617326 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:37.595229518 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:37.617548221 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:38.618785199 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:38.634064091 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:39.634290827 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:39.646541214 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe
+[rank1]:[W718 19:22:40.646787280 TCPStore.cpp:106] [c10d] sendBytes failed on SocketImpl(fd=30, addr=[gx10-3fe8]:37834, remote=[::ffff:10.200.0.1]:25000): Broken pipe
+Exception raised from sendBytes at /pytorch/torch/csrc/distributed/c10d/Utils.hpp:653 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >) + 0xc8 (0xe847a4a866e8 in /usr/local/lib/python3.12/dist-packages/torch/lib/libc10.so)
+frame #1: <unknown function> + 0x66f513c (0xe847c0ce513c in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #2: c10d::TCPStore::check(std::vector<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> >, std::allocator<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > > > const&) + 0x1a4 (0xe847c0cee294 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cpu.so)
+frame #3: c10d::ProcessGroupNCCL::HeartbeatMonitor::runLoop() + 0x380 (0xe847a596db30 in /usr/local/lib/python3.12/dist-packages/torch/lib/libtorch_cuda.so)
+frame #4: <unknown function> + 0xd29cc (0xe848541929cc in /lib/aarch64-linux-gnu/libstdc++.so.6)
+frame #5: <unknown function> + 0x80398 (0xe84854d40398 in /lib/aarch64-linux-gnu/libc.so.6)
+frame #6: <unknown function> + 0xe9e9c (0xe84854da9e9c in /lib/aarch64-linux-gnu/libc.so.6)
+
+[rank1]:[W718 19:22:40.656681180 ProcessGroupNCCL.cpp:1826] [PG ID 0 PG GUID 0 Rank 1] Failed to check the "should dump" flag on TCPStore, (maybe TCPStore server has shut down too early), with error: Broken pipe

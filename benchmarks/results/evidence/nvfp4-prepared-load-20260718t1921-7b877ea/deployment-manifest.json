@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "deployment_revision": "7b877eaae2a8e2b5800e84b585d7f14fb90f5294",
+  "repacker_revision": "80ab0f2274b60d324930d036ac9929ce255a2b28",
+  "candidate_tag": "dspark-vllm-gx10:dev-7b877eaae2a8-aot0615-prepared",
+  "production_base_image_id": "sha256:3430d6614a8e2925f34d059af6caf05aff42387326db4d05639a60f10f2654d8",
+  "bundle": {
+    "path": ".local/deploy/dspark-7b877ea.bundle",
+    "bytes": 511005,
+    "sha256": "0412770b20286236b27cb7985643ae2f6e41a07a8824d0257a3c4326c2f721f5",
+    "advertised_ref": "refs/heads/wip/nvfp4-a4w4",
+    "advertised_revision": "7b877eaae2a8e2b5800e84b585d7f14fb90f5294",
+    "complete_history": true,
+    "hash_algorithm": "sha1"
+  },
+  "git_objects": {
+    "overlay_vllm_tree_sha1": "22e44201a2b1e16c219461c4d3c82aacd15adf97",
+    "prepared_probe_blob_sha1": "66e26817eb957afefd61893aaea2b9e7d6a7bd47",
+    "staged_probe_blob_sha1": "8e979ef62e058d086394d8fe46933ed639c7d364",
+    "compose_blob_sha1": "907d5aff486055c2454c0433d72b95919d5e574d"
+  },
+  "source_sha256": {
+    "docker/Dockerfile.nvfp4-aot-overlay": "300c509eb576d715d13d78121d436d5c2f5b61733ea8710daa775fd920a67eb4",
+    "docker/Dockerfile.nvfp4-aot-overlay.dockerignore": "61ce8a335afb6adcdf58e2707736ee4900a7325635c3115d11ea1da0cce9b2a7",
+    "docker-compose.yml": "c74c46acf67155a3278c993cf1327552d98f32c472ae9f65212e6065f8bbca5e",
+    "scripts/verify_flashinfer_runtime.py": "50ceb70b4ab10f65d41ed85f38925efd3a9c73aebc9e5fbefcb31e6591258cc1",
+    "benchmarks/probe_nvfp4_staged_routed_loader.py": "db5d4061e6f2e873aa3c14487ffff734dc23d82bca188ed7e754f8e9b59d0d98",
+    "benchmarks/probe_nvfp4_prepared_layer.py": "dc80209721d2842939a8950152c825ddde24ec960b0cea30dc0d816043618f7e",
+    "overlay/vllm/models/deepseek_v4/nvidia/model.py": "5f5ff1a3a5f28639674e9160bb271ac00febf0b12ff79413e76a8b27e8537ab5",
+    "overlay/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py": "ca0c264071bf36f22d0ed67dd4e902bd18c5f6c47f3efc296014c8205662d380",
+    "config/head.env.example": "c4b03c97ebf846501c154fee10d33c214ad8ae58e8caf3c1e0192247d32ed47c",
+    "config/worker.env.example": "ec72a8652a80b135bb04c7fde58834d88539ec50ca3c1247a78056b50e8ac3a5",
+    "tests/test_nvfp4_compose_config.py": "c9c9adcf45604160145814a5b3e10ef6405f336b7aa1b21632eb757fb6f3a0b1"
+  },
+  "flashinfer_wheels": {
+    "jit_cache": {
+      "bytes": 1811411320,
+      "sha256": "39e4f52378a34107ee277907bdec8bf8528c13a84143de8469d6da42ad937db3"
+    },
+    "cubin": {
+      "bytes": 611739141,
+      "sha256": "3870958b02a1752b44121d6842c531e1be2a29202f623a5fd5f08efe3eb70186"
+    }
+  },
+  "prepared_checkpoint": {
+    "local_path": "/Volumes/SN8100/DeepSeek-V4-Flash-NVFP4-TP2-CUTLASS-Prepared-v1",
+    "manifest_sha256": "972ba797456da80e586324a5a8c29af42bac86510ceff983e674de41d31e6f26",
+    "config_sha256": "f5d2f027ba158b88707c6715d7c1080f119b6fb244cfa4162d883e8935f72e1d",
+    "index_sha256": "9f768c86d1eb7e09c9dff4fb9f87b20cf59df17923f415f697f9ee6caecf328f",
+    "payload_bytes": 168266881608,
+    "physical_file_count": 101,
+    "physical_bytes": 168281460149,
+    "tensor_count": 3483,
+    "routed_layers": 43,
+    "runtime_h2d_calls_per_layer": 8,
+    "layer0": {
+      "path": "model-layer-00000.safetensors",
+      "bytes": 3623888352,
+      "sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+      "physical_probe_passed": true,
+      "immutable_reference_sha256": "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6"
+    },
+    "independent_verify_passed": true
+  },
+  "candidate_env": {
+    "head_path": ".local/deploy/prepared-head.env",
+    "head_sha256": "d85738ba3a3b61db462c64380255d967f90a4a59541c649a43800b2ffdde51dd",
+    "worker_path": ".local/deploy/prepared-worker.env",
+    "worker_sha256": "fd9e10c12bd4636aa732fc81de307725b602bf5b3139c018676c39f0d6a8a1ad",
+    "prepared_load": "1",
+    "raw_staged_load": "0",
+    "manifest_pin": "972ba797456da80e586324a5a8c29af42bac86510ceff983e674de41d31e6f26",
+    "moe_backend": "flashinfer_cutlass",
+    "weight_load_format": "auto",
+    "speculation_mode": "off"
+  },
+  "local_validation": {
+    "focused_tests": 88,
+    "focused_skips": 1,
+    "focused_status": "pass",
+    "full_discovery_tests": 226,
+    "full_discovery_skips": 8,
+    "full_discovery_status": "all prepared/staged tests pass; only RoCE module import is unavailable because local pytest is absent"
+  },
+  "scope": {
+    "roce": "paused",
+    "production_stop_authorized": false,
+    "model_load_authorized": false,
+    "full_checkpoint_copy_authorized": false,
+    "head_layer0_quarantine_only": true
+  }
+}

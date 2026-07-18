@@ -1,0 +1,10 @@
+{
+  "file_count": 87,
+  "loader_contract": "deepseek_v4_nvfp4_tp2_cutlass_prepared_v1",
+  "manifest_sha256": "972ba797456da80e586324a5a8c29af42bac86510ceff983e674de41d31e6f26",
+  "namespace": "__dspark_tp2_nvfp4_cutlass_v1__",
+  "ok": true,
+  "payload_bytes": 168266881608,
+  "runtime_h2d_calls_per_layer": 8,
+  "tensor_count": 3483
+}
