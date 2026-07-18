@@ -137,11 +137,25 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
     def test_checkpoint_reference_gate_compares_semantic_invariants(self) -> None:
         candidate = {
             "checkpoint_load_strategy": "per-expert",
+            "requested_backend_selection": bench.FLASHINFER_CUTLASS_MODE,
             "config_sha256": "config",
             "index_sha256": "index",
             "layer_idx": 0,
             "tp_offset": 0,
-            "sample_fingerprints": {"w13": "abc", "w2": "def"},
+            "sample_fingerprints": {
+                "w13": "abc",
+                "w2": "def",
+                "w13_scale_modelopt_swizzled": "ghi",
+                "w2_scale_modelopt_swizzled": "jkl",
+            },
+            "weight_preparation_contract": {
+                "flashinfer_b12x": False,
+                bench.FLASHINFER_CUTLASS_MODE: True,
+                "required_sample_fingerprints": sorted(
+                    bench.COMMON_SAMPLE_FINGERPRINTS
+                    | bench.CUTLASS_SAMPLE_FINGERPRINTS
+                ),
+            },
             "checkpoint_input_scale_stats": {"w13_global_max": 1.0},
             "checkpoint_input_scale_tensor_count": 768,
             "w1_w3_scale2_max_mismatch": 0.0,
@@ -156,22 +170,80 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                 candidate,
                 {
                     "checkpoint": candidate.copy(),
-                    "settings": {"checkpoint_load_strategy": "per-expert"},
+                    "settings": {
+                        "checkpoint_load_strategy": "per-expert",
+                        "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                    },
                 },
             ),
             [],
         )
         corrupt = candidate.copy()
-        corrupt["sample_fingerprints"] = {"w13": "wrong", "w2": "def"}
+        corrupt["sample_fingerprints"] = candidate["sample_fingerprints"] | {
+            "w13": "wrong"
+        }
         failures = bench.checkpoint_reference_failures(
             corrupt,
             {
                 "checkpoint": candidate.copy(),
-                "settings": {"checkpoint_load_strategy": "per-expert"},
+                "settings": {
+                    "checkpoint_load_strategy": "per-expert",
+                    "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                },
             },
         )
         self.assertEqual(failures[0]["kind"], "reference_mismatch")
-        self.assertEqual(failures[0]["field"], "sample_fingerprints")
+        self.assertEqual(failures[0]["field"], "sample_fingerprints.w13")
+
+        legacy_reference = candidate.copy()
+        legacy_reference["sample_fingerprints"] = candidate[
+            "sample_fingerprints"
+        ] | {
+            "w13_scale_b12x_baked_swizzled": "legacy-w13",
+            "w2_scale_b12x_baked_swizzled": "legacy-w2",
+        }
+        self.assertEqual(
+            bench.checkpoint_reference_failures(
+                candidate,
+                {
+                    "checkpoint": legacy_reference,
+                    "settings": {
+                        "checkpoint_load_strategy": "per-expert",
+                        "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                    },
+                },
+            ),
+            [],
+        )
+        unexpected_candidate = candidate.copy()
+        unexpected_candidate["sample_fingerprints"] = legacy_reference[
+            "sample_fingerprints"
+        ]
+        failures = bench.checkpoint_reference_failures(
+            unexpected_candidate,
+            {
+                "checkpoint": legacy_reference,
+                "settings": {
+                    "checkpoint_load_strategy": "per-expert",
+                    "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                },
+            },
+        )
+        self.assertEqual(failures[0]["kind"], "reference_contract")
+        self.assertEqual(failures[0]["field"], "sample_fingerprints.keys")
+
+        failures = bench.checkpoint_reference_failures(
+            candidate,
+            {
+                "checkpoint": candidate.copy(),
+                "settings": {
+                    "checkpoint_load_strategy": "per-expert",
+                    "backend_selection": "w4a4-ab",
+                },
+            },
+        )
+        self.assertEqual(failures[0]["kind"], "reference_contract")
+        self.assertEqual(failures[0]["field"], "settings.backend_selection")
 
         staged_reference = candidate.copy()
         staged_reference["checkpoint_load_strategy"] = "layer-staged"
@@ -179,7 +251,10 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
             candidate,
             {
                 "checkpoint": staged_reference,
-                "settings": {"checkpoint_load_strategy": "layer-staged"},
+                "settings": {
+                    "checkpoint_load_strategy": "layer-staged",
+                    "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                },
             },
         )
         self.assertEqual(failures[0]["kind"], "reference_contract")
@@ -234,6 +309,150 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertIn('(\"w1\", w13_host[expert_id, intermediate:])', source)
         self.assertIn("w13 = torch.cat((w3, w1), dim=1)", source)
         self.assertIn('copy_profile["bulk_device_transfer"]', source)
+
+    def test_backend_specific_scale_preparation_omits_b12x_for_cutlass(self) -> None:
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("PyTorch is not installed")
+
+        shape = bench.Dsv4Shape(
+            hidden_size=128,
+            intermediate_size=256,
+            num_experts=2,
+            top_k=1,
+            tp_size=2,
+            tp_rank=0,
+        )
+
+        def inputs() -> dict[str, object]:
+            experts = shape.num_experts
+            intermediate = shape.intermediate_size_per_rank
+            hidden = shape.hidden_size
+            return {
+                "w13": torch.zeros(
+                    experts, 2 * intermediate, hidden // 2, dtype=torch.uint8
+                ),
+                "w13_scale": torch.ones(
+                    experts, 2 * intermediate, hidden // 16
+                ),
+                "w13_scale_2": torch.ones(experts),
+                "w13_input_scale": torch.ones(experts),
+                "w2": torch.zeros(
+                    experts, hidden, intermediate // 2, dtype=torch.uint8
+                ),
+                "w2_scale": torch.ones(
+                    experts, hidden, intermediate // 16
+                ),
+                "w2_scale_2": torch.ones(experts),
+                "w2_input_scale": torch.ones(experts),
+            }
+
+        fake_nvfp4_utils = SimpleNamespace(
+            swizzle_blockscale=mock.Mock(side_effect=lambda tensor: tensor.clone())
+        )
+        real_import = __import__
+
+        def import_with_fake_nvfp4_utils(
+            name: str,
+            globals: object = None,
+            locals: object = None,
+            fromlist: object = (),
+            level: int = 0,
+        ) -> object:
+            if name == (
+                "vllm.model_executor.layers.quantization.utils.nvfp4_utils"
+            ):
+                return fake_nvfp4_utils
+            return real_import(name, globals, locals, fromlist, level)
+
+        with (
+            mock.patch("builtins.__import__", side_effect=import_with_fake_nvfp4_utils),
+            mock.patch.object(torch.cuda, "synchronize"),
+            mock.patch.object(bench, "_bake_expert_scales") as bake,
+            mock.patch.object(bench, "_scale_to_mma") as scale_to_mma,
+        ):
+            cutlass = bench._finish_scale_preparation(
+                torch,
+                **inputs(),
+                shape=shape,
+                metadata={"source": "checkpoint"},
+                prepare_cutlass=True,
+                prepare_b12x=False,
+            )
+
+        bake.assert_not_called()
+        scale_to_mma.assert_not_called()
+        self.assertEqual(fake_nvfp4_utils.swizzle_blockscale.call_count, 2)
+        self.assertIsNone(cutlass.w13_sf_swizzled)
+        self.assertIsNone(cutlass.w2_sf_swizzled)
+        self.assertIsNone(cutlass.w13_sf_mma)
+        self.assertIsNone(cutlass.w2_sf_mma)
+        self.assertIsNotNone(cutlass.w13_sf_modelopt)
+        self.assertIsNotNone(cutlass.w2_sf_modelopt)
+        self.assertEqual(
+            set(cutlass.metadata["sample_fingerprints"]),
+            bench.COMMON_SAMPLE_FINGERPRINTS
+            | bench.CUTLASS_SAMPLE_FINGERPRINTS,
+        )
+        self.assertEqual(
+            cutlass.metadata["weight_preparation_contract"],
+            {
+                "flashinfer_b12x": False,
+                bench.FLASHINFER_CUTLASS_MODE: True,
+                "required_sample_fingerprints": sorted(
+                    bench.COMMON_SAMPLE_FINGERPRINTS
+                    | bench.CUTLASS_SAMPLE_FINGERPRINTS
+                ),
+            },
+        )
+
+        fake_nvfp4_utils.swizzle_blockscale.reset_mock()
+        real_ones = torch.ones
+
+        def ones_on_cpu(*args: object, **kwargs: object) -> object:
+            forwarded = dict(kwargs)
+            if forwarded.get("device") == "cuda":
+                forwarded["device"] = "cpu"
+            return real_ones(*args, **forwarded)
+
+        with (
+            mock.patch("builtins.__import__", side_effect=import_with_fake_nvfp4_utils),
+            mock.patch.object(torch, "ones", side_effect=ones_on_cpu),
+            mock.patch.object(torch.cuda, "synchronize"),
+            mock.patch.object(
+                bench,
+                "_bake_expert_scales",
+                side_effect=lambda torch_module, scale, global_scale: scale,
+            ) as bake,
+            mock.patch.object(
+                bench,
+                "_scale_to_mma",
+                side_effect=lambda torch_module, scale, **kwargs: scale,
+            ) as scale_to_mma,
+        ):
+            dual = bench._finish_scale_preparation(
+                torch,
+                **inputs(),
+                shape=shape,
+                metadata={"source": "checkpoint"},
+                prepare_cutlass=True,
+                prepare_b12x=True,
+            )
+
+        self.assertEqual(bake.call_count, 2)
+        self.assertEqual(scale_to_mma.call_count, 2)
+        self.assertEqual(fake_nvfp4_utils.swizzle_blockscale.call_count, 4)
+        self.assertIsNotNone(dual.w13_sf_swizzled)
+        self.assertIsNotNone(dual.w2_sf_swizzled)
+        self.assertIsNotNone(dual.w13_sf_mma)
+        self.assertIsNotNone(dual.w2_sf_mma)
+        self.assertEqual(
+            set(dual.metadata["sample_fingerprints"]),
+            bench.COMMON_SAMPLE_FINGERPRINTS
+            | bench.B12X_SAMPLE_FINGERPRINTS
+            | bench.CUTLASS_SAMPLE_FINGERPRINTS,
+        )
 
     def test_tiny_cuda_checkpoint_staged_and_per_expert_are_bit_exact(self) -> None:
         try:

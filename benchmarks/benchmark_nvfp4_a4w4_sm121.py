@@ -47,6 +47,13 @@ DSV4_TP2_M8192_B12X_WRAPPER_CEILING_BYTES = 635_144_040
 B12X_W13_LAYOUT = "w13"
 FLASHINFER_CUTLASS_MODE = "flashinfer_cutlass"
 CHECKPOINT_LOAD_STRATEGIES = ("per-expert", "layer-staged")
+COMMON_SAMPLE_FINGERPRINTS = frozenset(("w13", "w2"))
+B12X_SAMPLE_FINGERPRINTS = frozenset(
+    ("w13_scale_b12x_baked_swizzled", "w2_scale_b12x_baked_swizzled")
+)
+CUTLASS_SAMPLE_FINGERPRINTS = frozenset(
+    ("w13_scale_modelopt_swizzled", "w2_scale_modelopt_swizzled")
+)
 LOAD_PREDICTOR_ROUTED_LAYERS = 43
 LOAD_PREDICTOR_FIXED_SECONDS = 60.0
 LOAD_SERVING_TARGET_SECONDS = 300.0
@@ -266,12 +273,35 @@ def checkpoint_reference_failures(
                 ),
             }
         )
+    requested_backend = candidate.get("requested_backend_selection")
+    if not isinstance(requested_backend, str):
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "requested_backend_selection",
+                "reason": "field missing from candidate",
+            }
+        )
+    elif not isinstance(settings, dict) or settings.get(
+        "backend_selection"
+    ) != requested_backend:
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "settings.backend_selection",
+                "expected": requested_backend,
+                "observed": (
+                    settings.get("backend_selection")
+                    if isinstance(settings, dict)
+                    else None
+                ),
+            }
+        )
     for field in (
         "config_sha256",
         "index_sha256",
         "layer_idx",
         "tp_offset",
-        "sample_fingerprints",
         "checkpoint_input_scale_stats",
         "checkpoint_input_scale_tensor_count",
         "w1_w3_scale2_max_mismatch",
@@ -293,6 +323,112 @@ def checkpoint_reference_failures(
                 {
                     "kind": "reference_mismatch",
                     "field": field,
+                    "expected": expected,
+                    "observed": observed,
+                }
+            )
+
+    preparation = candidate.get("weight_preparation_contract")
+    candidate_fingerprints = candidate.get("sample_fingerprints")
+    reference_fingerprints = reference.get("sample_fingerprints")
+    if not isinstance(preparation, dict):
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "weight_preparation_contract",
+                "reason": "field missing from candidate",
+            }
+        )
+        return failures
+    prepare_b12x = preparation.get("flashinfer_b12x")
+    prepare_cutlass = preparation.get(FLASHINFER_CUTLASS_MODE)
+    if not isinstance(prepare_b12x, bool) or not isinstance(prepare_cutlass, bool):
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "weight_preparation_contract",
+                "reason": "backend preparation flags must be booleans",
+            }
+        )
+        return failures
+    required_fingerprints = set(COMMON_SAMPLE_FINGERPRINTS)
+    if prepare_b12x:
+        required_fingerprints.update(B12X_SAMPLE_FINGERPRINTS)
+    if prepare_cutlass:
+        required_fingerprints.update(CUTLASS_SAMPLE_FINGERPRINTS)
+    declared_fingerprints = preparation.get("required_sample_fingerprints")
+    if declared_fingerprints != sorted(required_fingerprints):
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "weight_preparation_contract.required_sample_fingerprints",
+                "expected": sorted(required_fingerprints),
+                "observed": declared_fingerprints,
+            }
+        )
+    if not isinstance(candidate_fingerprints, dict):
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "sample_fingerprints",
+                "reason": "field missing from candidate",
+            }
+        )
+        return failures
+    if set(candidate_fingerprints) != required_fingerprints:
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "sample_fingerprints.keys",
+                "expected": sorted(required_fingerprints),
+                "observed": sorted(candidate_fingerprints),
+            }
+        )
+    if not isinstance(reference_fingerprints, dict):
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "sample_fingerprints",
+                "reason": "field missing from reference",
+            }
+        )
+        return failures
+
+    # References created before backend-specific preparation contain the two
+    # B12X scale fingerprints even when the selected serving backend is only
+    # FlashInfer CUTLASS. Accept only those known legacy extras; every target-
+    # path fingerprint remains required and bit-exact.
+    allowed_reference_fingerprints = set(required_fingerprints)
+    if prepare_cutlass and not prepare_b12x:
+        allowed_reference_fingerprints.update(B12X_SAMPLE_FINGERPRINTS)
+    unexpected_reference_fingerprints = set(reference_fingerprints).difference(
+        allowed_reference_fingerprints
+    )
+    if unexpected_reference_fingerprints:
+        failures.append(
+            {
+                "kind": "reference_contract",
+                "field": "sample_fingerprints.keys",
+                "reason": "unexpected reference fingerprints",
+                "observed": sorted(unexpected_reference_fingerprints),
+            }
+        )
+    for name in sorted(required_fingerprints):
+        expected = reference_fingerprints.get(name)
+        observed = candidate_fingerprints.get(name)
+        if expected is None:
+            failures.append(
+                {
+                    "kind": "reference_contract",
+                    "field": f"sample_fingerprints.{name}",
+                    "reason": "field missing from reference",
+                }
+            )
+        elif observed != expected:
+            failures.append(
+                {
+                    "kind": "reference_mismatch",
+                    "field": f"sample_fingerprints.{name}",
                     "expected": expected,
                     "observed": observed,
                 }
@@ -1147,10 +1283,14 @@ def _finish_scale_preparation(
     shape: Dsv4Shape,
     metadata: dict[str, Any],
     prepare_cutlass: bool,
+    prepare_b12x: bool = True,
 ) -> PreparedWeights:
     from vllm.model_executor.layers.quantization.utils.nvfp4_utils import (
         swizzle_blockscale,
     )
+
+    if not prepare_cutlass and not prepare_b12x:
+        raise ValueError("at least one NVFP4 backend must be prepared")
 
     if prepare_cutlass:
         if w13_input_scale is None or w2_input_scale is None:
@@ -1196,44 +1336,59 @@ def _finish_scale_preparation(
         cutlass_g1_alphas = None
         cutlass_g2_alphas = None
 
-    # Match vLLM FlashInferB12xExperts: absorb ModelOpt's global weight scale
-    # into a distinct block-scale representation, then use dynamic A4 with
-    # unit alphas/FC2 scale. This is intentionally not CUTLASS's calibrated
-    # static-activation representation.
-    _bake_expert_scales(torch, w13_scale, w13_scale_2)
-    _bake_expert_scales(torch, w2_scale, w2_scale_2)
-    del w13_scale_2, w2_scale_2
-
-    w13_sf_swizzled = swizzle_blockscale(w13_scale)
-    w2_sf_swizzled = swizzle_blockscale(w2_scale)
-    del w13_scale, w2_scale
-    w13_sf_mma = _scale_to_mma(
-        torch,
-        w13_sf_swizzled,
-        rows=2 * shape.intermediate_size_per_rank,
-        cols=shape.hidden_size,
-    )
-    w2_sf_mma = _scale_to_mma(
-        torch,
-        w2_sf_swizzled,
-        rows=shape.hidden_size,
-        cols=shape.intermediate_size_per_rank,
-    )
-    alpha1 = torch.ones(shape.num_experts, dtype=torch.float32, device="cuda")
-    alpha2 = torch.ones_like(alpha1)
-    fc2_input_scale = torch.ones_like(alpha1)
+    if prepare_b12x:
+        # Match vLLM FlashInferB12xExperts: absorb ModelOpt's global weight
+        # scale into a distinct block-scale representation, then use dynamic
+        # A4 with unit alphas/FC2 scale. CUTLASS keeps the raw ModelOpt scale
+        # representation and must not pay this B12X-only preparation cost.
+        _bake_expert_scales(torch, w13_scale, w13_scale_2)
+        _bake_expert_scales(torch, w2_scale, w2_scale_2)
+        w13_sf_swizzled = swizzle_blockscale(w13_scale)
+        w2_sf_swizzled = swizzle_blockscale(w2_scale)
+        w13_sf_mma = _scale_to_mma(
+            torch,
+            w13_sf_swizzled,
+            rows=2 * shape.intermediate_size_per_rank,
+            cols=shape.hidden_size,
+        )
+        w2_sf_mma = _scale_to_mma(
+            torch,
+            w2_sf_swizzled,
+            rows=shape.hidden_size,
+            cols=shape.intermediate_size_per_rank,
+        )
+        alpha1 = torch.ones(
+            shape.num_experts, dtype=torch.float32, device="cuda"
+        )
+        alpha2 = torch.ones_like(alpha1)
+        fc2_input_scale = torch.ones_like(alpha1)
+    else:
+        w13_sf_swizzled = None
+        w2_sf_swizzled = None
+        w13_sf_mma = None
+        w2_sf_mma = None
+        alpha1 = None
+        alpha2 = None
+        fc2_input_scale = None
+    del w13_scale, w2_scale, w13_scale_2, w2_scale_2
     torch.cuda.synchronize()
 
     sample_fingerprints = {
         "w13": _sample_tensor_digest(torch, w13),
         "w2": _sample_tensor_digest(torch, w2),
-        "w13_scale_b12x_baked_swizzled": _sample_tensor_digest(
-            torch, w13_sf_swizzled
-        ),
-        "w2_scale_b12x_baked_swizzled": _sample_tensor_digest(
-            torch, w2_sf_swizzled
-        ),
     }
+    if prepare_b12x:
+        assert w13_sf_swizzled is not None and w2_sf_swizzled is not None
+        sample_fingerprints.update(
+            {
+                "w13_scale_b12x_baked_swizzled": _sample_tensor_digest(
+                    torch, w13_sf_swizzled
+                ),
+                "w2_scale_b12x_baked_swizzled": _sample_tensor_digest(
+                    torch, w2_sf_swizzled
+                ),
+            }
+        )
     if prepare_cutlass:
         assert w13_sf_modelopt is not None and w2_sf_modelopt is not None
         assert w13_input_scale is not None and w2_input_scale is not None
@@ -1266,6 +1421,11 @@ def _finish_scale_preparation(
             "reason": "FlashInfer CUTLASS was not selected",
         }
     metadata["sample_fingerprints"] = sample_fingerprints
+    metadata["weight_preparation_contract"] = {
+        "flashinfer_b12x": prepare_b12x,
+        FLASHINFER_CUTLASS_MODE: prepare_cutlass,
+        "required_sample_fingerprints": sorted(sample_fingerprints),
+    }
     metadata["same_source_weight_storage"] = True
     metadata["source_weight_data_ptrs"] = {
         "w13": int(w13.data_ptr()),
@@ -1299,6 +1459,7 @@ def load_checkpoint_weights(
     layer_idx: int,
     checkpoint_metadata: dict[str, Any],
     prepare_cutlass: bool = False,
+    prepare_b12x: bool = True,
     load_strategy: str = "per-expert",
 ) -> PreparedWeights:
     if load_strategy not in CHECKPOINT_LOAD_STRATEGIES:
@@ -1743,6 +1904,7 @@ def load_checkpoint_weights(
         shape=shape,
         metadata=checkpoint_metadata,
         prepare_cutlass=prepare_cutlass,
+        prepare_b12x=prepare_b12x,
     )
     scale_prepare_seconds = time.perf_counter() - preparation_started
     total_layer_seconds = time.perf_counter() - raw_started
@@ -1774,6 +1936,7 @@ def make_synthetic_weights(
     seed: int = 4104,
     legacy_degenerate: bool = False,
     prepare_cutlass: bool = False,
+    prepare_b12x: bool = True,
 ) -> PreparedWeights:
     device = torch.device("cuda")
     experts = shape.num_experts
@@ -1931,6 +2094,7 @@ def make_synthetic_weights(
         shape=shape,
         metadata=metadata,
         prepare_cutlass=prepare_cutlass,
+        prepare_b12x=prepare_b12x,
     )
 
 
@@ -2436,24 +2600,55 @@ def _make_flashinfer_cutlass_runner(
             int(quant_config.w2_scale.untyped_storage().data_ptr())
             == int(weights.w2_sf_modelopt.untyped_storage().data_ptr())
         ),
-        "w13_scale_storage_distinct_from_b12x_baked": (
-            int(weights.w13_sf_modelopt.untyped_storage().data_ptr())
-            != int(weights.w13_sf_mma.untyped_storage().data_ptr())
-        ),
-        "w2_scale_storage_distinct_from_b12x_baked": (
-            int(weights.w2_sf_modelopt.untyped_storage().data_ptr())
-            != int(weights.w2_sf_mma.untyped_storage().data_ptr())
-        ),
     }
+    b12x_scale_storage_prepared = (
+        weights.w13_sf_mma is not None and weights.w2_sf_mma is not None
+    )
+    if (weights.w13_sf_mma is None) != (weights.w2_sf_mma is None):
+        raise RuntimeError("B12X scale preparation is only partially present")
+    declared_b12x_preparation = weights.metadata.get(
+        "weight_preparation_contract", {}
+    ).get("flashinfer_b12x")
+    if declared_b12x_preparation is not b12x_scale_storage_prepared:
+        raise RuntimeError(
+            "B12X scale storage disagrees with the preparation contract"
+        )
+    scale_storage_separation = {
+        "b12x_scale_storage_prepared": b12x_scale_storage_prepared,
+        "w13_scale_storage_distinct_from_b12x_baked": None,
+        "w2_scale_storage_distinct_from_b12x_baked": None,
+    }
+    if b12x_scale_storage_prepared:
+        scale_storage_separation.update(
+            {
+                "w13_scale_storage_distinct_from_b12x_baked": (
+                    int(weights.w13_sf_modelopt.untyped_storage().data_ptr())
+                    != int(weights.w13_sf_mma.untyped_storage().data_ptr())
+                ),
+                "w2_scale_storage_distinct_from_b12x_baked": (
+                    int(weights.w2_sf_modelopt.untyped_storage().data_ptr())
+                    != int(weights.w2_sf_mma.untyped_storage().data_ptr())
+                ),
+            }
+        )
     if not all(packed_weight_contract.values()):
         raise RuntimeError(
-            "FlashInfer CUTLASS does not share B12X's packed weight storage: "
+            "FlashInfer CUTLASS does not share checkpoint packed-weight storage: "
             f"{packed_weight_contract}"
         )
     if not all(cutlass_scale_contract.values()):
         raise RuntimeError(
             "FlashInfer CUTLASS raw ModelOpt scale contract is invalid: "
             f"{cutlass_scale_contract}"
+        )
+    if b12x_scale_storage_prepared and not all(
+        value
+        for name, value in scale_storage_separation.items()
+        if name != "b12x_scale_storage_prepared"
+    ):
+        raise RuntimeError(
+            "FlashInfer CUTLASS and B12X scale storage unexpectedly alias: "
+            f"{scale_storage_separation}"
         )
     is_synthetic = weights.metadata.get("source") == "synthetic-shape-only"
     loaded_input_scale_count = int(
@@ -2490,7 +2685,7 @@ def _make_flashinfer_cutlass_runner(
         "checkpoint_input_scale_stats": weights.metadata.get(
             "checkpoint_input_scale_stats"
         ),
-    } | packed_weight_contract | cutlass_scale_contract
+    } | packed_weight_contract | cutlass_scale_contract | scale_storage_separation
     return FlashInferCutlassRunner(experts=experts, activation=activation), proof
 
 
@@ -2647,6 +2842,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
 
     modes = order_modes(modes_for_backend(args.backend), args.w4a4_order)
     prepare_cutlass = FLASHINFER_CUTLASS_MODE in modes
+    prepare_b12x = any(mode in {"w4a4", "w4a16"} for mode in modes)
     if args.synthetic:
         shape = Dsv4Shape(
             num_experts=args.synthetic_experts or 256,
@@ -2661,6 +2857,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             seed=args.seed,
             legacy_degenerate=args.legacy_degenerate_synthetic,
             prepare_cutlass=prepare_cutlass,
+            prepare_b12x=prepare_b12x,
         )
     else:
         if args.model_path is None:
@@ -2684,6 +2881,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                 "layer_idx": args.layer_idx,
             }
         )
+        checkpoint_metadata["requested_backend_selection"] = args.backend
         print(
             f"Loading NVIDIA NVFP4 layer {args.layer_idx}, TP rank {args.tp_rank}/"
             f"{args.tp_size} from {args.model_path}...",
@@ -2696,6 +2894,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             layer_idx=args.layer_idx,
             checkpoint_metadata=checkpoint_metadata,
             prepare_cutlass=prepare_cutlass,
+            prepare_b12x=prepare_b12x,
             load_strategy=args.checkpoint_load_strategy,
         )
 
