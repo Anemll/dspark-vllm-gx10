@@ -12,7 +12,7 @@ import sys
 import tempfile
 import unittest
 from dataclasses import dataclass
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest import mock
 
 
@@ -79,6 +79,144 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertEqual(bench.parse_sha256("A" * 64), "a" * 64)
         with self.assertRaisesRegex(Exception, "64-character"):
             bench.parse_sha256("not-a-digest")
+
+    def test_checkpoint_warm_steady_predictor_counts_one_plus_42(self) -> None:
+        passing = bench.checkpoint_warm_steady_load_prediction(
+            6.0,
+            4.8,
+            cold_layer_idx=0,
+            steady_layer_idx=1,
+        )
+        failing = bench.checkpoint_warm_steady_load_prediction(
+            6.0,
+            4.9,
+            cold_layer_idx=0,
+            steady_layer_idx=1,
+        )
+
+        self.assertEqual(passing["recurring_steady_layers"], 42)
+        self.assertAlmostEqual(
+            passing["projected_routed_layer_seconds"], 6.0 + 42 * 4.8
+        )
+        self.assertAlmostEqual(
+            passing["prototype_screening_total_seconds"], 267.6
+        )
+        self.assertTrue(passing["prototype_budget_passed"])
+        self.assertAlmostEqual(
+            passing["maximum_steady_layer_seconds_after_cold"],
+            (270.0 - 60.0 - 6.0) / 42,
+        )
+        self.assertEqual(passing["effective_non_layer_budget_seconds"], 90.0)
+        self.assertAlmostEqual(
+            failing["prototype_screening_total_seconds"], 271.8
+        )
+        self.assertFalse(failing["prototype_budget_passed"])
+        with self.assertRaisesRegex(ValueError, "distinct"):
+            bench.checkpoint_warm_steady_load_prediction(
+                6.0,
+                4.8,
+                cold_layer_idx=1,
+                steady_layer_idx=1,
+            )
+
+    def test_checkpoint_admission_excludes_evidence_time(self) -> None:
+        profile = {
+            "serving_required_seconds": 3.0,
+            "evidence_validation_and_fingerprint_seconds": 5.0,
+            "total_observed_seconds": 8.0,
+        }
+        self.assertEqual(bench.checkpoint_admission_seconds(2.0, profile), 5.0)
+        for invalid in (None, math.inf, -1.0):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(ValueError, "serving_required_seconds"):
+                    bench.checkpoint_admission_seconds(
+                        2.0,
+                        {"serving_required_seconds": invalid},
+                    )
+
+    def test_native_cutlass_load_contract_rejects_missing_transfer_proof(self) -> None:
+        fingerprints = {
+            name: f"digest-{name}"
+            for name in (
+                bench.COMMON_SAMPLE_FINGERPRINTS
+                | bench.CUTLASS_SAMPLE_FINGERPRINTS
+            )
+        }
+        metadata = {
+            "layer_idx": 1,
+            "requested_backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+            "checkpoint_load_strategy": "layer-staged",
+            "native_cutlass_preparation": True,
+            "w13_input_layout": "raw ModelOpt [w1/gate, w3/up]",
+            "checkpoint_cache_evidence": {
+                "method": "POSIX_FADV_DONTNEED",
+                "layer_idx": 1,
+            },
+            "sample_fingerprints": fingerprints,
+            "weight_preparation_contract": {
+                "flashinfer_b12x": False,
+                bench.FLASHINFER_CUTLASS_MODE: True,
+                "required_sample_fingerprints": sorted(fingerprints),
+            },
+            "native_cutlass_preparation_contract": {
+                "backend": "FLASHINFER_CUTLASS",
+                "actual_pinned_helper_invocations": 1,
+                "input_w13_layout": "raw ModelOpt [w1/gate, w3/up]",
+                "output_w13_layout": "FlashInfer [w3/up, w1/gate]",
+                "input_w13_scale_2_shape": [256, 2],
+                "kernel_w13_scale_2_shape": [256],
+            },
+            "scale_preparation_profile": {
+                "native_cutlass_preparation": True,
+                "serving_required_completion_sync": True,
+                "fingerprints_excluded_from_admission": True,
+            },
+            "checkpoint_load_profile": {
+                "per_family_copy_or_stage": {
+                    "bulk_device_transfer": {
+                        "calls": 8,
+                        "tensor_names": sorted(
+                            bench.NATIVE_CUTLASS_TRANSFER_TENSORS
+                        ),
+                    }
+                }
+            },
+        }
+        self.assertEqual(
+            bench.native_cutlass_load_contract_failures(
+                metadata,
+                expected_layer_idx=1,
+            ),
+            [],
+        )
+        metadata["checkpoint_load_profile"]["per_family_copy_or_stage"][
+            "bulk_device_transfer"
+        ]["calls"] = 7
+        failures = bench.native_cutlass_load_contract_failures(
+            metadata,
+            expected_layer_idx=1,
+        )
+        self.assertEqual(failures[0]["field"], "bulk_device_transfer.calls")
+
+    def test_serving_path_fingerprint_audit_is_ast_based_and_fail_closed(self) -> None:
+        passing = bench.serving_weight_path_fingerprint_audit(ROOT)
+        self.assertTrue(passing["passed"])
+        self.assertEqual(len(passing["files"]), 3)
+        self.assertTrue(
+            all(not item["ast_forbidden_hits"] for item in passing["files"])
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            for relative in bench.SERVING_WEIGHT_PATH_AUDIT_FILES:
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("def load():\n    return 1\n")
+            corrupt = root / bench.SERVING_WEIGHT_PATH_AUDIT_FILES[1]
+            corrupt.write_text("import hashlib\ndef load(x):\n    return x.cpu().tolist()\n")
+            failing = bench.serving_weight_path_fingerprint_audit(root)
+        self.assertFalse(failing["passed"])
+        self.assertTrue(failing["failures"])
 
     def test_layer_staging_memory_contract_is_bounded_and_exact(self) -> None:
         shape = bench.Dsv4Shape()
@@ -543,6 +681,253 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
             | bench.CUTLASS_SAMPLE_FINGERPRINTS,
         )
 
+    def test_native_cutlass_profile_excludes_fingerprint_time(self) -> None:
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("PyTorch is not installed")
+
+        shape = bench.Dsv4Shape(
+            hidden_size=128,
+            intermediate_size=256,
+            num_experts=2,
+            top_k=1,
+            tp_size=2,
+            tp_rank=0,
+        )
+        intermediate = shape.intermediate_size_per_rank
+        w1 = torch.full(
+            (2, intermediate, 64), 1, dtype=torch.uint8
+        )
+        w3 = torch.full_like(w1, 3)
+        s1 = torch.full((2, intermediate, 8), 1.0)
+        s3 = torch.full_like(s1, 3.0)
+        backend_token = object()
+        events: list[str] = []
+        helper_calls: list[dict[str, object]] = []
+
+        def native_helper(**kwargs: object) -> tuple[object, ...]:
+            events.append("native")
+            helper_calls.append(kwargs)
+            raw_w13 = kwargs["w13"]
+            raw_scale = kwargs["w13_scale"]
+            left_w1, right_w3 = raw_w13.chunk(2, dim=1)
+            left_s1, right_s3 = raw_scale.chunk(2, dim=1)
+            experts = raw_w13.shape[0]
+            return (
+                torch.cat((right_w3, left_w1), dim=1).contiguous(),
+                torch.cat((right_s3, left_s1), dim=1).contiguous(),
+                kwargs["w13_scale_2"],
+                kwargs["a13_scale"].max().to(torch.float32).expand(experts),
+                kwargs["w2"],
+                kwargs["w2_scale"].clone(),
+                kwargs["w2_scale_2"],
+                kwargs["a2_scale"].max().to(torch.float32).expand(experts),
+            )
+
+        fake_oracle = SimpleNamespace(
+            NvFp4MoeBackend=SimpleNamespace(
+                FLASHINFER_CUTLASS=backend_token
+            )
+        )
+        fake_helper_module = SimpleNamespace(
+            prepare_nvfp4_moe_layer_for_fi_or_cutlass=native_helper
+        )
+        real_import = __import__
+
+        def import_native_modules(
+            name: str,
+            globals: object = None,
+            locals: object = None,
+            fromlist: object = (),
+            level: int = 0,
+        ) -> object:
+            if name == "vllm.model_executor.layers.fused_moe.oracle.nvfp4":
+                return fake_oracle
+            if name == (
+                "vllm.model_executor.layers.quantization.utils."
+                "flashinfer_fp4_moe"
+            ):
+                return fake_helper_module
+            return real_import(name, globals, locals, fromlist, level)
+
+        clock = iter(
+            [
+                10.0,
+                10.1,
+                10.2,
+                10.3,
+                10.6,
+                10.7,
+                11.0,
+                11.1,
+                12.0,
+                12.0,
+                12.0,
+                17.0,
+                17.5,
+            ]
+        )
+
+        def fingerprint(*args: object, **kwargs: object) -> str:
+            events.append("fingerprint")
+            return "digest"
+
+        with (
+            mock.patch("builtins.__import__", side_effect=import_native_modules),
+            mock.patch.object(bench.time, "perf_counter", side_effect=lambda: next(clock)),
+            mock.patch.object(
+                torch.cuda,
+                "synchronize",
+                side_effect=lambda: events.append("sync"),
+            ),
+            mock.patch.object(bench, "_sample_tensor_digest", side_effect=fingerprint),
+            mock.patch.object(bench, "_full_tensor_digest", side_effect=fingerprint),
+        ):
+            prepared = bench._finish_scale_preparation(
+                torch,
+                w13=torch.cat((w1, w3), dim=1),
+                w13_scale=torch.cat((s1, s3), dim=1),
+                w13_scale_2=torch.tensor([[0.25, 0.25], [0.5, 0.5]]),
+                w13_input_scale=torch.tensor([[2.0, 3.0], [4.0, 5.0]]),
+                w2=torch.zeros(2, 128, intermediate // 2, dtype=torch.uint8),
+                w2_scale=torch.ones(2, 128, intermediate // 16),
+                w2_scale_2=torch.tensor([0.5, 0.75]),
+                w2_input_scale=torch.tensor([6.0, 7.0]),
+                shape=shape,
+                metadata={"source": "checkpoint"},
+                prepare_cutlass=True,
+                prepare_b12x=False,
+                native_cutlass_preparation=True,
+            )
+
+        profile = prepared.metadata["scale_preparation_profile"]
+        self.assertEqual(prepared.w13[:, :intermediate].unique().item(), 3)
+        self.assertLess(events.index("sync"), events.index("fingerprint"))
+        self.assertAlmostEqual(profile["serving_required_seconds"], 2.0)
+        self.assertAlmostEqual(
+            profile["evidence_validation_and_fingerprint_seconds"], 5.0
+        )
+        self.assertAlmostEqual(profile["total_observed_seconds"], 7.5)
+        self.assertTrue(profile["fingerprints_excluded_from_admission"])
+        self.assertTrue(profile["serving_required_completion_sync"])
+        self.assertTrue(profile["native_cutlass_preparation"])
+        contract = prepared.metadata["native_cutlass_preparation_contract"]
+        self.assertEqual(len(helper_calls), 1)
+        self.assertIs(helper_calls[0]["backend"], backend_token)
+        self.assertIsNone(helper_calls[0]["layer"])
+        self.assertIs(helper_calls[0]["is_act_and_mul"], True)
+        self.assertIs(contract["w1_w3_scale_2_columns_allclose"], True)
+        self.assertEqual(contract["kernel_w13_scale_2_shape"], [2])
+
+    def test_tiny_cuda_native_cutlass_matches_prepared_reference(self) -> None:
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("PyTorch is not installed")
+        if not torch.cuda.is_available():
+            self.skipTest("CUDA is not available")
+
+        shape = bench.Dsv4Shape(
+            hidden_size=128,
+            intermediate_size=256,
+            num_experts=2,
+            top_k=1,
+            tp_size=2,
+            tp_rank=0,
+        )
+        intermediate = shape.intermediate_size_per_rank
+        device = torch.device("cuda")
+        w1 = torch.arange(
+            2 * intermediate * 64, dtype=torch.int64, device=device
+        ).remainder(251).to(torch.uint8).reshape(2, intermediate, 64)
+        w3 = w1.add(17).remainder(251).to(torch.uint8)
+        w2 = torch.arange(
+            2 * 128 * (intermediate // 2),
+            dtype=torch.int64,
+            device=device,
+        ).remainder(239).to(torch.uint8).reshape(2, 128, intermediate // 2)
+        s1 = torch.full(
+            (2, intermediate, 8),
+            2.0**-7,
+            dtype=torch.float8_e4m3fn,
+            device=device,
+        )
+        s3 = torch.full_like(s1, 2.0**-6)
+        s2 = torch.full(
+            (2, 128, intermediate // 16),
+            2.0**-5,
+            dtype=torch.float8_e4m3fn,
+            device=device,
+        )
+        w13_scale_2 = torch.tensor(
+            [[0.25, 0.25], [0.5, 0.5]],
+            dtype=torch.float32,
+            device=device,
+        )
+        w2_scale_2 = torch.tensor(
+            [0.75, 1.0], dtype=torch.float32, device=device
+        )
+        w13_input_raw = torch.tensor(
+            [[2.0, 3.0], [4.0, 5.0]],
+            dtype=torch.float32,
+            device=device,
+        )
+        w2_input_raw = torch.tensor(
+            [6.0, 7.0], dtype=torch.float32, device=device
+        )
+
+        native = bench._finish_scale_preparation(
+            torch,
+            w13=torch.cat((w1, w3), dim=1),
+            w13_scale=torch.cat((s1, s3), dim=1),
+            w13_scale_2=w13_scale_2.clone(),
+            w13_input_scale=w13_input_raw.clone(),
+            w2=w2.clone(),
+            w2_scale=s2.clone(),
+            w2_scale_2=w2_scale_2.clone(),
+            w2_input_scale=w2_input_raw.clone(),
+            shape=shape,
+            metadata={"source": "checkpoint"},
+            prepare_cutlass=True,
+            prepare_b12x=False,
+            native_cutlass_preparation=True,
+        )
+        reference = bench._finish_scale_preparation(
+            torch,
+            w13=torch.cat((w3, w1), dim=1),
+            w13_scale=torch.cat((s3, s1), dim=1),
+            w13_scale_2=w13_scale_2[:, 0].clone(),
+            w13_input_scale=w13_input_raw.max().expand(2),
+            w2=w2.clone(),
+            w2_scale=s2.clone(),
+            w2_scale_2=w2_scale_2.clone(),
+            w2_input_scale=w2_input_raw.max().expand(2),
+            shape=shape,
+            metadata={"source": "checkpoint"},
+            prepare_cutlass=True,
+            prepare_b12x=False,
+        )
+
+        for field in (
+            "w13",
+            "w13_sf_modelopt",
+            "w2",
+            "w2_sf_modelopt",
+            "cutlass_a1_gscale",
+            "cutlass_a2_gscale",
+            "cutlass_g1_alphas",
+            "cutlass_g2_alphas",
+        ):
+            with self.subTest(field=field):
+                self.assertTrue(
+                    torch.equal(getattr(native, field), getattr(reference, field))
+                )
+        self.assertEqual(
+            native.metadata["sample_fingerprints"],
+            reference.metadata["sample_fingerprints"],
+        )
+
     def test_tiny_cuda_checkpoint_staged_and_per_expert_are_bit_exact(self) -> None:
         try:
             import torch
@@ -605,9 +990,14 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                     tp_rank=tp_rank,
                 )
                 captures: dict[str, dict[str, object]] = {}
+                capture_metadata: dict[str, dict[str, object]] = {}
 
                 def capture_finish(torch_module: object, **kwargs: object) -> object:
-                    strategy = str(kwargs["metadata"]["checkpoint_load_strategy"])
+                    strategy = (
+                        "native-layer-staged"
+                        if kwargs["native_cutlass_preparation"]
+                        else str(kwargs["metadata"]["checkpoint_load_strategy"])
+                    )
                     captures[strategy] = {
                         key: kwargs[key].detach().cpu().clone()
                         for key in (
@@ -621,6 +1011,11 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                             "w2_input_scale",
                         )
                     }
+                    kwargs["metadata"]["scale_preparation_profile"] = {
+                        "serving_required_seconds": 0.0,
+                        "total_observed_seconds": 0.0,
+                    }
+                    capture_metadata[strategy] = kwargs["metadata"]
                     return SimpleNamespace(metadata=kwargs["metadata"])
 
                 with mock.patch.object(
@@ -639,6 +1034,18 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                             load_strategy=strategy,
                         )
                         torch.cuda.empty_cache()
+                    bench.load_checkpoint_weights(
+                        torch,
+                        root,
+                        shape,
+                        layer_idx=0,
+                        checkpoint_metadata={"layer_idx": 0},
+                        prepare_cutlass=True,
+                        prepare_b12x=False,
+                        load_strategy="layer-staged",
+                        native_cutlass_preparation=True,
+                    )
+                    torch.cuda.empty_cache()
 
                 baseline = captures["per-expert"]
                 staged = captures["layer-staged"]
@@ -650,6 +1057,39 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
                         left = left.view(torch.uint8)
                         right = right.view(torch.uint8)
                     self.assertTrue(torch.equal(left, right), f"mismatch in {key}")
+                native = captures["native-layer-staged"]
+                intermediate = shape.intermediate_size_per_rank
+                self.assertTrue(
+                    torch.equal(
+                        native["w13"][:, :intermediate],
+                        baseline["w13"][:, intermediate:],
+                    )
+                )
+                self.assertTrue(
+                    torch.equal(
+                        native["w13"][:, intermediate:],
+                        baseline["w13"][:, :intermediate],
+                    )
+                )
+                self.assertTrue(
+                    torch.equal(
+                        native["w13_scale"][:, :intermediate],
+                        baseline["w13_scale"][:, intermediate:],
+                    )
+                )
+                self.assertEqual(tuple(native["w13_scale_2"].shape), (2, 2))
+                self.assertEqual(tuple(native["w13_input_scale"].shape), (2, 2))
+                self.assertTrue(
+                    torch.equal(native["w13_scale_2"][:, 0], baseline["w13_scale_2"])
+                )
+                native_bulk = capture_metadata["native-layer-staged"][
+                    "checkpoint_load_profile"
+                ]["per_family_copy_or_stage"]["bulk_device_transfer"]
+                self.assertEqual(native_bulk["calls"], 8)
+                self.assertEqual(
+                    native_bulk["tensor_names"],
+                    sorted(bench.NATIVE_CUTLASS_TRANSFER_TENSORS),
+                )
                 rank_outputs[tp_rank] = staged["w13"]
 
         self.assertFalse(torch.equal(rank_outputs[0], rank_outputs[1]))
@@ -678,25 +1118,295 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "backend flashinfer_cutlass"):
             bench.validate_args(args)
 
-        args = parser.parse_args(
-            [
-                "--dry-run",
-                "--model-path",
-                "/does/not-matter-for-validation",
-                "--load-only",
-                "--require-load-predictor",
-                "--backend",
-                bench.FLASHINFER_CUTLASS_MODE,
-                "--checkpoint-load-strategy",
-                "layer-staged",
-                "--reference-load-json",
-                "/immutable/reference.json",
-                "--reference-load-sha256",
-                "0" * 64,
-                "--evict-checkpoint-pages",
-            ]
+        valid = [
+            "--dry-run",
+            "--model-path",
+            "/does/not-matter-for-validation",
+            "--load-only",
+            "--require-load-predictor",
+            "--backend",
+            bench.FLASHINFER_CUTLASS_MODE,
+            "--checkpoint-load-strategy",
+            "layer-staged",
+            "--native-cutlass-preparation",
+            "--reference-load-json",
+            "/immutable/reference.json",
+            "--reference-load-sha256",
+            "0" * 64,
+            "--evict-checkpoint-pages",
+        ]
+        with self.assertRaisesRegex(ValueError, "requires --steady-layer-idx"):
+            bench.validate_args(parser.parse_args(valid))
+
+        bench.validate_args(parser.parse_args([*valid, "--steady-layer-idx", "1"]))
+
+        with self.assertRaisesRegex(ValueError, "distinct"):
+            bench.validate_args(
+                parser.parse_args(
+                    [
+                        *valid,
+                        "--layer-idx",
+                        "1",
+                        "--steady-layer-idx",
+                        "1",
+                    ]
+                )
+            )
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            bench.validate_args(
+                parser.parse_args([*valid, "--steady-layer-idx", "-1"])
+            )
+        with self.assertRaisesRegex(ValueError, "requires --load-only"):
+            bench.validate_args(
+                parser.parse_args(
+                    [
+                        "--dry-run",
+                        "--model-path",
+                        "/does/not-matter-for-validation",
+                        "--steady-layer-idx",
+                        "1",
+                    ]
+                )
+            )
+
+    def test_load_predictor_times_two_distinct_layers_in_one_process(self) -> None:
+        try:
+            import torch
+        except ImportError:
+            self.skipTest("PyTorch is not installed")
+
+        parser = bench.build_parser()
+        events: list[str] = []
+        shape = bench.Dsv4Shape()
+
+        def read_contract(
+            model_path: pathlib.Path,
+            *,
+            layer_idx: int,
+            **kwargs: object,
+        ) -> tuple[object, dict[str, object]]:
+            events.append(f"read{layer_idx}")
+            return shape, {
+                "layer_idx": layer_idx,
+                "config_sha256": "config",
+                "index_sha256": "index",
+                "tp_offset": 0,
+            }
+
+        def evict(
+            model_path: pathlib.Path,
+            *,
+            layer_idx: int,
+        ) -> dict[str, object]:
+            events.append(f"evict{layer_idx}")
+            return {
+                "method": "POSIX_FADV_DONTNEED",
+                "layer_idx": layer_idx,
+            }
+
+        def load(
+            torch_module: object,
+            model_path: pathlib.Path,
+            loaded_shape: object,
+            *,
+            layer_idx: int,
+            checkpoint_metadata: dict[str, object],
+            **kwargs: object,
+        ) -> object:
+            events.append(f"load{layer_idx}")
+            self.assertEqual(loaded_shape, shape)
+            self.assertTrue(kwargs["prepare_cutlass"])
+            self.assertFalse(kwargs["prepare_b12x"])
+            self.assertTrue(kwargs["native_cutlass_preparation"])
+            self.assertEqual(kwargs["load_strategy"], "layer-staged")
+            checkpoint_metadata.update(
+                {
+                    "total_layer_load_seconds": 6.0 if layer_idx == 0 else 4.8,
+                    "checkpoint_load_strategy": "layer-staged",
+                    "native_cutlass_preparation": True,
+                    "w13_input_layout": "raw ModelOpt [w1/gate, w3/up]",
+                    "load_memory_contract": {"passed": True},
+                    "prototype_load_screen": {"prototype_budget_passed": False},
+                    "sample_fingerprints": {
+                        name: f"digest-{layer_idx}-{name}"
+                        for name in (
+                            bench.COMMON_SAMPLE_FINGERPRINTS
+                            | bench.CUTLASS_SAMPLE_FINGERPRINTS
+                        )
+                    },
+                    "weight_preparation_contract": {
+                        "flashinfer_b12x": False,
+                        bench.FLASHINFER_CUTLASS_MODE: True,
+                        "required_sample_fingerprints": sorted(
+                            bench.COMMON_SAMPLE_FINGERPRINTS
+                            | bench.CUTLASS_SAMPLE_FINGERPRINTS
+                        ),
+                    },
+                    "native_cutlass_preparation_contract": {
+                        "backend": "FLASHINFER_CUTLASS",
+                        "actual_pinned_helper_invocations": 1,
+                        "input_w13_layout": "raw ModelOpt [w1/gate, w3/up]",
+                        "output_w13_layout": "FlashInfer [w3/up, w1/gate]",
+                        "input_w13_scale_2_shape": [256, 2],
+                        "kernel_w13_scale_2_shape": [256],
+                    },
+                    "scale_preparation_profile": {
+                        "native_cutlass_preparation": True,
+                        "serving_required_completion_sync": True,
+                        "fingerprints_excluded_from_admission": True,
+                    },
+                    "checkpoint_load_profile": {
+                        "per_family_copy_or_stage": {
+                            "bulk_device_transfer": {
+                                "calls": 8,
+                                "tensor_names": sorted(
+                                    bench.NATIVE_CUTLASS_TRANSFER_TENSORS
+                                ),
+                            }
+                        }
+                    },
+                }
+            )
+            return SimpleNamespace(metadata=checkpoint_metadata)
+
+        fake_dispatch = ModuleType("moe_dispatch")
+        fake_dispatch.select_sm120_moe_backend = lambda *args, **kwargs: None
+        fake_modules = {
+            "flashinfer": ModuleType("flashinfer"),
+            "flashinfer.fused_moe": ModuleType("flashinfer.fused_moe"),
+            "flashinfer.fused_moe.cute_dsl": ModuleType(
+                "flashinfer.fused_moe.cute_dsl"
+            ),
+            "flashinfer.fused_moe.cute_dsl.blackwell_sm12x": ModuleType(
+                "flashinfer.fused_moe.cute_dsl.blackwell_sm12x"
+            ),
+            "flashinfer.fused_moe.cute_dsl.blackwell_sm12x.moe_dispatch": (
+                fake_dispatch
+            ),
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            reference = root / "reference.json"
+            reference.write_text(
+                json.dumps(
+                    {
+                        "shape": bench.dataclasses.asdict(shape)
+                        | {
+                            "intermediate_size_per_rank": (
+                                shape.intermediate_size_per_rank
+                            )
+                        },
+                        "checkpoint": {
+                            "checkpoint_load_strategy": "per-expert",
+                            "total_layer_load_seconds": 20.0,
+                        },
+                        "settings": {
+                            "checkpoint_load_strategy": "per-expert",
+                            "backend_selection": bench.FLASHINFER_CUTLASS_MODE,
+                        },
+                    }
+                )
+            )
+            reference_sha = bench._sha256_file(reference)
+            output = root / "result.json"
+            args = parser.parse_args(
+                [
+                    "--model-path",
+                    str(root),
+                    "--load-only",
+                    "--require-load-predictor",
+                    "--backend",
+                    bench.FLASHINFER_CUTLASS_MODE,
+                    "--checkpoint-load-strategy",
+                    "layer-staged",
+                    "--native-cutlass-preparation",
+                    "--steady-layer-idx",
+                    "1",
+                    "--reference-load-json",
+                    str(reference),
+                    "--reference-load-sha256",
+                    reference_sha,
+                    "--evict-checkpoint-pages",
+                    "--output",
+                    str(output),
+                ]
+            )
+            bench.validate_args(args)
+
+            with (
+                mock.patch.dict(sys.modules, fake_modules),
+                mock.patch.object(torch.cuda, "is_available", return_value=True),
+                mock.patch.object(
+                    torch.cuda, "get_device_capability", return_value=(12, 1)
+                ),
+                mock.patch.object(torch.cuda, "synchronize"),
+                mock.patch.object(
+                    torch.cuda,
+                    "empty_cache",
+                    side_effect=lambda: events.append("empty_cache"),
+                ),
+                mock.patch.object(torch.cuda, "memory_allocated", return_value=0),
+                mock.patch.object(torch.cuda, "memory_reserved", return_value=0),
+                mock.patch.object(
+                    torch.cuda, "max_memory_allocated", return_value=0
+                ),
+                mock.patch.object(
+                    bench, "read_checkpoint_contract", side_effect=read_contract
+                ),
+                mock.patch.object(
+                    bench, "evict_checkpoint_layer_pages", side_effect=evict
+                ),
+                mock.patch.object(
+                    bench, "load_checkpoint_weights", side_effect=load
+                ),
+                mock.patch.object(bench, "runtime_provenance", return_value={}),
+                mock.patch.object(
+                    bench, "checkpoint_reference_failures", return_value=[]
+                ),
+                mock.patch.object(
+                    bench.gc,
+                    "collect",
+                    side_effect=lambda: events.append("gc"),
+                ),
+            ):
+                rc = bench.run_benchmark(args, ROOT)
+
+            self.assertEqual(rc, 0)
+            report = json.loads(output.read_text())
+
+        self.assertEqual(
+            [event for event in events if event.startswith("read")],
+            ["read0", "read1"],
         )
-        bench.validate_args(args)
+        self.assertEqual(
+            [event for event in events if event.startswith("evict")],
+            ["evict0", "evict1"],
+        )
+        self.assertEqual(
+            [event for event in events if event.startswith("load")],
+            ["load0", "load1"],
+        )
+        gc_indices = [index for index, event in enumerate(events) if event == "gc"]
+        empty_indices = [
+            index for index, event in enumerate(events) if event == "empty_cache"
+        ]
+        self.assertEqual(len(gc_indices), 2)
+        self.assertEqual(len(empty_indices), 2)
+        self.assertLess(events.index("load0"), gc_indices[0])
+        self.assertLess(gc_indices[0], empty_indices[0])
+        self.assertLess(empty_indices[0], events.index("read1"))
+        self.assertLess(events.index("read1"), events.index("evict1"))
+        self.assertLess(events.index("evict1"), events.index("load1"))
+        self.assertLess(events.index("load1"), gc_indices[1])
+        self.assertLess(gc_indices[1], empty_indices[1])
+        self.assertEqual(report["checkpoint"]["layer_idx"], 0)
+        self.assertEqual(report["steady_checkpoint"]["layer_idx"], 1)
+        prediction = report["checkpoint"]["prototype_load_screen"]
+        self.assertEqual(prediction["cold_layer_seconds"], 6.0)
+        self.assertEqual(prediction["steady_layer_seconds"], 4.8)
+        self.assertEqual(prediction["recurring_steady_layers"], 42)
+        self.assertTrue(prediction["prototype_budget_passed"])
 
     def test_b12x_timing_mirrors_serving_adapter_output_copy(self) -> None:
         source = inspect.getsource(bench.run_benchmark)

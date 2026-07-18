@@ -25,7 +25,9 @@ The script imports CUDA libraries only after argument validation.  Therefore
 from __future__ import annotations
 
 import argparse
+import ast
 import dataclasses
+import gc
 import hashlib
 import importlib.metadata
 import inspect
@@ -60,6 +62,23 @@ CUTLASS_SAMPLE_FINGERPRINTS = frozenset(
         "cutlass_g1_alphas",
         "cutlass_g2_alphas",
     )
+)
+NATIVE_CUTLASS_TRANSFER_TENSORS = frozenset(
+    (
+        "w13",
+        "w2",
+        "w13_scale_raw",
+        "w2_scale_raw",
+        "w13_weight_scale_2_raw",
+        "w2_weight_scale_2",
+        "w13_input_scale_raw",
+        "w2_input_scale",
+    )
+)
+SERVING_WEIGHT_PATH_AUDIT_FILES = (
+    "overlay/vllm/models/deepseek_v4/nvidia/model.py",
+    "overlay/vllm/models/deepseek_v4/nvidia/staged_weight_loading.py",
+    "overlay/vllm/models/deepseek_v4/nvidia/weight_loading.py",
 )
 LOAD_PREDICTOR_ROUTED_LAYERS = 43
 LOAD_PREDICTOR_FIXED_SECONDS = 60.0
@@ -153,6 +172,332 @@ def checkpoint_load_prediction(
         )
         / routed_layers,
         "prototype_budget_passed": screening_total <= decision_limit_seconds,
+    }
+
+
+def checkpoint_warm_steady_load_prediction(
+    cold_layer_seconds: float,
+    steady_layer_seconds: float,
+    *,
+    cold_layer_idx: int,
+    steady_layer_idx: int,
+    routed_layers: int = LOAD_PREDICTOR_ROUTED_LAYERS,
+    fixed_seconds: float = LOAD_PREDICTOR_FIXED_SECONDS,
+    decision_limit_seconds: float = LOAD_PREDICTOR_DECISION_LIMIT_SECONDS,
+    serving_target_seconds: float = LOAD_SERVING_TARGET_SECONDS,
+) -> dict[str, Any]:
+    """Project one cold layer plus distinct-layer steady-state preparation.
+
+    The first CUDA scale-layout call can include import/JIT/warmup work.  It is
+    not valid to multiply that one-time cost by every routed layer.  Requiring
+    a different checkpoint layer for the steady sample also avoids presenting
+    a same-layer page-cache repeat as representative serving evidence.
+    """
+
+    for label, value in (
+        ("cold_layer_seconds", cold_layer_seconds),
+        ("steady_layer_seconds", steady_layer_seconds),
+    ):
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"{label} must be finite and non-negative")
+    if cold_layer_idx < 0 or steady_layer_idx < 0:
+        raise ValueError("checkpoint layer indices must be non-negative")
+    if cold_layer_idx == steady_layer_idx:
+        raise ValueError("steady timing requires a distinct checkpoint layer")
+    if (
+        routed_layers <= 1
+        or fixed_seconds < 0
+        or decision_limit_seconds <= 0
+        or serving_target_seconds < decision_limit_seconds
+    ):
+        raise ValueError("invalid warm/steady checkpoint-load predictor contract")
+
+    recurring_layers = routed_layers - 1
+    routed_layer_seconds = (
+        cold_layer_seconds + recurring_layers * steady_layer_seconds
+    )
+    screening_total = routed_layer_seconds + fixed_seconds
+    reserve_seconds = serving_target_seconds - decision_limit_seconds
+    return {
+        "prototype_only": True,
+        "serving_loader_integrated": False,
+        "serving_run_authorized": False,
+        "predictor_model": "one-distinct-cold-plus-steady-v1",
+        "routed_layers": routed_layers,
+        "cold_layer_idx": cold_layer_idx,
+        "steady_layer_idx": steady_layer_idx,
+        "cold_layer_seconds": cold_layer_seconds,
+        "steady_layer_seconds": steady_layer_seconds,
+        "recurring_steady_layers": recurring_layers,
+        "projected_routed_layer_seconds": routed_layer_seconds,
+        "fixed_budget_allowance_seconds": fixed_seconds,
+        "unspent_serving_reserve_seconds": reserve_seconds,
+        "effective_non_layer_budget_seconds": fixed_seconds + reserve_seconds,
+        "serving_target_seconds": serving_target_seconds,
+        "prototype_screening_total_seconds": screening_total,
+        "prototype_decision_limit_seconds": decision_limit_seconds,
+        "required_average_layer_seconds": (
+            decision_limit_seconds - fixed_seconds
+        )
+        / routed_layers,
+        "maximum_steady_layer_seconds_after_cold": (
+            decision_limit_seconds - fixed_seconds - cold_layer_seconds
+        )
+        / recurring_layers,
+        "prototype_budget_passed": screening_total <= decision_limit_seconds,
+    }
+
+
+def checkpoint_admission_seconds(
+    raw_load_seconds: float,
+    scale_preparation_profile: dict[str, Any],
+) -> float:
+    """Return serving-required layer time without benchmark-only evidence.
+
+    Fingerprints and scalar diagnostics are correctness evidence, not work the
+    serving loader performs.  Keep this tiny function fail-closed so admission
+    can never silently fall back to the broader observed wall time.
+    """
+
+    serving_seconds = scale_preparation_profile.get("serving_required_seconds")
+    for label, value in (
+        ("raw_load_seconds", raw_load_seconds),
+        ("serving_required_seconds", serving_seconds),
+    ):
+        if not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+            raise ValueError(f"{label} must be a finite number")
+        if float(value) < 0:
+            raise ValueError(f"{label} must be non-negative")
+    return float(raw_load_seconds) + float(serving_seconds)
+
+
+def native_cutlass_load_contract_failures(
+    metadata: dict[str, Any],
+    *,
+    expected_layer_idx: int,
+) -> list[dict[str, Any]]:
+    """Fail closed unless one layer proves the reviewed native staging path."""
+
+    failures: list[dict[str, Any]] = []
+
+    def require(field: str, observed: Any, expected: Any) -> None:
+        if observed != expected:
+            failures.append(
+                {
+                    "kind": "native_cutlass_load_contract",
+                    "field": field,
+                    "expected": expected,
+                    "observed": observed,
+                }
+            )
+
+    require("layer_idx", metadata.get("layer_idx"), expected_layer_idx)
+    require(
+        "requested_backend_selection",
+        metadata.get("requested_backend_selection"),
+        FLASHINFER_CUTLASS_MODE,
+    )
+    require(
+        "checkpoint_load_strategy",
+        metadata.get("checkpoint_load_strategy"),
+        "layer-staged",
+    )
+    require(
+        "native_cutlass_preparation",
+        metadata.get("native_cutlass_preparation"),
+        True,
+    )
+    require(
+        "w13_input_layout",
+        metadata.get("w13_input_layout"),
+        "raw ModelOpt [w1/gate, w3/up]",
+    )
+
+    cache = metadata.get("checkpoint_cache_evidence")
+    if not isinstance(cache, dict):
+        require("checkpoint_cache_evidence", cache, "mapping")
+    else:
+        require(
+            "checkpoint_cache_evidence.method",
+            cache.get("method"),
+            "POSIX_FADV_DONTNEED",
+        )
+        require(
+            "checkpoint_cache_evidence.layer_idx",
+            cache.get("layer_idx"),
+            expected_layer_idx,
+        )
+
+    required_fingerprints = sorted(
+        COMMON_SAMPLE_FINGERPRINTS | CUTLASS_SAMPLE_FINGERPRINTS
+    )
+    fingerprints = metadata.get("sample_fingerprints")
+    require(
+        "sample_fingerprints.keys",
+        sorted(fingerprints) if isinstance(fingerprints, dict) else None,
+        required_fingerprints,
+    )
+    preparation = metadata.get("weight_preparation_contract")
+    if not isinstance(preparation, dict):
+        require("weight_preparation_contract", preparation, "mapping")
+    else:
+        require(
+            "weight_preparation_contract.flashinfer_b12x",
+            preparation.get("flashinfer_b12x"),
+            False,
+        )
+        require(
+            f"weight_preparation_contract.{FLASHINFER_CUTLASS_MODE}",
+            preparation.get(FLASHINFER_CUTLASS_MODE),
+            True,
+        )
+        require(
+            "weight_preparation_contract.required_sample_fingerprints",
+            preparation.get("required_sample_fingerprints"),
+            required_fingerprints,
+        )
+
+    native = metadata.get("native_cutlass_preparation_contract")
+    if not isinstance(native, dict):
+        require("native_cutlass_preparation_contract", native, "mapping")
+    else:
+        require("native.backend", native.get("backend"), "FLASHINFER_CUTLASS")
+        require(
+            "native.actual_pinned_helper_invocations",
+            native.get("actual_pinned_helper_invocations"),
+            1,
+        )
+        require(
+            "native.input_w13_layout",
+            native.get("input_w13_layout"),
+            "raw ModelOpt [w1/gate, w3/up]",
+        )
+        require(
+            "native.output_w13_layout",
+            native.get("output_w13_layout"),
+            "FlashInfer [w3/up, w1/gate]",
+        )
+        require(
+            "native.input_w13_scale_2_shape",
+            native.get("input_w13_scale_2_shape"),
+            [256, 2],
+        )
+        require(
+            "native.kernel_w13_scale_2_shape",
+            native.get("kernel_w13_scale_2_shape"),
+            [256],
+        )
+
+    profile = metadata.get("scale_preparation_profile")
+    if not isinstance(profile, dict):
+        require("scale_preparation_profile", profile, "mapping")
+    else:
+        require(
+            "scale_profile.native_cutlass_preparation",
+            profile.get("native_cutlass_preparation"),
+            True,
+        )
+        require(
+            "scale_profile.serving_required_completion_sync",
+            profile.get("serving_required_completion_sync"),
+            True,
+        )
+        require(
+            "scale_profile.fingerprints_excluded_from_admission",
+            profile.get("fingerprints_excluded_from_admission"),
+            True,
+        )
+
+    load_profile = metadata.get("checkpoint_load_profile")
+    bulk = None
+    if isinstance(load_profile, dict):
+        per_family = load_profile.get("per_family_copy_or_stage")
+        if isinstance(per_family, dict):
+            bulk = per_family.get("bulk_device_transfer")
+    if not isinstance(bulk, dict):
+        require("bulk_device_transfer", bulk, "mapping")
+    else:
+        require("bulk_device_transfer.calls", bulk.get("calls"), 8)
+        require(
+            "bulk_device_transfer.tensor_names",
+            bulk.get("tensor_names"),
+            sorted(NATIVE_CUTLASS_TRANSFER_TENSORS),
+        )
+    return failures
+
+
+def serving_weight_path_fingerprint_audit(
+    repo_root: pathlib.Path,
+) -> dict[str, Any]:
+    """Prove the integrated serving loader contains no evidence hashing/readback."""
+
+    forbidden_call_tokens = (
+        "fingerprint",
+        "digest",
+        "hashlib",
+        "sha1",
+        "sha256",
+        "md5",
+    )
+    forbidden_attributes = {"cpu", "tolist", "numpy"}
+    files: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    for relative in SERVING_WEIGHT_PATH_AUDIT_FILES:
+        path = repo_root / relative
+        if not path.is_file():
+            failures.append({"file": relative, "reason": "missing"})
+            continue
+        source = path.read_text()
+        digest = hashlib.sha256(source.encode()).hexdigest()
+        try:
+            tree = ast.parse(source, filename=str(path))
+        except SyntaxError as exc:
+            failures.append(
+                {"file": relative, "reason": "syntax", "detail": str(exc)}
+            )
+            continue
+        file_hits: list[dict[str, Any]] = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split(".", 1)[0] == "hashlib":
+                        file_hits.append(
+                            {"line": node.lineno, "symbol": alias.name}
+                        )
+            elif isinstance(node, ast.ImportFrom):
+                if (node.module or "").split(".", 1)[0] == "hashlib":
+                    file_hits.append(
+                        {"line": node.lineno, "symbol": node.module}
+                    )
+            elif isinstance(node, ast.Call):
+                function = node.func
+                if isinstance(function, ast.Name):
+                    symbol = function.id
+                elif isinstance(function, ast.Attribute):
+                    symbol = function.attr
+                else:
+                    symbol = ""
+                lowered = symbol.lower()
+                if (
+                    symbol in forbidden_attributes
+                    or any(token in lowered for token in forbidden_call_tokens)
+                ):
+                    file_hits.append({"line": node.lineno, "symbol": symbol})
+        files.append(
+            {
+                "path": relative,
+                "sha256": digest,
+                "ast_forbidden_hits": file_hits,
+            }
+        )
+        failures.extend({"file": relative, **hit} for hit in file_hits)
+    return {
+        "files": files,
+        "forbidden_call_tokens": list(forbidden_call_tokens),
+        "forbidden_attributes": sorted(forbidden_attributes),
+        "failures": failures,
+        "passed": len(files) == len(SERVING_WEIGHT_PATH_AUDIT_FILES)
+        and not failures,
     }
 
 
@@ -1319,40 +1664,130 @@ def _finish_scale_preparation(
     metadata: dict[str, Any],
     prepare_cutlass: bool,
     prepare_b12x: bool = True,
+    native_cutlass_preparation: bool = False,
 ) -> PreparedWeights:
-    from vllm.model_executor.layers.quantization.utils.nvfp4_utils import (
-        swizzle_blockscale,
-    )
-
     if not prepare_cutlass and not prepare_b12x:
         raise ValueError("at least one NVFP4 backend must be prepared")
+    if native_cutlass_preparation and (
+        not prepare_cutlass or prepare_b12x
+    ):
+        raise ValueError(
+            "native CUTLASS preparation requires CUTLASS-only backend selection"
+        )
+
+    serving_required_started = time.perf_counter()
+    import_started = time.perf_counter()
+    swizzle_blockscale = None
+    native_helper = None
+    native_backend = None
+    if native_cutlass_preparation:
+        from vllm.model_executor.layers.fused_moe.oracle.nvfp4 import (
+            NvFp4MoeBackend,
+        )
+        from vllm.model_executor.layers.quantization.utils.flashinfer_fp4_moe import (
+            prepare_nvfp4_moe_layer_for_fi_or_cutlass,
+        )
+
+        native_helper = prepare_nvfp4_moe_layer_for_fi_or_cutlass
+        native_backend = NvFp4MoeBackend.FLASHINFER_CUTLASS
+    else:
+        from vllm.model_executor.layers.quantization.utils.nvfp4_utils import (
+            swizzle_blockscale as imported_swizzle_blockscale,
+        )
+
+        swizzle_blockscale = imported_swizzle_blockscale
+    import_seconds = time.perf_counter() - import_started
+    native_helper_enqueue_seconds = 0.0
+    cutlass_algebra_enqueue_seconds = 0.0
+    w13_scale_2_columns_allclose: bool | None = None
 
     if prepare_cutlass:
         if w13_input_scale is None or w2_input_scale is None:
             raise ValueError(
                 "FlashInfer CUTLASS preparation requires checkpoint input scales"
             )
-        for name, scale in (
-            ("w13_input_scale", w13_input_scale),
-            ("w2_input_scale", w2_input_scale),
-        ):
-            if tuple(scale.shape) != (shape.num_experts,):
-                raise ValueError(
-                    f"{name} must be expanded to one value per expert, got {scale.shape}"
-                )
-            if not bool(torch.isfinite(scale).all().item()) or not bool(
-                (scale > 0).all().item()
-            ):
-                raise ValueError(f"{name} must contain only positive finite values")
+        checkpoint_w13_input_scale = w13_input_scale
+        checkpoint_w2_input_scale = w2_input_scale
 
         # Reproduce vLLM's native FlashInfer CUTLASS ModelOpt contract before
         # B12X normalization mutates a separate copy of the block scales:
         #   a_gscale = 1 / max(checkpoint input_scale)
         #   g_alpha  = weight_scale_2 * max(checkpoint input_scale)
-        w13_sf_modelopt = swizzle_blockscale(w13_scale.clone())
-        w2_sf_modelopt = swizzle_blockscale(w2_scale.clone())
+        if native_cutlass_preparation:
+            if tuple(w13_input_scale.shape) != (shape.num_experts, 2):
+                raise ValueError(
+                    "native w13_input_scale must retain [w1,w3] columns; "
+                    f"got {w13_input_scale.shape}"
+                )
+            if tuple(w2_input_scale.shape) != (shape.num_experts,):
+                raise ValueError(
+                    "native w2_input_scale must have one value per expert; "
+                    f"got {w2_input_scale.shape}"
+                )
+            if tuple(w13_scale_2.shape) != (shape.num_experts, 2):
+                raise ValueError(
+                    "native w13_scale_2 must retain [w1,w3] columns; "
+                    f"got {w13_scale_2.shape}"
+                )
+            if tuple(w2_scale_2.shape) != (shape.num_experts,):
+                raise ValueError(
+                    "native w2_scale_2 must have one value per expert; "
+                    f"got {w2_scale_2.shape}"
+                )
+            assert native_helper is not None and native_backend is not None
+
+            # Match ModelOptNvFp4FusedMoE before the pinned helper: w1 and w3
+            # global weight scales are checked for drift, then the authoritative
+            # w1 column is made contiguous for the fused W13 kernel contract.
+            w13_scale_2_columns_allclose = bool(
+                torch.allclose(w13_scale_2[:, 0], w13_scale_2[:, 1])
+            )
+            w13_scale_2_for_kernel = w13_scale_2[:, 0].contiguous()
+            native_helper_started = time.perf_counter()
+
+            (
+                w13,
+                w13_sf_modelopt,
+                w13_scale_2_for_kernel,
+                w13_input_scale,
+                w2,
+                w2_sf_modelopt,
+                w2_scale_2,
+                w2_input_scale,
+            ) = native_helper(
+                backend=native_backend,
+                layer=None,
+                w13=w13,
+                w13_scale=w13_scale,
+                w13_scale_2=w13_scale_2_for_kernel,
+                a13_scale=w13_input_scale,
+                w2=w2,
+                w2_scale=w2_scale,
+                w2_scale_2=w2_scale_2,
+                a2_scale=w2_input_scale,
+                is_act_and_mul=True,
+            )
+            native_helper_enqueue_seconds = (
+                time.perf_counter() - native_helper_started
+            )
+        else:
+            if tuple(w13_input_scale.shape) != (shape.num_experts,):
+                raise ValueError(
+                    "w13_input_scale must be expanded to one value per expert, "
+                    f"got {w13_input_scale.shape}"
+                )
+            if tuple(w2_input_scale.shape) != (shape.num_experts,):
+                raise ValueError(
+                    "w2_input_scale must be expanded to one value per expert, "
+                    f"got {w2_input_scale.shape}"
+                )
+            assert swizzle_blockscale is not None
+            w13_sf_modelopt = swizzle_blockscale(w13_scale.clone())
+            w2_sf_modelopt = swizzle_blockscale(w2_scale.clone())
+            w13_scale_2_for_kernel = w13_scale_2
+        cutlass_algebra_started = time.perf_counter()
         cutlass_a1_gscale, cutlass_g1_alphas = modelopt_cutlass_scale_contract(
-            w13_scale_2.float(), w13_input_scale.float()
+            w13_scale_2_for_kernel.float(), w13_input_scale.float()
         )
         cutlass_a2_gscale, cutlass_g2_alphas = modelopt_cutlass_scale_contract(
             w2_scale_2.float(), w2_input_scale.float()
@@ -1361,9 +1796,14 @@ def _finish_scale_preparation(
         cutlass_a2_gscale = cutlass_a2_gscale.to(torch.float32).contiguous()
         cutlass_g1_alphas = cutlass_g1_alphas.to(torch.float32).contiguous()
         cutlass_g2_alphas = cutlass_g2_alphas.to(torch.float32).contiguous()
+        cutlass_algebra_enqueue_seconds = (
+            time.perf_counter() - cutlass_algebra_started
+        )
     else:
         if w13_input_scale is not None or w2_input_scale is not None:
             raise ValueError("input scales were supplied without CUTLASS preparation")
+        checkpoint_w13_input_scale = None
+        checkpoint_w2_input_scale = None
         w13_sf_modelopt = None
         w2_sf_modelopt = None
         cutlass_a1_gscale = None
@@ -1376,6 +1816,7 @@ def _finish_scale_preparation(
         # scale into a distinct block-scale representation, then use dynamic
         # A4 with unit alphas/FC2 scale. CUTLASS keeps the raw ModelOpt scale
         # representation and must not pay this B12X-only preparation cost.
+        assert swizzle_blockscale is not None
         _bake_expert_scales(torch, w13_scale, w13_scale_2)
         _bake_expert_scales(torch, w2_scale, w2_scale_2)
         w13_sf_swizzled = swizzle_blockscale(w13_scale)
@@ -1405,8 +1846,54 @@ def _finish_scale_preparation(
         alpha1 = None
         alpha2 = None
         fc2_input_scale = None
-    del w13_scale, w2_scale, w13_scale_2, w2_scale_2
+
+    # Measure the actual asynchronous scale transforms to completion before
+    # any benchmark-only fingerprints or diagnostic scalar .item() calls.
+    # Real serving does not hash these tensors, and first-call import/JIT work
+    # must remain visible only in the cold-layer sample.
+    completion_sync_started = time.perf_counter()
     torch.cuda.synchronize()
+    completion_sync_seconds = time.perf_counter() - completion_sync_started
+    serving_required_seconds = time.perf_counter() - serving_required_started
+
+    evidence_started = time.perf_counter()
+    if prepare_cutlass:
+        assert checkpoint_w13_input_scale is not None
+        assert checkpoint_w2_input_scale is not None
+        for name, scale in (
+            ("w13_input_scale", checkpoint_w13_input_scale),
+            ("w2_input_scale", checkpoint_w2_input_scale),
+        ):
+            if not bool(torch.isfinite(scale).all().item()) or not bool(
+                (scale > 0).all().item()
+            ):
+                raise ValueError(f"{name} must contain only positive finite values")
+
+        if native_cutlass_preparation:
+            input1 = checkpoint_w13_input_scale[:, 0]
+            input3 = checkpoint_w13_input_scale[:, 1]
+        else:
+            input1 = checkpoint_w13_input_scale
+            input3 = checkpoint_w13_input_scale
+        checkpoint_metadata_stats = {
+            "w1_min": float(input1.min().item()),
+            "w1_max": float(input1.max().item()),
+            "w3_min": float(input3.min().item()),
+            "w3_max": float(input3.max().item()),
+            "w2_min": float(checkpoint_w2_input_scale.min().item()),
+            "w2_max": float(checkpoint_w2_input_scale.max().item()),
+            "w1_w3_max_abs_difference": float(
+                (input1 - input3).abs().max().item()
+            ),
+            "w13_global_max": float(checkpoint_w13_input_scale.max().item()),
+            "w2_global_max": float(checkpoint_w2_input_scale.max().item()),
+        }
+        if "checkpoint_input_scale_stats" not in metadata:
+            metadata["checkpoint_input_scale_stats"] = checkpoint_metadata_stats
+        if "checkpoint_input_scale_tensor_count" not in metadata:
+            metadata["checkpoint_input_scale_tensor_count"] = (
+                3 * shape.num_experts
+            )
 
     sample_fingerprints = {
         "w13": _sample_tensor_digest(torch, w13),
@@ -1465,6 +1952,29 @@ def _finish_scale_preparation(
             "g1_alpha_formula": "w1.weight_scale_2 * w13_input_scale",
             "g2_alpha_formula": "w2.weight_scale_2 * w2_input_scale",
         }
+        if native_cutlass_preparation:
+            metadata["native_cutlass_preparation_contract"] = {
+                "prepared_by": (
+                    "vllm.model_executor.layers.quantization.utils."
+                    "flashinfer_fp4_moe."
+                    "prepare_nvfp4_moe_layer_for_fi_or_cutlass"
+                ),
+                "backend": "FLASHINFER_CUTLASS",
+                "input_w13_layout": "raw ModelOpt [w1/gate, w3/up]",
+                "output_w13_layout": "FlashInfer [w3/up, w1/gate]",
+                "input_w13_scale_2_shape": list(w13_scale_2.shape),
+                "kernel_w13_scale_2_shape": list(w13_scale_2_for_kernel.shape),
+                "w1_w3_scale_2_columns_allclose": (
+                    w13_scale_2_columns_allclose
+                ),
+                "input_w13_activation_scale_shape": list(
+                    checkpoint_w13_input_scale.shape
+                ),
+                "output_w13_activation_scale_shape": list(
+                    w13_input_scale.shape
+                ),
+                "actual_pinned_helper_invocations": 1,
+            }
     else:
         metadata["modelopt_activation_scale_contract"] = {
             "prepared": False,
@@ -1476,11 +1986,33 @@ def _finish_scale_preparation(
         FLASHINFER_CUTLASS_MODE: prepare_cutlass,
         "required_sample_fingerprints": sorted(sample_fingerprints),
     }
+    evidence_validation_and_fingerprint_seconds = (
+        time.perf_counter() - evidence_started
+    )
+    metadata["scale_preparation_profile"] = {
+        "serving_required_seconds": serving_required_seconds,
+        "module_import_seconds": import_seconds,
+        "native_helper_enqueue_seconds": native_helper_enqueue_seconds,
+        "cutlass_algebra_enqueue_seconds": cutlass_algebra_enqueue_seconds,
+        "completion_sync_seconds": completion_sync_seconds,
+        "evidence_validation_and_fingerprint_seconds": (
+            evidence_validation_and_fingerprint_seconds
+        ),
+        "total_observed_seconds": (
+            time.perf_counter() - serving_required_started
+        ),
+        "native_cutlass_preparation": native_cutlass_preparation,
+        "serving_required_completion_sync": True,
+        "fingerprints_excluded_from_admission": True,
+        "fingerprints_required_for_correctness": True,
+        "timer_includes_import_or_first_call_work_when_incurred": True,
+    }
     metadata["same_source_weight_storage"] = True
     metadata["source_weight_data_ptrs"] = {
         "w13": int(w13.data_ptr()),
         "w2": int(w2.data_ptr()),
     }
+    del w13_scale, w2_scale, w13_scale_2, w2_scale_2
     return PreparedWeights(
         w13=w13,
         w13_sf_modelopt=w13_sf_modelopt,
@@ -1511,9 +2043,18 @@ def load_checkpoint_weights(
     prepare_cutlass: bool = False,
     prepare_b12x: bool = True,
     load_strategy: str = "per-expert",
+    native_cutlass_preparation: bool = False,
 ) -> PreparedWeights:
     if load_strategy not in CHECKPOINT_LOAD_STRATEGIES:
         raise ValueError(f"unsupported checkpoint load strategy {load_strategy!r}")
+    if native_cutlass_preparation and (
+        load_strategy != "layer-staged"
+        or not prepare_cutlass
+        or prepare_b12x
+    ):
+        raise ValueError(
+            "native CUTLASS timing requires CUTLASS-only layer-staged loading"
+        )
     loader = IndexedSafetensorLoader(model_path)
     device = torch.device("cuda")
     experts = shape.num_experts
@@ -1685,12 +2226,40 @@ def load_checkpoint_weights(
             dtype=torch.uint8,
             device="cpu",
         )
-        gs1_host = torch.empty(experts, dtype=torch.float32, device="cpu")
-        gs3_host = torch.empty_like(gs1_host)
-        gs2_host = torch.empty_like(gs1_host)
-        input1_host = torch.empty_like(gs1_host) if prepare_cutlass else None
-        input3_host = torch.empty_like(gs1_host) if prepare_cutlass else None
-        input2_host = torch.empty_like(gs1_host) if prepare_cutlass else None
+        if native_cutlass_preparation:
+            w13_scale_2_host = torch.empty(
+                experts, 2, dtype=torch.float32, device="cpu"
+            )
+            gs1_host = w13_scale_2_host[:, 0]
+            gs3_host = w13_scale_2_host[:, 1]
+            gs2_host = torch.empty(experts, dtype=torch.float32, device="cpu")
+            w13_input_scale_host = torch.empty_like(w13_scale_2_host)
+            input1_host = w13_input_scale_host[:, 0]
+            input3_host = w13_input_scale_host[:, 1]
+            input2_host = torch.empty_like(gs2_host)
+            scalar_staging_allocations = (
+                w13_scale_2_host,
+                gs2_host,
+                w13_input_scale_host,
+                input2_host,
+            )
+        else:
+            w13_scale_2_host = None
+            w13_input_scale_host = None
+            gs1_host = torch.empty(experts, dtype=torch.float32, device="cpu")
+            gs3_host = torch.empty_like(gs1_host)
+            gs2_host = torch.empty_like(gs1_host)
+            input1_host = torch.empty_like(gs1_host) if prepare_cutlass else None
+            input3_host = torch.empty_like(gs1_host) if prepare_cutlass else None
+            input2_host = torch.empty_like(gs1_host) if prepare_cutlass else None
+            scalar_staging_allocations = (
+                gs1_host,
+                gs3_host,
+                gs2_host,
+                input1_host,
+                input3_host,
+                input2_host,
+            )
         staged_host_bytes = sum(
             int(tensor.numel()) * int(tensor.element_size())
             for tensor in (
@@ -1698,12 +2267,7 @@ def load_checkpoint_weights(
                 w2_host,
                 w13_scale_host,
                 s2_host,
-                gs1_host,
-                gs3_host,
-                gs2_host,
-                input1_host,
-                input3_host,
-                input2_host,
+                *scalar_staging_allocations,
             )
             if tensor is not None
         )
@@ -1719,11 +2283,21 @@ def load_checkpoint_weights(
 
         for expert_id in range(experts):
             prefix = f"layers.{layer_idx}.ffn.experts.{expert_id}"
-            # w13 is [up/w3, gate/w1], matching both B12X and CUTLASS proof.
-            for projection, destination in (
-                ("w3", w13_host[expert_id, :intermediate]),
-                ("w1", w13_host[expert_id, intermediate:]),
-            ):
+            # Native vLLM receives raw ModelOpt [w1/gate,w3/up] and performs
+            # the serving reorder itself.  The legacy benchmark path retains
+            # its already-prepared [w3/up,w1/gate] layout.
+            w13_projection_destinations = (
+                (
+                    ("w1", w13_host[expert_id, :intermediate]),
+                    ("w3", w13_host[expert_id, intermediate:]),
+                )
+                if native_cutlass_preparation
+                else (
+                    ("w3", w13_host[expert_id, :intermediate]),
+                    ("w1", w13_host[expert_id, intermediate:]),
+                )
+            )
+            for projection, destination in w13_projection_destinations:
                 _copy_with_profile(
                     destination,
                     _packed_bytes(
@@ -1740,10 +2314,18 @@ def load_checkpoint_weights(
                 copy_profile,
                 "weight",
             )
-            for projection, destination in (
-                ("w3", w13_scale_host[expert_id, :intermediate]),
-                ("w1", w13_scale_host[expert_id, intermediate:]),
-            ):
+            w13_scale_projection_destinations = (
+                (
+                    ("w1", w13_scale_host[expert_id, :intermediate]),
+                    ("w3", w13_scale_host[expert_id, intermediate:]),
+                )
+                if native_cutlass_preparation
+                else (
+                    ("w3", w13_scale_host[expert_id, :intermediate]),
+                    ("w1", w13_scale_host[expert_id, intermediate:]),
+                )
+            )
+            for projection, destination in w13_scale_projection_destinations:
                 _copy_with_profile(
                     destination,
                     _packed_bytes(
@@ -1804,16 +2386,33 @@ def load_checkpoint_weights(
                 print(f"  staged experts {expert_id + 1}/{experts}", flush=True)
 
         memory_during["host_staged"] = linux_memory_snapshot()
-        transfer_sources = {
-            "w13": w13_host,
-            "w2": w2_host,
-            "w13_scale_raw": w13_scale_host,
-            "w2_scale_raw": s2_host,
-            "w13_weight_scale_2": gs1_host,
-            "w3_weight_scale_2_diagnostic": gs3_host,
-            "w2_weight_scale_2": gs2_host,
-        }
-        if prepare_cutlass:
+        if native_cutlass_preparation:
+            assert (
+                w13_scale_2_host is not None
+                and w13_input_scale_host is not None
+                and input2_host is not None
+            )
+            transfer_sources = {
+                "w13": w13_host,
+                "w2": w2_host,
+                "w13_scale_raw": w13_scale_host,
+                "w2_scale_raw": s2_host,
+                "w13_weight_scale_2_raw": w13_scale_2_host,
+                "w2_weight_scale_2": gs2_host,
+                "w13_input_scale_raw": w13_input_scale_host,
+                "w2_input_scale": input2_host,
+            }
+        else:
+            transfer_sources = {
+                "w13": w13_host,
+                "w2": w2_host,
+                "w13_scale_raw": w13_scale_host,
+                "w2_scale_raw": s2_host,
+                "w13_weight_scale_2": gs1_host,
+                "w3_weight_scale_2_diagnostic": gs3_host,
+                "w2_weight_scale_2": gs2_host,
+            }
+        if prepare_cutlass and not native_cutlass_preparation:
             assert (
                 input1_host is not None
                 and input3_host is not None
@@ -1835,12 +2434,23 @@ def load_checkpoint_weights(
         w2 = transferred["w2"]
         w13_scale = transferred["w13_scale_raw"].view(torch.float8_e4m3fn)
         s2 = transferred["w2_scale_raw"].view(torch.float8_e4m3fn)
-        gs1 = transferred["w13_weight_scale_2"]
-        gs3 = transferred["w3_weight_scale_2_diagnostic"]
         gs2 = transferred["w2_weight_scale_2"]
-        input1 = transferred.get("w1_input_scale")
-        input3 = transferred.get("w3_input_scale")
-        input2 = transferred.get("w2_input_scale")
+        if native_cutlass_preparation:
+            w13_scale_2_raw = transferred["w13_weight_scale_2_raw"]
+            gs1 = w13_scale_2_raw[:, 0]
+            gs3 = w13_scale_2_raw[:, 1]
+            w13_input_scale_raw = transferred["w13_input_scale_raw"]
+            input1 = w13_input_scale_raw[:, 0]
+            input3 = w13_input_scale_raw[:, 1]
+            input2 = transferred["w2_input_scale"]
+        else:
+            w13_scale_2_raw = None
+            w13_input_scale_raw = None
+            gs1 = transferred["w13_weight_scale_2"]
+            gs3 = transferred["w3_weight_scale_2_diagnostic"]
+            input1 = transferred.get("w1_input_scale")
+            input3 = transferred.get("w3_input_scale")
+            input2 = transferred.get("w2_input_scale")
         copy_profile["bulk_device_transfer"] = {
             "calls": len(transfer_sources),
             "tensor_names": sorted(transfer_sources),
@@ -1859,59 +2469,65 @@ def load_checkpoint_weights(
             gs1_host,
             gs3_host,
             gs2_host,
+            w13_scale_2_host,
             input1_host,
             input3_host,
             input2_host,
+            w13_input_scale_host,
         )
+        del scalar_staging_allocations
 
-    mismatch = float((gs1 - gs3).abs().max().item())
-    if mismatch:
-        print(
-            f"WARNING: w1/w3 weight_scale_2 max mismatch is {mismatch:.6g}; "
-            "matching vLLM by using w1 scale for fused W13",
-            file=sys.stderr,
-        )
+    # The raw phase ends at completed checkpoint-to-device materialization.
+    # Tensor-value diagnostics below are deliberately outside admission.
+    raw_load_seconds = time.perf_counter() - raw_started
     w13_input_scale = None
     w2_input_scale = None
     if prepare_cutlass:
         assert input1 is not None and input3 is not None and input2 is not None
-        # Match prepare_nvfp4_moe_layer_for_fi_or_cutlass: global-scale-capable
-        # backends reduce every expert/projection activation scale to one maximum
-        # and then expand that scalar to E.
-        for name, scale in (("w1", input1), ("w3", input3), ("w2", input2)):
-            if not bool(torch.isfinite(scale).all().item()) or not bool(
-                (scale > 0).all().item()
-            ):
-                raise ValueError(
-                    f"checkpoint {name}.input_scale contains "
-                    "non-positive/non-finite values"
-                )
-        w13_input_scalar = torch.stack((input1, input3), dim=1).max().to(
-            torch.float32
-        )
-        w2_input_scalar = input2.max().to(torch.float32)
-        checkpoint_metadata.update(
-            {
-                "checkpoint_input_scale_stats": {
-                    "w1_min": float(input1.min().item()),
-                    "w1_max": float(input1.max().item()),
-                    "w3_min": float(input3.min().item()),
-                    "w3_max": float(input3.max().item()),
-                    "w2_min": float(input2.min().item()),
-                    "w2_max": float(input2.max().item()),
-                    "w1_w3_max_abs_difference": float(
-                        (input1 - input3).abs().max().item()
-                    ),
-                    "w13_global_max": float(w13_input_scalar.item()),
-                    "w2_global_max": float(w2_input_scalar.item()),
-                },
-                "checkpoint_input_scale_tensor_count": 3 * experts,
-            }
-        )
-        w13_input_scale = w13_input_scalar.expand(experts)
-        w2_input_scale = w2_input_scalar.expand(experts)
-    del gs3, input1, input3, input2
-    raw_load_seconds = time.perf_counter() - raw_started
+        if native_cutlass_preparation:
+            assert w13_input_scale_raw is not None
+            assert w13_scale_2_raw is not None
+            w13_input_scale = w13_input_scale_raw
+            w2_input_scale = input2
+            w13_scale_2_for_finish = w13_scale_2_raw
+        else:
+            # Legacy microbenchmark preparation keeps its historical already-
+            # reduced contract.  Admission-gated runs must use the native path.
+            for name, scale in (("w1", input1), ("w3", input3), ("w2", input2)):
+                if not bool(torch.isfinite(scale).all().item()) or not bool(
+                    (scale > 0).all().item()
+                ):
+                    raise ValueError(
+                        f"checkpoint {name}.input_scale contains "
+                        "non-positive/non-finite values"
+                    )
+            w13_input_scalar = torch.stack((input1, input3), dim=1).max().to(
+                torch.float32
+            )
+            w2_input_scalar = input2.max().to(torch.float32)
+            checkpoint_metadata.update(
+                {
+                    "checkpoint_input_scale_stats": {
+                        "w1_min": float(input1.min().item()),
+                        "w1_max": float(input1.max().item()),
+                        "w3_min": float(input3.min().item()),
+                        "w3_max": float(input3.max().item()),
+                        "w2_min": float(input2.min().item()),
+                        "w2_max": float(input2.max().item()),
+                        "w1_w3_max_abs_difference": float(
+                            (input1 - input3).abs().max().item()
+                        ),
+                        "w13_global_max": float(w13_input_scalar.item()),
+                        "w2_global_max": float(w2_input_scalar.item()),
+                    },
+                    "checkpoint_input_scale_tensor_count": 3 * experts,
+                }
+            )
+            w13_input_scale = w13_input_scalar.expand(experts)
+            w2_input_scale = w2_input_scalar.expand(experts)
+            w13_scale_2_for_finish = gs1
+    else:
+        w13_scale_2_for_finish = gs1
     checkpoint_metadata.update(
         {
             # Preserve the legacy name while making the phase boundary explicit.
@@ -1935,17 +2551,21 @@ def load_checkpoint_weights(
                     ),
                 },
             },
+            "w13_input_layout": (
+                "raw ModelOpt [w1/gate, w3/up]"
+                if native_cutlass_preparation
+                else "prepared [w3/up, w1/gate]"
+            ),
             "w13_layout": "w13 (up/w3, gate/w1; B12X up_gate)",
-            "w1_w3_scale2_max_mismatch": mismatch,
+            "native_cutlass_preparation": native_cutlass_preparation,
             "tp_offset": tp_offset,
         }
     )
-    preparation_started = time.perf_counter()
     prepared = _finish_scale_preparation(
         torch,
         w13=w13,
         w13_scale=w13_scale,
-        w13_scale_2=gs1,
+        w13_scale_2=w13_scale_2_for_finish,
         w13_input_scale=w13_input_scale,
         w2=w2,
         w2_scale=s2,
@@ -1955,9 +2575,26 @@ def load_checkpoint_weights(
         metadata=checkpoint_metadata,
         prepare_cutlass=prepare_cutlass,
         prepare_b12x=prepare_b12x,
+        native_cutlass_preparation=native_cutlass_preparation,
     )
-    scale_prepare_seconds = time.perf_counter() - preparation_started
-    total_layer_seconds = time.perf_counter() - raw_started
+    mismatch = float((gs1 - gs3).abs().max().item())
+    if mismatch:
+        print(
+            f"WARNING: w1/w3 weight_scale_2 max mismatch is {mismatch:.6g}; "
+            "matching vLLM by using w1 scale for fused W13",
+            file=sys.stderr,
+        )
+    checkpoint_metadata["w1_w3_scale2_max_mismatch"] = mismatch
+    benchmark_total_wall_seconds = time.perf_counter() - raw_started
+    scale_profile = checkpoint_metadata.get("scale_preparation_profile")
+    if not isinstance(scale_profile, dict):
+        raise RuntimeError("scale preparation did not produce its timing profile")
+    scale_prepare_seconds = float(scale_profile["serving_required_seconds"])
+    total_layer_seconds = checkpoint_admission_seconds(
+        raw_load_seconds,
+        scale_profile,
+    )
+    del gs3, input1, input3, input2
     memory_after = linux_memory_snapshot()
     memory_contract = checkpoint_load_memory_contract(
         memory_before,
@@ -1970,6 +2607,7 @@ def load_checkpoint_weights(
         {
             "scale_prepare_seconds": scale_prepare_seconds,
             "total_layer_load_seconds": total_layer_seconds,
+            "benchmark_total_wall_seconds": benchmark_total_wall_seconds,
             "prototype_load_screen": checkpoint_load_prediction(
                 total_layer_seconds
             ),
@@ -2893,6 +3531,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
     modes = order_modes(modes_for_backend(args.backend), args.w4a4_order)
     prepare_cutlass = FLASHINFER_CUTLASS_MODE in modes
     prepare_b12x = any(mode in {"w4a4", "w4a16"} for mode in modes)
+    steady_checkpoint_metadata: dict[str, Any] | None = None
     if args.synthetic:
         shape = Dsv4Shape(
             num_experts=args.synthetic_experts or 256,
@@ -2946,14 +3585,169 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             prepare_cutlass=prepare_cutlass,
             prepare_b12x=prepare_b12x,
             load_strategy=args.checkpoint_load_strategy,
+            native_cutlass_preparation=args.native_cutlass_preparation,
         )
+
+        if args.load_only and args.steady_layer_idx is not None:
+            primary_checkpoint_metadata = weights.metadata
+            primary_scale_profile = primary_checkpoint_metadata.get(
+                "scale_preparation_profile"
+            )
+            if isinstance(primary_scale_profile, dict):
+                primary_scale_profile["sample_role"] = "cold"
+            cold_layer_seconds = primary_checkpoint_metadata.get(
+                "total_layer_load_seconds"
+            )
+            if not isinstance(cold_layer_seconds, (int, float)):
+                raise RuntimeError("cold layer did not produce admission timing")
+
+            # Bound this diagnostic to one physical layer at a time.  Real
+            # serving retains earlier layers, so the allocator/cache condition
+            # is explicitly recorded as an optimistic steady-state screen.
+            torch.cuda.synchronize()
+            del weights
+            gc.collect()
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+
+            steady_shape, steady_checkpoint_metadata = read_checkpoint_contract(
+                args.model_path,
+                layer_idx=args.steady_layer_idx,
+                tp_size=args.tp_size,
+                tp_rank=args.tp_rank,
+                require_input_scales=prepare_cutlass,
+            )
+            if dataclasses.asdict(steady_shape) != dataclasses.asdict(shape):
+                raise RuntimeError(
+                    "steady checkpoint layer shape drifted from cold layer"
+                )
+            steady_checkpoint_metadata["checkpoint_cache_evidence"] = (
+                evict_checkpoint_layer_pages(
+                    args.model_path,
+                    layer_idx=args.steady_layer_idx,
+                )
+                if args.evict_checkpoint_pages
+                else {
+                    "method": "uncontrolled",
+                    "advisory_only": True,
+                    "layer_idx": args.steady_layer_idx,
+                }
+            )
+            steady_checkpoint_metadata["requested_backend_selection"] = args.backend
+            print(
+                f"Loading distinct steady NVIDIA NVFP4 layer "
+                f"{args.steady_layer_idx}, TP rank {args.tp_rank}/{args.tp_size} "
+                f"from {args.model_path}...",
+                flush=True,
+            )
+            steady_weights = load_checkpoint_weights(
+                torch,
+                args.model_path,
+                steady_shape,
+                layer_idx=args.steady_layer_idx,
+                checkpoint_metadata=steady_checkpoint_metadata,
+                prepare_cutlass=prepare_cutlass,
+                prepare_b12x=prepare_b12x,
+                load_strategy=args.checkpoint_load_strategy,
+                native_cutlass_preparation=args.native_cutlass_preparation,
+            )
+            steady_layer_seconds = steady_weights.metadata.get(
+                "total_layer_load_seconds"
+            )
+            if not isinstance(steady_layer_seconds, (int, float)):
+                raise RuntimeError("steady layer did not produce admission timing")
+            prediction = checkpoint_warm_steady_load_prediction(
+                float(cold_layer_seconds),
+                float(steady_layer_seconds),
+                cold_layer_idx=args.layer_idx,
+                steady_layer_idx=args.steady_layer_idx,
+            )
+            primary_checkpoint_metadata["prototype_load_screen"] = prediction
+            primary_checkpoint_metadata["steady_layer_measurement_contract"] = {
+                "distinct_layer": True,
+                "steady_layer_idx": args.steady_layer_idx,
+                "same_process": True,
+                "cold_weights_released_before_steady": True,
+                "serving_retains_prior_layers": True,
+                "allocator_condition": "optimistic bounded diagnostic",
+            }
+            steady_checkpoint_metadata = steady_weights.metadata
+            steady_scale_profile = steady_checkpoint_metadata.get(
+                "scale_preparation_profile"
+            )
+            if isinstance(steady_scale_profile, dict):
+                steady_scale_profile["sample_role"] = "steady-distinct-layer"
+            torch.cuda.synchronize()
+            del steady_weights
+            gc.collect()
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+        else:
+            primary_checkpoint_metadata = weights.metadata
+            primary_scale_profile = primary_checkpoint_metadata.get(
+                "scale_preparation_profile"
+            )
+            if isinstance(primary_scale_profile, dict):
+                primary_scale_profile["sample_role"] = "single-layer"
 
     provenance = runtime_provenance(torch, repo_root)
     if args.load_only:
-        prediction = weights.metadata.get("prototype_load_screen")
-        memory_contract = weights.metadata.get("load_memory_contract")
+        prediction = primary_checkpoint_metadata.get("prototype_load_screen")
+        memory_contract = primary_checkpoint_metadata.get("load_memory_contract")
+        steady_memory_contract = (
+            steady_checkpoint_metadata.get("load_memory_contract")
+            if isinstance(steady_checkpoint_metadata, dict)
+            else None
+        )
         failures: list[dict[str, Any]] = []
         reference_proof = None
+        serving_path_fingerprint_proof = serving_weight_path_fingerprint_audit(
+            repo_root
+        )
+        if args.require_load_predictor and not serving_path_fingerprint_proof.get(
+            "passed", False
+        ):
+            failures.append(
+                {
+                    "kind": "serving_path_fingerprint_audit",
+                    "contract": serving_path_fingerprint_proof,
+                }
+            )
+        if args.require_load_predictor:
+            failures.extend(
+                native_cutlass_load_contract_failures(
+                    primary_checkpoint_metadata,
+                    expected_layer_idx=args.layer_idx,
+                )
+            )
+            if isinstance(steady_checkpoint_metadata, dict):
+                failures.extend(
+                    native_cutlass_load_contract_failures(
+                        steady_checkpoint_metadata,
+                        expected_layer_idx=args.steady_layer_idx,
+                    )
+                )
+                for field in ("config_sha256", "index_sha256", "tp_offset"):
+                    if primary_checkpoint_metadata.get(field) != (
+                        steady_checkpoint_metadata.get(field)
+                    ):
+                        failures.append(
+                            {
+                                "kind": "steady_checkpoint_identity",
+                                "field": field,
+                                "cold": primary_checkpoint_metadata.get(field),
+                                "steady": steady_checkpoint_metadata.get(field),
+                            }
+                        )
+            else:
+                failures.append(
+                    {
+                        "kind": "native_cutlass_load_contract",
+                        "field": "steady_checkpoint",
+                        "expected": "mapping",
+                        "observed": steady_checkpoint_metadata,
+                    }
+                )
         if args.reference_load_json is not None:
             if not args.reference_load_json.is_file():
                 raise FileNotFoundError(
@@ -2974,7 +3768,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                 )
             reference_report = json.loads(args.reference_load_json.read_text())
             reference_failures = checkpoint_reference_failures(
-                weights.metadata,
+                primary_checkpoint_metadata,
                 reference_report,
             )
             observed_shape = dataclasses.asdict(shape) | {
@@ -2994,7 +3788,9 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             reference_seconds = reference_checkpoint.get(
                 "total_layer_load_seconds"
             )
-            observed_seconds = weights.metadata.get("total_layer_load_seconds")
+            observed_seconds = primary_checkpoint_metadata.get(
+                "total_layer_load_seconds"
+            )
             speedup = None
             speedup_passed = False
             if (
@@ -3050,21 +3846,38 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                     "contract": memory_contract,
                 }
             )
+        if args.require_load_predictor and (
+            not isinstance(steady_memory_contract, dict)
+            or steady_memory_contract.get("passed") is not True
+        ):
+            failures.append(
+                {
+                    "kind": "steady_checkpoint_load_memory",
+                    "contract": steady_memory_contract,
+                }
+            )
         report = {
             "schema_version": SCHEMA_VERSION,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "load_only": True,
             "shape": dataclasses.asdict(shape)
             | {"intermediate_size_per_rank": shape.intermediate_size_per_rank},
-            "checkpoint": weights.metadata,
+            "checkpoint": primary_checkpoint_metadata,
+            "steady_checkpoint": steady_checkpoint_metadata,
             "provenance": provenance,
             "settings": {
                 "backend_selection": args.backend,
                 "checkpoint_load_strategy": args.checkpoint_load_strategy,
+                "native_cutlass_preparation": args.native_cutlass_preparation,
+                "cold_layer_idx": args.layer_idx,
+                "steady_layer_idx": args.steady_layer_idx,
                 "require_load_predictor": args.require_load_predictor,
                 "evict_checkpoint_pages": args.evict_checkpoint_pages,
             },
             "reference_proof": reference_proof,
+            "serving_path_fingerprint_proof": (
+                serving_path_fingerprint_proof
+            ),
             "memory": {
                 "allocated_gib": torch.cuda.memory_allocated() / (1 << 30),
                 "reserved_gib": torch.cuda.memory_reserved() / (1 << 30),
@@ -3585,6 +4398,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--layer-idx", type=int, default=0)
     parser.add_argument(
+        "--steady-layer-idx",
+        type=int,
+        default=None,
+        help=(
+            "Distinct real checkpoint layer timed second in the same process "
+            "for cold-plus-steady load prediction"
+        ),
+    )
+    parser.add_argument(
         "--checkpoint-load-strategy",
         choices=CHECKPOINT_LOAD_STRATEGIES,
         default="per-expert",
@@ -3599,6 +4421,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Load and prepare one real routed layer, emit a prototype budget "
             "screen, and skip kernels"
+        ),
+    )
+    parser.add_argument(
+        "--native-cutlass-preparation",
+        action="store_true",
+        help=(
+            "Feed raw ModelOpt [w1,w3] tensors through vLLM's pinned native "
+            "FlashInfer CUTLASS preparation helper; required for admission"
         ),
     )
     parser.add_argument(
@@ -3716,8 +4546,31 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--synthetic-experts must be positive")
     if args.layer_idx < 0:
         raise ValueError("--layer-idx must be non-negative")
+    if args.steady_layer_idx is not None and args.steady_layer_idx < 0:
+        raise ValueError("--steady-layer-idx must be non-negative")
+    if args.steady_layer_idx is not None and not args.load_only:
+        raise ValueError("--steady-layer-idx requires --load-only")
+    if args.steady_layer_idx == args.layer_idx:
+        raise ValueError("--steady-layer-idx must select a distinct checkpoint layer")
     if args.load_only and args.synthetic:
         raise ValueError("--load-only requires a real --model-path checkpoint")
+    if args.native_cutlass_preparation and not args.load_only:
+        raise ValueError("--native-cutlass-preparation requires --load-only")
+    if (
+        args.native_cutlass_preparation
+        and args.backend != FLASHINFER_CUTLASS_MODE
+    ):
+        raise ValueError(
+            "--native-cutlass-preparation requires --backend flashinfer_cutlass"
+        )
+    if (
+        args.native_cutlass_preparation
+        and args.checkpoint_load_strategy != "layer-staged"
+    ):
+        raise ValueError(
+            "--native-cutlass-preparation requires "
+            "--checkpoint-load-strategy layer-staged"
+        )
     if args.require_load_predictor and not args.load_only:
         raise ValueError("--require-load-predictor requires --load-only")
     if args.reference_load_json is not None and not args.load_only:
@@ -3731,6 +4584,14 @@ def validate_args(args: argparse.Namespace) -> None:
     if args.require_load_predictor and args.checkpoint_load_strategy != "layer-staged":
         raise ValueError(
             "--require-load-predictor requires --checkpoint-load-strategy layer-staged"
+        )
+    if args.require_load_predictor and not args.native_cutlass_preparation:
+        raise ValueError(
+            "--require-load-predictor requires --native-cutlass-preparation"
+        )
+    if args.require_load_predictor and args.steady_layer_idx is None:
+        raise ValueError(
+            "--require-load-predictor requires --steady-layer-idx"
         )
     if args.require_load_predictor and args.reference_load_json is None:
         raise ValueError("--require-load-predictor requires --reference-load-json")
