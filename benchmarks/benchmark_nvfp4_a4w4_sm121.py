@@ -673,6 +673,9 @@ def build_dry_run_plan(args: argparse.Namespace, repo_root: pathlib.Path) -> dic
             "repeats": args.repeats,
             "cuda_events": True,
             "cuda_graph": args.cuda_graph,
+            "require_graphs": args.require_graphs,
+            "no_correctness_gate": args.no_correctness_gate,
+            "fail_fast": args.fail_fast,
             "l2_flush_mib": args.l2_flush_mib,
         },
         "expected_pins": expected_pins(repo_root),
@@ -1452,6 +1455,25 @@ def numeric_metrics_pass(
     )
 
 
+def effective_failures(
+    failures: Sequence[dict[str, Any]],
+    *,
+    no_correctness_gate: bool,
+) -> list[dict[str, Any]]:
+    """Return failures that determine the process exit status.
+
+    ``--no-correctness-gate`` intentionally suppresses only numerical
+    comparisons. Output activity, required-graph, workspace, and input-RMS
+    failures remain fatal and must still stop a fail-fast matrix.
+    """
+
+    return [
+        failure
+        for failure in failures
+        if failure["kind"] != "numeric" or not no_correctness_gate
+    ]
+
+
 def measure_cuda_events(
     torch: Any,
     fn: Callable[[], Any],
@@ -2025,6 +2047,9 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             "iters": args.iters,
             "repeats": args.repeats,
             "cuda_graph": args.cuda_graph,
+            "require_graphs": args.require_graphs,
+            "no_correctness_gate": args.no_correctness_gate,
+            "fail_fast": args.fail_fast,
             "fast_math": args.fast_math,
             "l2_flush_mib": args.l2_flush_mib,
             "numeric_min_cosine": args.numeric_min_cosine,
@@ -2046,7 +2071,18 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                 }
             )
 
-    for m in args.m:
+    matrix_m_values = args.m
+    if args.fail_fast and effective_failures(
+        report["failures"],
+        no_correctness_gate=args.no_correctness_gate,
+    ):
+        report["fail_fast_stop"] = {
+            "after_m": None,
+            "remaining_m": list(args.m),
+        }
+        matrix_m_values = ()
+
+    for m_index, m in enumerate(matrix_m_values):
         x, topk_ids, topk_weights = make_routes(
             torch,
             shape,
@@ -2371,6 +2407,15 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                     )
         report["results"].append(row)
         del eager_outputs, launches, keepalive, x, topk_ids, topk_weights
+        if args.fail_fast and effective_failures(
+            report["failures"],
+            no_correctness_gate=args.no_correctness_gate,
+        ):
+            report["fail_fast_stop"] = {
+                "after_m": m,
+                "remaining_m": list(matrix_m_values[m_index + 1 :]),
+            }
+            break
 
     if "w4a4" in modes and FLASHINFER_CUTLASS_MODE in modes:
         report["w4a4_backend_crossover"] = {
@@ -2392,13 +2437,12 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
     else:
         print(json.dumps(report, indent=2, sort_keys=True))
 
-    effective_failures = [
-        failure
-        for failure in report["failures"]
-        if failure["kind"] != "numeric" or not args.no_correctness_gate
-    ]
-    if effective_failures:
-        print(f"FAILED: {len(effective_failures)} gate(s)", file=sys.stderr)
+    failures_for_exit = effective_failures(
+        report["failures"],
+        no_correctness_gate=args.no_correctness_gate,
+    )
+    if failures_for_exit:
+        print(f"FAILED: {len(failures_for_exit)} gate(s)", file=sys.stderr)
         return 2
     return 0
 
@@ -2477,6 +2521,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--cuda-graph", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--require-graphs", action="store_true")
+    parser.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help=(
+            "After preserving the completed M row, stop before the next M on "
+            "the first effective gate failure"
+        ),
+    )
     # The pinned FlashInfer public B12X wrapper fixes fast-math on.  Keep the
     # matched W4A16 comparator on the same setting instead of exposing a flag
     # that could silently make the two closures different.
@@ -2516,6 +2568,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("warmup must be non-negative; iters/repeats must be positive")
     if args.l2_flush_mib < 0:
         raise ValueError("--l2-flush-mib must be non-negative")
+    if args.require_graphs and not args.cuda_graph:
+        raise ValueError("--require-graphs requires --cuda-graph")
     if not math.isfinite(args.input_rms) or args.input_rms <= 0:
         raise ValueError("--input-rms must be positive and finite")
     if not math.isfinite(args.swiglu_limit) or args.swiglu_limit <= 0:

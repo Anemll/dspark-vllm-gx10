@@ -251,6 +251,27 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
             )
         )
 
+    def test_effective_failures_suppresses_only_numeric_comparisons(self) -> None:
+        numeric = {"kind": "numeric", "comparison": "graph_vs_eager"}
+        activity = {"kind": "output_activity", "stage": "eager"}
+        graph = {"kind": "cuda_graph", "error": "capture failed"}
+        failures = [numeric, activity, graph]
+
+        self.assertEqual(
+            bench.effective_failures(
+                failures,
+                no_correctness_gate=False,
+            ),
+            failures,
+        )
+        self.assertEqual(
+            bench.effective_failures(
+                failures,
+                no_correctness_gate=True,
+            ),
+            [activity, graph],
+        )
+
     def test_tensor_comparison_handles_zero_and_tiny_vectors_without_underflow(self) -> None:
         try:
             import torch
@@ -309,6 +330,40 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         self.assertIn("output.fill_(math.nan)", source)
         self.assertIn("graph_output.fill_(math.nan)", source)
         self.assertIn('"kind": "output_activity"', source)
+
+    def test_fail_fast_is_recorded_and_stops_after_completed_row_cleanup(self) -> None:
+        parser = bench.build_parser()
+        args = parser.parse_args(
+            [
+                "--dry-run",
+                "--synthetic",
+                "--m",
+                "1,2",
+                "--correctness-m",
+                "1,2",
+                "--fail-fast",
+                "--require-graphs",
+            ]
+        )
+        bench.validate_args(args)
+        plan = bench.build_dry_run_plan(args, ROOT)
+        self.assertTrue(plan["timing"]["fail_fast"])
+        self.assertTrue(plan["timing"]["require_graphs"])
+        self.assertFalse(plan["timing"]["no_correctness_gate"])
+
+        source = inspect.getsource(bench.run_benchmark)
+        cleanup = source.index(
+            "del eager_outputs, launches, keepalive, x, topk_ids, topk_weights"
+        )
+        row_stop = source.index('report["fail_fast_stop"]', cleanup)
+        self.assertLess(cleanup, row_stop)
+        self.assertIn('"after_m": m', source[row_stop:])
+        self.assertIn(
+            '"remaining_m": list(matrix_m_values[m_index + 1 :])',
+            source[row_stop:],
+        )
+        self.assertIn('"after_m": None', source[:cleanup])
+        self.assertIn('"remaining_m": list(args.m)', source[:cleanup])
 
     def test_workspace_storage_summary_deduplicates_tensor_views(self) -> None:
         class _Storage:
@@ -373,6 +428,9 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         )
         self.assertIsNone(
             bench.b12x_workspace_ceiling_bytes(bench.Dsv4Shape(), 4096)
+        )
+        self.assertIsNone(
+            bench.b12x_workspace_ceiling_bytes(bench.Dsv4Shape(), 1)
         )
 
     def test_default_matrix_and_phase_boundary(self) -> None:
@@ -583,6 +641,19 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
             ]
         )
         with self.assertRaisesRegex(ValueError, "CUTLASS/W4A16"):
+            bench.validate_args(args)
+
+    def test_require_graphs_rejects_disabled_cuda_graphs(self) -> None:
+        parser = bench.build_parser()
+        args = parser.parse_args(
+            [
+                "--dry-run",
+                "--synthetic",
+                "--require-graphs",
+                "--no-cuda-graph",
+            ]
+        )
+        with self.assertRaisesRegex(ValueError, "requires --cuda-graph"):
             bench.validate_args(args)
 
 

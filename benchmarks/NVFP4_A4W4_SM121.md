@@ -146,6 +146,15 @@ This allocates roughly one TP rank's expert weights plus the selected backends'
 workspaces. It must run only in an exclusive GX10 test window with the serving
 container stopped; it is not a client-side benchmark.
 
+For a cost-ordered multi-M gate, add `--fail-fast`. The harness finishes and
+records the current M row, releases its per-row references, then stops before
+the next M when an effective gate has failed. The JSON contains
+`fail_fast_stop.after_m` and `fail_fast_stop.remaining_m`, so a shortened
+matrix cannot be mistaken for a complete run. `--no-correctness-gate`
+suppresses only numerical comparisons; output activity, required-graph,
+workspace, and input-RMS failures still stop the matrix. `--require-graphs`
+requires CUDA graphs to be enabled and is rejected with `--no-cuda-graph`.
+
 ## Tactics and M values
 
 With top-k=6, the pinned B12X W4A4 dispatcher selects:
@@ -182,6 +191,10 @@ output tensor, deduplicates views by underlying storage, and fails if their
 combined unique storage exceeds 635,144,040 bytes. This is the one-arena
 ceiling; the 43-layer sharing regression is separately enforced by the overlay
 unit test and must still be confirmed by full-model allocator telemetry.
+The workspace result is deliberately tri-state: `passed` is `true` or `false`
+only when `contract_applies` is `true`; otherwise `passed` and `ceiling_bytes`
+are `null`. In particular, M=1 does not satisfy the exact Mmax=8,192 contract,
+so validators must not require `passed=true` for that run.
 
 Use `--routing random` after the balanced baseline to sample realistic route
 imbalance, and `--routing hot` only as a skew stress case. Keep route mode and
