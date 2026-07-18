@@ -12,8 +12,11 @@ import sys
 import tempfile
 import unittest
 
+import numpy as np
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+TEST_REVISION = "1" * 40
 sys.path.insert(0, str(ROOT))
 
 from scripts import repack_deepseek_v4_nvfp4_tp2 as repack  # noqa: E402
@@ -76,8 +79,10 @@ def _matrix(rows: int, columns: int, seed: int) -> bytes:
 
 
 class SyntheticCheckpoint:
-    hidden = 16
-    intermediate = 32
+    # Keep both scale-grid axes aligned to the pinned CUTLASS swizzle contract
+    # so this fixture exercises both raw-v1 and prepared-v1 conversion.
+    hidden = 128
+    intermediate = 128
     experts = 2
     layers = 2
 
@@ -122,6 +127,11 @@ class SyntheticCheckpoint:
                     else:
                         weight_shape = (self.intermediate, self.hidden // 2)
                         scale_shape = (self.intermediate, self.hidden // 16)
+                    scalar_seed = (
+                        10 * layer + 3 * expert
+                        if projection in ("w1", "w3")
+                        else seed
+                    )
                     values = {
                         "weight": (
                             "U8",
@@ -129,19 +139,19 @@ class SyntheticCheckpoint:
                             _matrix(*weight_shape, seed=seed),
                         ),
                         "weight_scale": (
-                            "U8",
+                            "F8_E4M3",
                             scale_shape,
                             _matrix(*scale_shape, seed=100 + seed),
                         ),
                         "weight_scale_2": (
                             "F32",
                             (1,),
-                            _encode_f32(200 + seed),
+                            _encode_f32(200 + scalar_seed),
                         ),
                         "input_scale": (
                             "F32",
                             (1,),
-                            _encode_f32(300 + seed),
+                            _encode_f32(300 + scalar_seed),
                         ),
                     }
                     for suffix, row in values.items():
@@ -261,7 +271,15 @@ class DeepSeekV4Nvfp4Tp2RepackTests(unittest.TestCase):
         w13_name = f"{prefix}.w13.weight"
         dtype, shape, observed_w13 = tensors[w13_name]
         self.assertEqual(dtype, "U8")
-        self.assertEqual(shape, (2, 2, 32, 8))
+        self.assertEqual(
+            shape,
+            (
+                2,
+                self.source.experts,
+                self.source.intermediate,
+                self.source.hidden // 2,
+            ),
+        )
         expected_w13 = bytearray()
         rank_rows = self.source.intermediate // 2
         row_bytes = self.source.hidden // 2
@@ -276,7 +294,15 @@ class DeepSeekV4Nvfp4Tp2RepackTests(unittest.TestCase):
 
         w2_name = f"{prefix}.w2.weight"
         _, w2_shape, observed_w2 = tensors[w2_name]
-        self.assertEqual(w2_shape, (2, 2, 16, 8))
+        self.assertEqual(
+            w2_shape,
+            (
+                2,
+                self.source.experts,
+                self.source.hidden,
+                (self.source.intermediate // 2) // 2,
+            ),
+        )
         expected_w2 = bytearray()
         full_columns = self.source.intermediate // 2
         rank_columns = full_columns // 2
@@ -383,6 +409,269 @@ class DeepSeekV4Nvfp4Tp2RepackTests(unittest.TestCase):
         with self.assertRaisesRegex(repack.ContractError, "file digest mismatch"):
             repack.verify_repacked_checkpoint(output)
 
+    def test_prepared_build_materializes_exact_eight_final_cutlass_families(
+        self,
+    ) -> None:
+        output = self.base / "prepared"
+        result = repack.build_prepared_checkpoint(
+            self.source.root,
+            output,
+            expected_config_sha256=self.source.config_sha256,
+            expected_index_sha256=self.source.index_sha256,
+            source_revision=TEST_REVISION,
+            chunk_bytes=97,
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(
+            result["source_payload_delta_bytes"],
+            self.source.layers * self.source.experts * 2 * 4,
+        )
+        self.assertFalse((output / repack.PREPARED_STATE_NAME).exists())
+        marker = json.loads((output / "config.json").read_text())[
+            "dspark_nvfp4_prepared"
+        ]
+        self.assertEqual(marker["loader_contract"], repack.PREPARED_LOADER_CONTRACT)
+        self.assertEqual(marker["payload_stage"], repack.PREPARED_PAYLOAD_STAGE)
+
+        manifest = json.loads((output / repack.MANIFEST_NAME).read_text())
+        loader = manifest["loader"]
+        self.assertTrue(loader["cutlass_serving_layout_ready"])
+        self.assertEqual(loader["required_runtime_transforms"], [])
+        self.assertEqual(loader["runtime_h2d_calls_per_layer"], 8)
+        self.assertEqual(loader["families"], list(repack.PREPARED_FAMILY_ORDER))
+        self.assertEqual(loader["w13_final_projection_order"], ["w3", "w1"])
+        self.assertEqual(
+            manifest["preparation"]["identity"]["engine"],
+            repack.PREPARED_ENGINE,
+        )
+        self.assertEqual(
+            manifest["preparation"]["identity"]["source_revision"],
+            TEST_REVISION,
+        )
+        self.assertEqual(
+            manifest["preparation"]["identity"]["repacker_script_sha256"],
+            _sha256(ROOT / "scripts" / "repack_deepseek_v4_nvfp4_tp2.py"),
+        )
+
+        tensors = _read_tensors(output / "model-layer-00000.safetensors")
+        prefix = f"{repack.PREPARED_NAMESPACE}.layers.0.experts"
+        self.assertEqual(
+            {name.removeprefix(prefix + ".") for name in tensors},
+            set(repack.PREPARED_FAMILY_ORDER),
+        )
+        w13 = tensors[f"{prefix}.w13.weight"]
+        self.assertEqual(w13[0], "U8")
+        self.assertEqual(
+            w13[1],
+            (
+                2,
+                self.source.experts,
+                self.source.intermediate,
+                self.source.hidden // 2,
+            ),
+        )
+        expected_rank0 = bytearray()
+        rows = self.source.intermediate // 2
+        row_bytes = self.source.hidden // 2
+        for expert in range(self.source.experts):
+            for projection in ("w3", "w1"):
+                payload = self.source.source_payloads[
+                    f"layers.0.ffn.experts.{expert}.{projection}.weight"
+                ]
+                expected_rank0.extend(payload[: rows * row_bytes])
+        rank_bytes = len(expected_rank0)
+        self.assertEqual(w13[2][:rank_bytes], bytes(expected_rank0))
+
+        w13_scale = tensors[f"{prefix}.w13.weight_scale"]
+        self.assertEqual(w13_scale[0], "F8_E4M3")
+        linear = bytearray()
+        scale_rows = self.source.intermediate // 2
+        scale_columns = self.source.hidden // 16
+        for expert in range(self.source.experts):
+            for projection in ("w3", "w1"):
+                payload = self.source.source_payloads[
+                    f"layers.0.ffn.experts.{expert}.{projection}.weight_scale"
+                ]
+                linear.extend(payload[: scale_rows * scale_columns])
+        linear_array = np.frombuffer(bytes(linear), dtype=np.uint8).reshape(
+            self.source.experts,
+            self.source.intermediate,
+            scale_columns,
+        )
+        expected_scale = repack._swizzle_blockscale_bytes(linear_array).tobytes()
+        self.assertEqual(w13_scale[2][: len(expected_scale)], expected_scale)
+
+        for family in repack.PREPARED_FAMILY_ORDER[4:]:
+            dtype, shape, payload = tensors[f"{prefix}.{family}"]
+            self.assertEqual(dtype, "F32")
+            self.assertEqual(shape, (2, self.source.experts))
+            half = len(payload) // 2
+            self.assertEqual(payload[:half], payload[half:])
+        self.assertTrue(repack.verify_prepared_checkpoint(output)["ok"])
+
+    def test_prepared_verify_rejects_payload_corruption(self) -> None:
+        output = self.base / "prepared"
+        self.source.build(self.base / "raw-control")
+        repack.build_prepared_checkpoint(
+            self.source.root,
+            output,
+            expected_config_sha256=self.source.config_sha256,
+            expected_index_sha256=self.source.index_sha256,
+            source_revision=TEST_REVISION,
+        )
+        path = output / "model-layer-00000.safetensors"
+        data = bytearray(path.read_bytes())
+        data[-1] ^= 0xA5
+        path.write_bytes(data)
+        with self.assertRaisesRegex(repack.ContractError, "file digest mismatch"):
+            repack.verify_prepared_checkpoint(output)
+
+    def test_prepared_build_resumes_only_verified_completed_layer_files(self) -> None:
+        output = self.base / "prepared"
+        identity = repack._cpu_preparation_identity(TEST_REVISION)
+        failed = False
+
+        def fail_once(raw, rank, context):
+            nonlocal failed
+            if context["layer"] == 1 and rank == 0 and not failed:
+                failed = True
+                raise RuntimeError("injected prepared interruption")
+            return repack._cpu_prepare_rank(raw, rank, context)
+
+        with self.assertRaisesRegex(RuntimeError, "injected prepared interruption"):
+            repack.build_prepared_checkpoint(
+                self.source.root,
+                output,
+                expected_config_sha256=self.source.config_sha256,
+                expected_index_sha256=self.source.index_sha256,
+                source_revision=TEST_REVISION,
+                prepare_rank=fail_once,
+                preparation_identity=identity,
+            )
+        partial = output.with_name(f".{output.name}.prepared-partial")
+        layer0 = partial / "model-layer-00000.safetensors"
+        self.assertTrue(layer0.is_file())
+        layer0_digest = _sha256(layer0)
+        observed_calls: list[tuple[int, int]] = []
+
+        def resumed(raw, rank, context):
+            observed_calls.append((context["layer"], rank))
+            return repack._cpu_prepare_rank(raw, rank, context)
+
+        result = repack.build_prepared_checkpoint(
+            self.source.root,
+            output,
+            expected_config_sha256=self.source.config_sha256,
+            expected_index_sha256=self.source.index_sha256,
+            source_revision=TEST_REVISION,
+            prepare_rank=resumed,
+            preparation_identity=identity,
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(observed_calls, [(1, 0), (1, 1)])
+        self.assertEqual(
+            _sha256(output / "model-layer-00000.safetensors"), layer0_digest
+        )
+        self.assertFalse(partial.exists())
+
+    def test_prepared_build_cleanly_pauses_after_physical_layer0_then_resumes(
+        self,
+    ) -> None:
+        output = self.base / "prepared-layer0-gate"
+        paused = repack.build_prepared_checkpoint(
+            self.source.root,
+            output,
+            expected_config_sha256=self.source.config_sha256,
+            expected_index_sha256=self.source.index_sha256,
+            source_revision=TEST_REVISION,
+            stop_after_layer=0,
+        )
+        partial = output.with_name(f".{output.name}.prepared-partial")
+        layer0 = partial / "model-layer-00000.safetensors"
+        layer1 = partial / "model-layer-00001.safetensors"
+
+        self.assertTrue(paused["ok"])
+        self.assertFalse(paused["complete"])
+        self.assertEqual(paused["paused_after_layer"], 0)
+        self.assertEqual(
+            pathlib.Path(paused["partial_checkpoint"]), partial.resolve()
+        )
+        self.assertTrue(layer0.is_file())
+        self.assertFalse(layer1.exists())
+        self.assertFalse(output.exists())
+        self.assertEqual(paused["routed_file_sha256"], _sha256(layer0))
+        layer0_sha = _sha256(layer0)
+
+        resumed = repack.build_prepared_checkpoint(
+            self.source.root,
+            output,
+            expected_config_sha256=self.source.config_sha256,
+            expected_index_sha256=self.source.index_sha256,
+            source_revision=TEST_REVISION,
+        )
+        self.assertTrue(resumed["ok"])
+        self.assertTrue(output.is_dir())
+        self.assertFalse(partial.exists())
+        self.assertEqual(
+            _sha256(output / "model-layer-00000.safetensors"), layer0_sha
+        )
+        self.assertTrue((output / "model-layer-00001.safetensors").is_file())
+
+    def test_layer0_pause_resumes_after_interruption_before_first_layer(self) -> None:
+        output = self.base / "prepared-pre-layer0-interruption"
+        identity = repack._cpu_preparation_identity(TEST_REVISION)
+
+        def fail_before_layer0(_raw, _rank, _context):
+            raise RuntimeError("injected before layer0 publication")
+
+        with self.assertRaisesRegex(RuntimeError, "before layer0 publication"):
+            repack.build_prepared_checkpoint(
+                self.source.root,
+                output,
+                expected_config_sha256=self.source.config_sha256,
+                expected_index_sha256=self.source.index_sha256,
+                source_revision=TEST_REVISION,
+                stop_after_layer=0,
+                prepare_rank=fail_before_layer0,
+                preparation_identity=identity,
+            )
+
+        paused = repack.build_prepared_checkpoint(
+            self.source.root,
+            output,
+            expected_config_sha256=self.source.config_sha256,
+            expected_index_sha256=self.source.index_sha256,
+            source_revision=TEST_REVISION,
+            stop_after_layer=0,
+        )
+        self.assertTrue(paused["ok"])
+        self.assertEqual(paused["paused_after_layer"], 0)
+
+    def test_layer0_pause_rejects_stray_later_routed_file(self) -> None:
+        output = self.base / "prepared-stray-later"
+        paused = repack.build_prepared_checkpoint(
+            self.source.root,
+            output,
+            expected_config_sha256=self.source.config_sha256,
+            expected_index_sha256=self.source.index_sha256,
+            source_revision=TEST_REVISION,
+            stop_after_layer=0,
+        )
+        partial = pathlib.Path(paused["partial_checkpoint"])
+        (partial / "model-layer-00001.safetensors").write_bytes(b"stray")
+
+        with self.assertRaisesRegex(
+            repack.ContractError, "cannot run after later routed layers"
+        ):
+            repack.build_prepared_checkpoint(
+                self.source.root,
+                output,
+                expected_config_sha256=self.source.config_sha256,
+                expected_index_sha256=self.source.index_sha256,
+                source_revision=TEST_REVISION,
+                stop_after_layer=0,
+            )
+
     def test_cli_build_and_verify(self) -> None:
         output = self.base / "cli-output"
         script = ROOT / "scripts" / "repack_deepseek_v4_nvfp4_tp2.py"
@@ -424,6 +713,94 @@ class DeepSeekV4Nvfp4Tp2RepackTests(unittest.TestCase):
         )
         self.assertEqual(verify.returncode, 0, verify.stderr)
         self.assertTrue(json.loads(verify.stdout)["ok"])
+
+    def test_cli_build_prepared_and_verify_prepared(self) -> None:
+        output = self.base / "cli-prepared"
+        script = ROOT / "scripts" / "repack_deepseek_v4_nvfp4_tp2.py"
+        build = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "build-prepared",
+                "--source",
+                str(self.source.root),
+                "--output",
+                str(output),
+                "--expected-config-sha256",
+                self.source.config_sha256,
+                "--expected-index-sha256",
+                self.source.index_sha256,
+                "--source-revision",
+                TEST_REVISION,
+                "--chunk-mib",
+                "1",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(build.returncode, 0, build.stderr)
+        self.assertTrue(json.loads(build.stdout)["ok"])
+        manifest = json.loads((output / repack.MANIFEST_NAME).read_text())
+        self.assertEqual(
+            manifest["preparation"]["identity"]["source_revision"],
+            TEST_REVISION,
+        )
+        verify = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "verify-prepared",
+                "--checkpoint",
+                str(output),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(verify.returncode, 0, verify.stderr)
+        self.assertTrue(json.loads(verify.stdout)["ok"])
+
+    def test_prepared_build_rejects_unpinned_source_revision(self) -> None:
+        output = self.base / "bad-revision"
+        with self.assertRaisesRegex(repack.ContractError, "40-character git SHA"):
+            repack.build_prepared_checkpoint(
+                self.source.root,
+                output,
+                expected_config_sha256=self.source.config_sha256,
+                expected_index_sha256=self.source.index_sha256,
+                source_revision="worktree",
+            )
+        self.assertFalse(output.exists())
+        self.assertFalse(
+            output.with_name(f".{output.name}.prepared-partial").exists()
+        )
+
+        cli_output = self.base / "bad-cli-revision"
+        script = ROOT / "scripts" / "repack_deepseek_v4_nvfp4_tp2.py"
+        cli = subprocess.run(
+            [
+                sys.executable,
+                str(script),
+                "build-prepared",
+                "--source",
+                str(self.source.root),
+                "--output",
+                str(cli_output),
+                "--expected-config-sha256",
+                self.source.config_sha256,
+                "--expected-index-sha256",
+                self.source.index_sha256,
+                "--source-revision",
+                "worktree",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(cli.returncode, 2)
+        self.assertIn("40-character git SHA", cli.stderr)
+        self.assertFalse(cli_output.exists())
 
 
 if __name__ == "__main__":

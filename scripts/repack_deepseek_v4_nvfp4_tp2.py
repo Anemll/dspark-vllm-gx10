@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Anemll contributors
-"""Repack DeepSeek V4 ModelOpt NVFP4 experts into a TP=2 layer layout.
+"""Repack DeepSeek V4 ModelOpt NVFP4 experts into TP=2 layer layouts.
 
 This is an offline format converter, not a generic safetensors optimizer.  It
 accepts only a digest-pinned DeepSeek V4 NVFP4 checkpoint and writes a custom,
@@ -21,9 +21,20 @@ W13 is stored in raw checkpoint order ``[w1/gate, w3/up]``.  This is important:
 the serving CUTLASS path performs the one authoritative gate/up swap during
 post-load processing.  Repacking must not apply that swap a second time.
 
+The default ``build`` command preserves this raw v1 behavior.  The separate
+``build-prepared`` command creates an incompatible CUTLASS-ready format.  It
+applies a pinned, byte-exact NumPy implementation of the audited vLLM
+preparation semantics once per layer/rank while offline, stores the final W13
+order and swizzled block scales, and replaces the raw ModelOpt scale inputs with
+the four final kernel scale tensors.  The matching serving loader therefore
+performs exactly eight bulk H2D copies and no reorder, reduction, swizzle, or
+scale algebra at model-load time.
+
 All non-routed-expert tensors retain their original names, dtype, shape, and
-payload bytes.  The converter streams source ranges and never imports torch or
-safetensors, keeping peak memory independent of the checkpoint size.
+payload bytes.  Raw v1 conversion streams source ranges without importing
+torch.  Prepared conversion bounds host residency to one complete layer,
+publishes each completed file atomically into a resumable partial directory,
+and only renames the complete verified directory to its final name.
 """
 
 from __future__ import annotations
@@ -40,7 +51,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Iterator, Mapping, Sequence
+from typing import Any, Callable, Iterable, Iterator, Mapping, Sequence
 
 
 INDEX_NAME = "model.safetensors.index.json"
@@ -57,6 +68,33 @@ REQUIRED_BACKEND = "FLASHINFER_CUTLASS"
 VLLM_LAYOUT_PIN = "752a3a504485790a2e8491cacbb35c137339ad34"
 FLASHINFER_LAYOUT_PIN = "0472b9b3f2fba11b463f8526f390297d52a8aad7"
 RESERVED_PREPARED_STAGE = "flashinfer_cutlass_prepared_v1"
+PREPARED_NAMESPACE = "__dspark_tp2_nvfp4_cutlass_v1__"
+PREPARED_SCHEMA = "dspark.deepseek_v4.nvfp4.tp2_cutlass_prepared.v1"
+PREPARED_LOADER_CONTRACT = "deepseek_v4_nvfp4_tp2_cutlass_prepared_v1"
+PREPARED_PAYLOAD_STAGE = RESERVED_PREPARED_STAGE
+PREPARED_STATE_NAME = ".dspark-nvfp4-prepared-build-state.json"
+PREPARED_SCHEMA_VERSION = 1
+PREPARED_ENGINE = "cpu_numpy_exact_v1"
+PINNED_PREPARATION_SOURCE_SHA256 = {
+    "flashinfer_fp4_moe": "7a98da73bebad0168fbb19ecd96232d4bed0c3586af882a6409e8dabb4b60b9d",
+    "nvfp4_oracle": "746e6a5569696fe07329e13aeb397ae2152453d6a972640c7e7cf29efd173350",
+    "modelopt": "e39a867fdbefd46ad25a51dace9c294c2c0b079206f285eb08e092aefc0d77d5",
+    "flashinfer_experts": "d90f5215a6972c742be60ff8e9786432ab544570273483daa8faf317ba2d3ab5",
+    "nvfp4_utils": "ed665537e42580e82ae71bb4f2ce8a699c0ffe8a042947c4eb600107c0b924ba",
+}
+LAYER0_RANK0_REFERENCE_JSON_SHA256 = (
+    "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6"
+)
+LAYER0_RANK0_REFERENCE_FINGERPRINTS = {
+    "w13.weight": "f02bb1c5778d151fbc210d57fe14c232a3dcb5b3ef213366a466ddf8ce875e55",
+    "w2.weight": "24b3299b6f60cd66f9b9209294503d7d8c18f5565790c52b1f2b5012270b586d",
+    "w13.weight_scale": "b76d300f85af4d71e6df85b2910cd1f6da319c97d7875d022c08c62e67ae8a0a",
+    "w2.weight_scale": "4a2c3041d99597af244183af181d3ca99edf738df4563f2c06a3b65fa67b7156",
+    "a1_gscale": "ca75efb8ecb87d5b545fb8e0acdbe4db69c2683b34073738ed3132c7fed8755a",
+    "a2_gscale": "4fe0db93441a8df2f59f74d196fdf5511db258c02dababb9bd9cd95a0b6f2887",
+    "g1_alphas": "42fd9084021adf41c496f6696244ac24c853d114ece6143660b428a5c4a1e193",
+    "g2_alphas": "e67aa7dc665954c5a922e9a74d645ef903240c935e9bc2b09f37770ac5ed0615",
+}
 TP_SIZE = 2
 MAX_HEADER_BYTES = 128 * 1024 * 1024
 DEFAULT_CHUNK_BYTES = 8 * 1024 * 1024
@@ -68,6 +106,7 @@ EXPERT_RE = re.compile(
 )
 LAYER_RE = re.compile(r"^(?:model\.)?layers\.(?P<layer>[0-9]+)\.")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+GIT_REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 
 FAMILY_ORDER = (
     "w13.weight",
@@ -79,6 +118,39 @@ FAMILY_ORDER = (
     "w13.input_scale",
     "w2.input_scale",
 )
+
+PREPARED_FAMILY_ORDER = (
+    "w13.weight",
+    "w2.weight",
+    "w13.weight_scale",
+    "w2.weight_scale",
+    "a1_gscale",
+    "a2_gscale",
+    "g1_alphas",
+    "g2_alphas",
+)
+
+PREPARED_DTYPES = {
+    "w13.weight": "U8",
+    "w2.weight": "U8",
+    "w13.weight_scale": "F8_E4M3",
+    "w2.weight_scale": "F8_E4M3",
+    "a1_gscale": "F32",
+    "a2_gscale": "F32",
+    "g1_alphas": "F32",
+    "g2_alphas": "F32",
+}
+
+PREPARED_SOURCE_DTYPES = {
+    "w13.weight": "U8",
+    "w2.weight": "U8",
+    "w13.weight_scale": "F8_E4M3",
+    "w2.weight_scale": "F8_E4M3",
+    "w13.weight_scale_2": "F32",
+    "w2.weight_scale_2": "F32",
+    "w13.input_scale": "F32",
+    "w2.input_scale": "F32",
+}
 
 
 class ContractError(ValueError):
@@ -209,6 +281,13 @@ def parse_sha256(value: str, label: str) -> str:
     normalized = value.strip().lower()
     if SHA256_RE.fullmatch(normalized) is None:
         raise ContractError(f"{label} must be an exact 64-character SHA-256")
+    return normalized
+
+
+def parse_git_revision(value: str, label: str = "source revision") -> str:
+    normalized = value.strip().lower()
+    if GIT_REVISION_RE.fullmatch(normalized) is None:
+        raise ContractError(f"{label} must be an exact 40-character git SHA")
     return normalized
 
 
@@ -853,10 +932,15 @@ def plan_repack(
 
 
 def _safetensors_header(
-    plans: Sequence[OutputTensorPlan], *, layer: int | None
+    plans: Sequence[OutputTensorPlan],
+    *,
+    layer: int | None,
+    contract_metadata: Mapping[str, str] | None = None,
 ) -> tuple[bytes, dict[str, tuple[int, int]]]:
-    header: dict[str, Any] = {
-        "__metadata__": {
+    metadata = (
+        dict(contract_metadata)
+        if contract_metadata is not None
+        else {
             "format": "pt",
             "dspark_schema": SCHEMA,
             "dspark_loader_contract": LOADER_CONTRACT,
@@ -866,7 +950,10 @@ def _safetensors_header(
             "dspark_standard_loader_compatible": "false",
             "dspark_layer": "residual" if layer is None else str(layer),
         }
-    }
+    )
+    if any(not isinstance(key, str) or not isinstance(value, str) for key, value in metadata.items()):
+        raise ContractError("safetensors contract metadata must contain strings")
+    header: dict[str, Any] = {"__metadata__": metadata}
     offsets: dict[str, tuple[int, int]] = {}
     cursor = 0
     for plan in plans:
@@ -933,8 +1020,11 @@ def _write_safetensors(
     *,
     layer: int | None,
     chunk_bytes: int,
+    contract_metadata: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
-    prefix, _ = _safetensors_header(plans, layer=layer)
+    prefix, _ = _safetensors_header(
+        plans, layer=layer, contract_metadata=contract_metadata
+    )
     file_digest = hashlib.sha256()
     tensor_rows: list[dict[str, Any]] = []
     with SourceReader() as reader, path.open("xb") as output:
@@ -1474,6 +1564,1297 @@ def verify_repacked_checkpoint(output: Path) -> dict[str, Any]:
     }
 
 
+def _prepared_shapes(config: Mapping[str, Any]) -> dict[str, tuple[int, ...]]:
+    """Return the exact rank-major SM121 CUTLASS payload shapes."""
+
+    hidden = _config_int(config, "hidden_size")
+    intermediate = _config_int(config, "moe_intermediate_size")
+    experts = _config_int(config, "n_routed_experts")
+    if hidden % 16 or intermediate % (16 * TP_SIZE):
+        raise ContractError("prepared layout dimensions violate NVFP4 TP=2")
+    return {
+        "w13.weight": (TP_SIZE, experts, intermediate, hidden // 2),
+        "w2.weight": (
+            TP_SIZE,
+            experts,
+            hidden,
+            (intermediate // 2) // TP_SIZE,
+        ),
+        "w13.weight_scale": (
+            TP_SIZE,
+            experts,
+            intermediate,
+            hidden // 16,
+        ),
+        "w2.weight_scale": (
+            TP_SIZE,
+            experts,
+            hidden,
+            (intermediate // 16) // TP_SIZE,
+        ),
+        "a1_gscale": (TP_SIZE, experts),
+        "a2_gscale": (TP_SIZE, experts),
+        "g1_alphas": (TP_SIZE, experts),
+        "g2_alphas": (TP_SIZE, experts),
+    }
+
+
+def _prepared_header_metadata(layer: int | None) -> dict[str, str]:
+    return {
+        "format": "pt",
+        "dspark_schema": PREPARED_SCHEMA,
+        "dspark_loader_contract": PREPARED_LOADER_CONTRACT,
+        "dspark_namespace": PREPARED_NAMESPACE,
+        "dspark_payload_stage": PREPARED_PAYLOAD_STAGE,
+        "dspark_required_backend": REQUIRED_BACKEND,
+        "dspark_standard_loader_compatible": "false",
+        "dspark_layer": "residual" if layer is None else str(layer),
+    }
+
+
+def _validate_preparation_identity(value: Mapping[str, Any]) -> dict[str, Any]:
+    required_strings = (
+        "implementation",
+        "engine",
+        "backend",
+        "vllm_layout_pin",
+        "flashinfer_layout_pin",
+        "numpy_version",
+        "transform_spec_sha256",
+        "repacker_script_path",
+        "repacker_script_sha256",
+        "source_revision",
+    )
+    result = dict(value)
+    for name in required_strings:
+        if not isinstance(result.get(name), str) or not result[name]:
+            raise ContractError(f"prepared identity field {name!r} is missing")
+    if result["implementation"] != (
+        "scripts.repack_deepseek_v4_nvfp4_tp2._cpu_prepare_rank"
+    ) or result["engine"] != PREPARED_ENGINE:
+        raise ContractError("prepared identity implementation drifted")
+    if result["backend"] != REQUIRED_BACKEND:
+        raise ContractError("prepared identity backend drifted")
+    if result["vllm_layout_pin"] != VLLM_LAYOUT_PIN:
+        raise ContractError("prepared identity vLLM pin drifted")
+    if result["flashinfer_layout_pin"] != FLASHINFER_LAYOUT_PIN:
+        raise ContractError("prepared identity FlashInfer pin drifted")
+    result["transform_spec_sha256"] = parse_sha256(
+        result["transform_spec_sha256"], "transform spec digest"
+    )
+    result["repacker_script_sha256"] = parse_sha256(
+        result["repacker_script_sha256"], "repacker script digest"
+    )
+    result["source_revision"] = parse_git_revision(result["source_revision"])
+    source_hashes = result.get("pinned_preparation_source_sha256")
+    if source_hashes != PINNED_PREPARATION_SOURCE_SHA256:
+        raise ContractError("prepared identity pinned source hashes drifted")
+    if result.get("is_act_and_mul") is not True:
+        raise ContractError("prepared identity must pin is_act_and_mul=true")
+    return result
+
+
+def _prepared_loader_contract(config: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "schema": PREPARED_SCHEMA,
+        "loader_contract": PREPARED_LOADER_CONTRACT,
+        "namespace": PREPARED_NAMESPACE,
+        "payload_stage": PREPARED_PAYLOAD_STAGE,
+        "required_backend": REQUIRED_BACKEND,
+        "vllm_layout_pin": VLLM_LAYOUT_PIN,
+        "flashinfer_layout_pin": FLASHINFER_LAYOUT_PIN,
+        "standard_vllm_compatible": False,
+        "fail_closed_without_exact_loader_contract": True,
+        "cutlass_serving_layout_ready": True,
+        "tp_size": TP_SIZE,
+        "matrix_rank_axis": 0,
+        "matrix_expert_axis": 1,
+        "families": list(PREPARED_FAMILY_ORDER),
+        "w13_final_projection_order": ["w3", "w1"],
+        "required_runtime_transforms": [],
+        "runtime_h2d_calls_per_layer": len(PREPARED_FAMILY_ORDER),
+        "runtime_source_reads_per_layer": len(PREPARED_FAMILY_ORDER),
+        "scalar_rank_copies_required_bitwise_equal": True,
+        "final_scale_fields": {
+            "a1_gscale": "1 / max(all checkpoint w1,w3 input_scale)",
+            "a2_gscale": "1 / max(all checkpoint w2 input_scale)",
+            "g1_alphas": "w1.weight_scale_2 * reciprocal(a1_gscale)",
+            "g2_alphas": "w2.weight_scale_2 * reciprocal(a2_gscale)",
+        },
+        "offline_transforms": [
+            "tp2_slice",
+            "reorder_w13_once_from_w1_w3_to_w3_w1",
+            "reduce_checkpoint_input_scales_globally",
+            "swizzle_block_scales_for_flashinfer_cutlass",
+            "compute_final_cutlass_global_scales_and_alphas",
+        ],
+        "num_hidden_layers": _config_int(config, "num_hidden_layers"),
+        "n_routed_experts": _config_int(config, "n_routed_experts"),
+    }
+
+
+PreparedRankFn = Callable[
+    [Mapping[str, Any], int, Mapping[str, Any]],
+    tuple[Mapping[str, Any], Mapping[str, Any]],
+]
+
+
+def _cpu_transform_spec() -> dict[str, Any]:
+    return {
+        "engine": PREPARED_ENGINE,
+        "source_layout": "raw ModelOpt TP=2 rank slice [w1,w3]",
+        "final_w13_order": ["w3", "w1"],
+        "swizzle": {
+            "reshape": ["B", "M/128", 4, 32, "K/4", 4],
+            "transpose": [0, 1, 4, 3, 2, 5],
+            "padding_allowed": False,
+        },
+        "activation_reduction": "float32 max across all experts/projections",
+        "w13_scale2": "require w1/w3 bitwise equal; use w1",
+        "a_gscale": "float32 reciprocal(reduced input scale)",
+        "g_alpha": "float32 weight_scale_2 * reduced input scale",
+        "runtime_transforms": [],
+    }
+
+
+def _cpu_preparation_identity(source_revision: str) -> dict[str, Any]:
+    import numpy as np
+
+    return _validate_preparation_identity(
+        {
+            "implementation": (
+                "scripts.repack_deepseek_v4_nvfp4_tp2._cpu_prepare_rank"
+            ),
+            "engine": PREPARED_ENGINE,
+            "backend": REQUIRED_BACKEND,
+            "vllm_layout_pin": VLLM_LAYOUT_PIN,
+            "flashinfer_layout_pin": FLASHINFER_LAYOUT_PIN,
+            "numpy_version": str(np.__version__),
+            "transform_spec_sha256": canonical_sha256(_cpu_transform_spec()),
+            "repacker_script_path": str(Path(__file__).resolve()),
+            "repacker_script_sha256": sha256_file(Path(__file__).resolve()),
+            "source_revision": parse_git_revision(source_revision),
+            "pinned_preparation_source_sha256": dict(
+                PINNED_PREPARATION_SOURCE_SHA256
+            ),
+            "is_act_and_mul": True,
+        }
+    )
+
+
+def _swizzle_blockscale_bytes(array: Any) -> Any:
+    """Exact CPU byte permutation of pinned vLLM swizzle_blockscale."""
+
+    import numpy as np
+
+    if array.dtype != np.uint8 or array.ndim != 3:
+        raise ContractError("block-scale swizzle requires a rank-3 uint8 array")
+    batches, rows, columns = array.shape
+    if rows % 128 or columns % 4:
+        raise ContractError(
+            "prepared format forbids implicit block-scale padding: "
+            f"shape={array.shape}"
+        )
+    return (
+        array.reshape(batches, rows // 128, 4, 32, columns // 4, 4)
+        .transpose(0, 1, 4, 3, 2, 5)
+        .copy()
+        .reshape(batches, rows, columns)
+    )
+
+
+def _numpy_bitwise_equal(left: Any, right: Any) -> bool:
+    """Compare exact array storage, including signed zero and NaN payloads."""
+
+    import numpy as np
+
+    left_array = np.asarray(left)
+    right_array = np.asarray(right)
+    if (
+        left_array.shape != right_array.shape
+        or left_array.dtype != right_array.dtype
+    ):
+        return False
+    left_bytes = np.ascontiguousarray(left_array).view(np.uint8).reshape(-1)
+    right_bytes = np.ascontiguousarray(right_array).view(np.uint8).reshape(-1)
+    return bool(np.array_equal(left_bytes, right_bytes))
+
+
+def _cpu_prepare_rank(
+    raw: Mapping[str, Any],
+    rank: int,
+    context: Mapping[str, Any],
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    """Prepare one already-TP-sliced rank with exact NumPy byte semantics."""
+
+    import numpy as np
+
+    if rank not in range(TP_SIZE):
+        raise ContractError(f"invalid prepared TP rank: {rank}")
+    if set(raw) != set(FAMILY_ORDER):
+        raise ContractError("CPU prepared input family set drifted")
+    w13_raw = np.asarray(raw["w13.weight"], dtype=np.uint8)
+    w13_scale_raw = np.asarray(raw["w13.weight_scale"], dtype=np.uint8)
+    if w13_raw.ndim != 3 or w13_raw.shape[1] % 2:
+        raise ContractError("raw W13 weight shape cannot be reordered")
+    if w13_scale_raw.ndim != 3 or w13_scale_raw.shape[1] % 2:
+        raise ContractError("raw W13 scale shape cannot be reordered")
+    weight_half = w13_raw.shape[1] // 2
+    scale_half = w13_scale_raw.shape[1] // 2
+    w13 = np.concatenate(
+        (w13_raw[:, weight_half:], w13_raw[:, :weight_half]), axis=1
+    )
+    w13_scale_linear = np.concatenate(
+        (
+            w13_scale_raw[:, scale_half:],
+            w13_scale_raw[:, :scale_half],
+        ),
+        axis=1,
+    )
+    w2 = np.ascontiguousarray(raw["w2.weight"], dtype=np.uint8)
+    w2_scale_linear = np.ascontiguousarray(
+        raw["w2.weight_scale"], dtype=np.uint8
+    )
+    w13_scale = _swizzle_blockscale_bytes(w13_scale_linear)
+    w2_scale = _swizzle_blockscale_bytes(w2_scale_linear)
+
+    w13_scale2 = np.asarray(raw["w13.weight_scale_2"], dtype=np.float32)
+    w2_scale2 = np.asarray(raw["w2.weight_scale_2"], dtype=np.float32)
+    w13_input = np.asarray(raw["w13.input_scale"], dtype=np.float32)
+    w2_input = np.asarray(raw["w2.input_scale"], dtype=np.float32)
+    if w13_scale2.ndim != 2 or w13_scale2.shape[1] != 2:
+        raise ContractError("raw W13 scale_2 must have [E,2] shape")
+    if w13_input.shape != w13_scale2.shape:
+        raise ContractError("raw W13 input-scale shape drifted")
+    if w2_scale2.ndim != 1 or w2_input.shape != w2_scale2.shape:
+        raise ContractError("raw W2 scalar shape drifted")
+    if not _numpy_bitwise_equal(w13_scale2[:, 0], w13_scale2[:, 1]):
+        raise ContractError("checkpoint w1/w3 weight_scale_2 bytes differ")
+    for name, value in (
+        ("w13 input_scale", w13_input),
+        ("w2 input_scale", w2_input),
+        ("w13 weight_scale_2", w13_scale2),
+        ("w2 weight_scale_2", w2_scale2),
+    ):
+        if not bool(np.isfinite(value).all()):
+            raise ContractError(f"{name} contains non-finite values")
+    if not bool((w13_input > 0).all()) or not bool((w2_input > 0).all()):
+        raise ContractError("checkpoint input scales must be positive")
+    a13 = np.float32(np.max(w13_input))
+    a2 = np.float32(np.max(w2_input))
+    experts = w13_scale2.shape[0]
+    prepared = {
+        "w13.weight": np.ascontiguousarray(w13),
+        "w2.weight": w2,
+        "w13.weight_scale": w13_scale,
+        "w2.weight_scale": w2_scale,
+        "a1_gscale": np.full(
+            experts, np.float32(1.0) / a13, dtype=np.float32
+        ),
+        "a2_gscale": np.full(
+            experts, np.float32(1.0) / a2, dtype=np.float32
+        ),
+        "g1_alphas": np.multiply(
+            w13_scale2[:, 0], a13, dtype=np.float32
+        ),
+        "g2_alphas": np.multiply(w2_scale2, a2, dtype=np.float32),
+    }
+    proof = {
+        "rank": rank,
+        "engine": PREPARED_ENGINE,
+        "w13_scale_2_columns_bitwise_equal": True,
+        "a13_global_scale": float(a13),
+        "a2_global_scale": float(a2),
+        "transform_spec_sha256": canonical_sha256(_cpu_transform_spec()),
+    }
+    return prepared, proof
+
+
+def _sample_numpy_digest(array: Any, family: str) -> str:
+    """Match the immutable GPU benchmark's sampled tensor fingerprint."""
+
+    import numpy as np
+
+    dtype_text = {
+        "w13.weight": "torch.uint8",
+        "w2.weight": "torch.uint8",
+        "w13.weight_scale": "torch.float8_e4m3fn",
+        "w2.weight_scale": "torch.float8_e4m3fn",
+        "a1_gscale": "torch.float32",
+        "a2_gscale": "torch.float32",
+        "g1_alphas": "torch.float32",
+        "g2_alphas": "torch.float32",
+    }[family]
+    contiguous = np.ascontiguousarray(array)
+    flat = contiguous.view(np.uint8).reshape(-1)
+    sample_bytes = flat.size if family in PREPARED_FAMILY_ORDER[4:] else 4096
+    offsets = sorted(
+        {
+            0,
+            max(0, flat.size // 2 - sample_bytes // 2),
+            max(0, flat.size - sample_bytes),
+        }
+    )
+    digest = hashlib.sha256()
+    digest.update(str(tuple(contiguous.shape)).encode())
+    digest.update(dtype_text.encode())
+    for offset in offsets:
+        digest.update(flat[offset : min(flat.size, offset + sample_bytes)].tobytes())
+    return digest.hexdigest()
+
+
+def _numpy_safetensors_views(path: Path) -> dict[str, Any]:
+    import numpy as np
+
+    header, _, parsed = _read_safetensors_header(path)
+    result: dict[str, Any] = {}
+    for name, (start, _byte_length, _) in parsed.items():
+        entry = header[name]
+        dtype_name = str(entry["dtype"])
+        if dtype_name in ("U8", "F8_E4M3"):
+            dtype = np.uint8
+        elif dtype_name == "F32":
+            dtype = np.dtype("<f4")
+        else:
+            raise ContractError(
+                f"unsupported CPU prepared scratch dtype {dtype_name}: {name}"
+            )
+        result[name] = np.memmap(
+            path,
+            mode="r",
+            dtype=dtype,
+            offset=start,
+            shape=tuple(entry["shape"]),
+            order="C",
+        )
+    return result
+
+
+def _prepared_routed_filename(layer: int) -> str:
+    return f"model-layer-{layer:05d}.safetensors"
+
+
+def _prepared_nonexpert_filename(layer: int | None) -> str:
+    return (
+        "model-nonlayer.safetensors"
+        if layer is None
+        else f"model-layer-{layer:05d}-nonexpert.safetensors"
+    )
+
+
+def _atomic_write_json(path: Path, value: Any) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.tmp-", dir=path.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(value, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _atomic_write_safetensors(
+    path: Path,
+    plans: Sequence[OutputTensorPlan],
+    *,
+    layer: int | None,
+    chunk_bytes: int,
+    contract_metadata: Mapping[str, str],
+) -> dict[str, Any]:
+    """Publish one non-expert safetensors file with crash-safe replacement."""
+
+    temporary = path.with_name(f".{path.name}.partial")
+    if temporary.exists():
+        temporary.unlink()
+    try:
+        row = _write_safetensors(
+            temporary,
+            plans,
+            layer=layer,
+            chunk_bytes=chunk_bytes,
+            contract_metadata=contract_metadata,
+        )
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    row["path"] = path.name
+    return row
+
+
+def _prepared_tensor_name(layer: int, family: str) -> str:
+    return f"{PREPARED_NAMESPACE}.layers.{layer}.experts.{family}"
+
+
+def _physical_file_manifest(
+    path: Path,
+    *,
+    layer: int | None,
+    kinds: Mapping[str, tuple[str, str | None]],
+) -> dict[str, Any]:
+    header, _, parsed = _read_safetensors_header(path)
+    metadata = header.get("__metadata__")
+    if metadata != _prepared_header_metadata(layer):
+        raise ContractError(f"prepared safetensors metadata drifted: {path.name}")
+    if set(parsed) != set(kinds):
+        raise ContractError(f"prepared physical tensor set drifted: {path.name}")
+    rows: list[dict[str, Any]] = []
+    for name in sorted(parsed):
+        start, byte_length, _ = parsed[name]
+        entry = header[name]
+        kind, family = kinds[name]
+        rows.append(
+            {
+                "name": name,
+                "dtype": entry["dtype"],
+                "shape": entry["shape"],
+                "bytes": byte_length,
+                "sha256": _tensor_payload_digest(path, start, byte_length),
+                "kind": kind,
+                "family": family,
+                "source_payload_sha256": (
+                    _tensor_payload_digest(path, start, byte_length)
+                    if kind == "bitwise_nonexpert"
+                    else None
+                ),
+            }
+        )
+    return {
+        "path": path.name,
+        "layer": layer,
+        "size": path.stat().st_size,
+        "sha256": sha256_file(path),
+        "payload_bytes": sum(row["bytes"] for row in rows),
+        "tensor_count": len(rows),
+        "tensors": rows,
+    }
+
+
+def _write_prepared_arrays(
+    path: Path,
+    *,
+    layer: int,
+    rank_outputs: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Write two rank outputs without relying on float8 NumPy dtype support."""
+
+    import numpy as np
+
+    if len(rank_outputs) != TP_SIZE:
+        raise ContractError("prepared output requires exactly two rank rows")
+    descriptors: list[tuple[str, str, tuple[int, ...], int, str]] = []
+    for family in PREPARED_FAMILY_ORDER:
+        first = np.asarray(rank_outputs[0][family])
+        descriptors.append(
+            (
+                _prepared_tensor_name(layer, family),
+                PREPARED_DTYPES[family],
+                (TP_SIZE, *first.shape),
+                TP_SIZE * int(first.nbytes),
+                family,
+            )
+        )
+    header: dict[str, Any] = {"__metadata__": _prepared_header_metadata(layer)}
+    cursor = 0
+    for name, dtype, shape, byte_length, _family in descriptors:
+        end = cursor + byte_length
+        header[name] = {
+            "dtype": dtype,
+            "shape": list(shape),
+            "data_offsets": [cursor, end],
+        }
+        cursor = end
+    raw_header = json.dumps(
+        header, separators=(",", ":"), ensure_ascii=True
+    ).encode("utf-8")
+    raw_header += b" " * ((-len(raw_header)) % 8)
+    if len(raw_header) > MAX_HEADER_BYTES:
+        raise ContractError("prepared safetensors header is too large")
+    prefix = struct.pack("<Q", len(raw_header)) + raw_header
+    file_digest = hashlib.sha256(prefix)
+    tensor_rows: list[dict[str, Any]] = []
+    with path.open("xb") as handle:
+        handle.write(prefix)
+        for name, dtype, shape, byte_length, family in descriptors:
+            tensor_digest = hashlib.sha256()
+            written = 0
+            for rank in range(TP_SIZE):
+                array = np.asarray(rank_outputs[rank][family])
+                view = memoryview(array).cast("B")
+                for offset in range(0, len(view), DEFAULT_CHUNK_BYTES):
+                    chunk = view[offset : offset + DEFAULT_CHUNK_BYTES]
+                    handle.write(chunk)
+                    file_digest.update(chunk)
+                    tensor_digest.update(chunk)
+                    written += len(chunk)
+                del view
+            if written != byte_length:
+                raise ContractError(f"prepared tensor write was short: {name}")
+            tensor_rows.append(
+                {
+                    "name": name,
+                    "dtype": dtype,
+                    "shape": list(shape),
+                    "bytes": byte_length,
+                    "sha256": tensor_digest.hexdigest(),
+                    "kind": "tp2_rank_major_cutlass_prepared",
+                    "family": family,
+                    "source_payload_sha256": None,
+                }
+            )
+        handle.flush()
+        os.fsync(handle.fileno())
+    return {
+        "path": path.name,
+        "layer": layer,
+        "size": path.stat().st_size,
+        "sha256": file_digest.hexdigest(),
+        "payload_bytes": sum(row["bytes"] for row in tensor_rows),
+        "tensor_count": len(tensor_rows),
+        "tensors": tensor_rows,
+    }
+
+
+def _validate_resumable_file(root: Path, row: Mapping[str, Any]) -> bool:
+    path = root / str(row.get("path"))
+    return (
+        path.is_file()
+        and path.stat().st_size == row.get("size")
+        and sha256_file(path) == row.get("sha256")
+    )
+
+
+def build_prepared_checkpoint(
+    source: Path,
+    output: Path,
+    *,
+    expected_config_sha256: str,
+    expected_index_sha256: str,
+    source_revision: str,
+    chunk_bytes: int = DEFAULT_CHUNK_BYTES,
+    stop_after_layer: int | None = None,
+    prepare_rank: PreparedRankFn | None = None,
+    preparation_identity: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the resumable, final CUTLASS-ready TP=2 checkpoint."""
+
+    if chunk_bytes <= 0:
+        raise ContractError("chunk_bytes must be positive")
+    if stop_after_layer not in (None, 0):
+        raise ContractError(
+            "prepared conversion currently supports only --stop-after-layer 0"
+        )
+    source = source.resolve()
+    output = output.resolve()
+    if output.exists():
+        raise ContractError(f"output must not already exist: {output}")
+    if source == output or source in output.parents:
+        raise ContractError("output must not be the source or a child of the source")
+    output.parent.mkdir(parents=True, exist_ok=True)
+    partial = output.with_name(f".{output.name}.prepared-partial")
+
+    catalog = inspect_source(
+        source,
+        expected_config_sha256=expected_config_sha256,
+        expected_index_sha256=expected_index_sha256,
+    )
+    plans_by_layer = plan_repack(catalog, NAMESPACE)
+    shapes = _prepared_shapes(catalog.config)
+    layers = _config_int(catalog.config, "num_hidden_layers")
+    experts = _config_int(catalog.config, "n_routed_experts")
+    source_revision = parse_git_revision(source_revision)
+
+    if prepare_rank is None:
+        identity = _cpu_preparation_identity(source_revision)
+        prepare_rank = _cpu_prepare_rank
+    else:
+        if preparation_identity is None:
+            raise ContractError("injected preparer requires an exact identity")
+        identity = _validate_preparation_identity(preparation_identity)
+        if identity["source_revision"] != source_revision:
+            raise ContractError("injected preparer source revision drifted")
+
+    source_stats = {
+        name: list(values) for name, values in sorted(catalog.shard_stats.items())
+    }
+    state_contract = {
+        "schema_version": PREPARED_SCHEMA_VERSION,
+        "format": PREPARED_SCHEMA,
+        "source_realpath": str(source),
+        "source_config_sha256": catalog.config_sha256,
+        "source_index_sha256": catalog.index_sha256,
+        "source_shard_stats": source_stats,
+        "preparation_identity": identity,
+    }
+    state_path = partial / PREPARED_STATE_NAME
+    if partial.exists():
+        if not partial.is_dir() or not state_path.is_file():
+            raise ContractError(
+                f"prepared partial path lacks resumable state: {partial}"
+            )
+        state = _read_json(state_path, "prepared build state")
+        if state.get("contract") != state_contract:
+            raise ContractError("prepared partial state contract drifted")
+        files_by_name = state.get("files")
+        if not isinstance(files_by_name, dict):
+            raise ContractError("prepared partial file state is malformed")
+        copied_metadata = state.get("copied_metadata_files")
+        source_shard_digests = state.get("source_shards")
+        if not isinstance(copied_metadata, list) or not isinstance(
+            source_shard_digests, list
+        ):
+            raise ContractError("prepared partial integrity state is incomplete")
+        for row in copied_metadata:
+            if not isinstance(row, dict) or not _validate_resumable_file(partial, row):
+                raise ContractError("prepared partial metadata file drifted")
+        for filename, row in files_by_name.items():
+            if not isinstance(row, dict) or row.get("path") != filename:
+                raise ContractError("prepared partial output-file state is malformed")
+            if not _validate_resumable_file(partial, row):
+                raise ContractError(f"prepared partial file drifted: {filename}")
+        if stop_after_layer == 0:
+            later_routed = {
+                _prepared_routed_filename(layer) for layer in range(1, layers)
+            }
+            state_later = later_routed.intersection(files_by_name)
+            physical_later = later_routed.intersection(
+                path.name for path in partial.glob("model-layer-*.safetensors")
+            )
+            if state_later or physical_later:
+                raise ContractError(
+                    "layer-0 gate cannot run after later routed layers were "
+                    f"published: state={sorted(state_later)} "
+                    f"physical={sorted(physical_later)}"
+                )
+    else:
+        partial.mkdir()
+        source_shard_digests = [
+            {
+                "path": shard.name,
+                "size": shard.stat().st_size,
+                "sha256": sha256_file(shard, chunk_bytes=chunk_bytes),
+            }
+            for shard in catalog.shards
+        ]
+        copied_metadata = _copy_metadata_files(
+            source, partial, {path.name for path in catalog.shards}
+        )
+        output_config_path = partial / "config.json"
+        output_config = _read_json(output_config_path, "copied output config")
+        if "dspark_nvfp4_prepared" in output_config:
+            raise ContractError("source config already declares a prepared contract")
+        output_config["dspark_nvfp4_prepared"] = {
+            "schema": PREPARED_SCHEMA,
+            "loader_contract": PREPARED_LOADER_CONTRACT,
+            "namespace": PREPARED_NAMESPACE,
+            "payload_stage": PREPARED_PAYLOAD_STAGE,
+            "required_backend": REQUIRED_BACKEND,
+            "vllm_layout_pin": VLLM_LAYOUT_PIN,
+            "flashinfer_layout_pin": FLASHINFER_LAYOUT_PIN,
+            "tp_size": TP_SIZE,
+            "manifest": MANIFEST_NAME,
+            "manifest_digest": MANIFEST_DIGEST_NAME,
+        }
+        _atomic_write_json(output_config_path, output_config)
+        for row in copied_metadata:
+            if row["path"] == "config.json":
+                row["size"] = output_config_path.stat().st_size
+                row["sha256"] = sha256_file(output_config_path)
+                break
+        else:
+            raise ContractError("prepared metadata copy omitted config.json")
+        files_by_name: dict[str, Any] = {}
+        state = {
+            "contract": state_contract,
+            "source_shards": source_shard_digests,
+            "copied_metadata_files": copied_metadata,
+            "files": files_by_name,
+            "layer_rank_proofs": {},
+        }
+        _atomic_write_json(state_path, state)
+
+    raw_source_payload = sum(tensor.byte_length for tensor in catalog.tensors.values())
+    expected_prepared_payload = raw_source_payload + layers * experts * 2 * 4
+    largest_raw_layer = max(
+        sum(plan.byte_length for plan in plans_by_layer[layer][: len(FAMILY_ORDER)])
+        for layer in range(layers)
+    )
+    completed_payload = sum(
+        int(row.get("payload_bytes", 0)) for row in files_by_name.values()
+    )
+    required_free = (
+        expected_prepared_payload - completed_payload + largest_raw_layer + (1 << 30)
+    )
+    if shutil.disk_usage(partial).free < required_free:
+        raise ContractError(
+            "insufficient free space for resumable prepared conversion: "
+            f"required={required_free}"
+        )
+
+    import numpy as np
+
+    expected_numpy_dtypes = {
+        "w13.weight": np.dtype("uint8"),
+        "w2.weight": np.dtype("uint8"),
+        "w13.weight_scale": np.dtype("uint8"),
+        "w2.weight_scale": np.dtype("uint8"),
+        "a1_gscale": np.dtype("float32"),
+        "a2_gscale": np.dtype("float32"),
+        "g1_alphas": np.dtype("float32"),
+        "g2_alphas": np.dtype("float32"),
+    }
+    scalar_families = PREPARED_FAMILY_ORDER[4:]
+    for layer in range(layers):
+        plans = plans_by_layer[layer]
+        raw_plans = plans[: len(FAMILY_ORDER)]
+        if tuple(plan.family for plan in raw_plans) != FAMILY_ORDER:
+            raise ContractError(f"layer {layer} raw family plan drifted")
+        for plan in raw_plans:
+            assert plan.family is not None
+            expected_dtype = PREPARED_SOURCE_DTYPES[plan.family]
+            if plan.dtype != expected_dtype:
+                raise ContractError(
+                    f"prepared source dtype drifted for layer {layer} "
+                    f"{plan.family}: {plan.dtype} != {expected_dtype}"
+                )
+        nonexpert_plans = plans[len(FAMILY_ORDER) :]
+
+        routed_filename = _prepared_routed_filename(layer)
+        if routed_filename not in files_by_name:
+            scratch = partial / f".raw-layer-{layer:05d}.safetensors.partial"
+            if scratch.exists():
+                scratch.unlink()
+            try:
+                _write_safetensors(
+                    scratch,
+                    raw_plans,
+                    layer=layer,
+                    chunk_bytes=chunk_bytes,
+                )
+                rank_outputs: list[Mapping[str, Any]] = []
+                rank_proofs: list[Mapping[str, Any]] = []
+                views = _numpy_safetensors_views(scratch)
+                for rank in range(TP_SIZE):
+                    raw: dict[str, Any] = {}
+                    for family in FAMILY_ORDER:
+                        value = views[
+                            f"{NAMESPACE}.layers.{layer}.experts.{family}"
+                        ]
+                        raw[family] = (
+                            value[rank]
+                            if family in FAMILY_ORDER[:4]
+                            else value
+                        )
+                    prepared, proof = prepare_rank(
+                        raw,
+                        rank,
+                        {
+                            "layer": layer,
+                            "config": catalog.config,
+                            "identity": identity,
+                        },
+                    )
+                    if tuple(prepared) != PREPARED_FAMILY_ORDER:
+                        raise ContractError(
+                            f"layer {layer} rank {rank} prepared family order drifted"
+                        )
+                    for family in PREPARED_FAMILY_ORDER:
+                        tensor = np.asarray(prepared[family])
+                        if tuple(tensor.shape) != shapes[family][1:]:
+                            raise ContractError(
+                                f"prepared shape drifted for layer {layer} rank "
+                                f"{rank} {family}: {tuple(tensor.shape)}"
+                            )
+                        if tensor.dtype != expected_numpy_dtypes[family]:
+                            raise ContractError(
+                                f"prepared dtype drifted for {family}: {tensor.dtype}"
+                            )
+                        if not tensor.flags.c_contiguous:
+                            raise ContractError(
+                                f"prepared tensor {family} is not contiguous"
+                            )
+                    rank_outputs.append(prepared)
+                    rank_proofs.append(dict(proof))
+                del views
+                for family in scalar_families:
+                    if not _numpy_bitwise_equal(
+                        rank_outputs[0][family], rank_outputs[1][family]
+                    ):
+                        raise ContractError(
+                            f"prepared scalar rank copies differ: layer={layer} {family}"
+                        )
+                if (
+                    layer == 0
+                    and catalog.config_sha256
+                    == "0c5dc7303ff322d73e0cd5caf9cc1b65d6efeff68fab53514531c2e959b1d616"
+                    and catalog.index_sha256
+                    == "2d83d58754cff11724f117d20d95e31803a48512d29f8e00463b2501905d6d72"
+                ):
+                    observed_fingerprints = {
+                        family: _sample_numpy_digest(
+                            rank_outputs[0][family], family
+                        )
+                        for family in PREPARED_FAMILY_ORDER
+                    }
+                    if observed_fingerprints != LAYER0_RANK0_REFERENCE_FINGERPRINTS:
+                        raise ContractError(
+                            "prepared layer0/rank0 fingerprints differ from the "
+                            "immutable GPU reference"
+                        )
+                    rank_proofs[0]["immutable_reference"] = {
+                        "source_json_sha256": (
+                            LAYER0_RANK0_REFERENCE_JSON_SHA256
+                        ),
+                        "fingerprints": observed_fingerprints,
+                        "passed": True,
+                    }
+                temporary = partial / f".{routed_filename}.partial"
+                if temporary.exists():
+                    temporary.unlink()
+                row = _write_prepared_arrays(
+                    temporary,
+                    layer=layer,
+                    rank_outputs=rank_outputs,
+                )
+                os.replace(temporary, partial / routed_filename)
+                row["path"] = routed_filename
+                files_by_name[routed_filename] = row
+                state["layer_rank_proofs"][str(layer)] = rank_proofs
+                _atomic_write_json(state_path, state)
+                del rank_outputs
+            finally:
+                if scratch.exists():
+                    scratch.unlink()
+
+        if nonexpert_plans:
+            nonexpert_filename = _prepared_nonexpert_filename(layer)
+            if nonexpert_filename not in files_by_name:
+                row = _atomic_write_safetensors(
+                    partial / nonexpert_filename,
+                    nonexpert_plans,
+                    layer=layer,
+                    chunk_bytes=chunk_bytes,
+                    contract_metadata=_prepared_header_metadata(layer),
+                )
+                files_by_name[nonexpert_filename] = row
+                _atomic_write_json(state_path, state)
+
+        if stop_after_layer == layer:
+            _source_stats_unchanged(source, catalog)
+            routed_row = files_by_name.get(routed_filename)
+            if not isinstance(routed_row, dict) or not _validate_resumable_file(
+                partial, routed_row
+            ):
+                raise ContractError(
+                    "layer-0 gate did not publish a verified routed file"
+                )
+            return {
+                "ok": True,
+                "complete": False,
+                "paused_after_layer": layer,
+                "resumable": True,
+                "partial_checkpoint": str(partial),
+                "routed_file": routed_filename,
+                "routed_file_size": routed_row["size"],
+                "routed_file_sha256": routed_row["sha256"],
+                "build_state_sha256": sha256_file(state_path),
+                "source_revision": source_revision,
+                "preparation_identity": identity,
+            }
+
+    residual_plans = plans_by_layer.get(None, [])
+    if residual_plans:
+        residual_filename = _prepared_nonexpert_filename(None)
+        if residual_filename not in files_by_name:
+            row = _atomic_write_safetensors(
+                partial / residual_filename,
+                residual_plans,
+                layer=None,
+                chunk_bytes=chunk_bytes,
+                contract_metadata=_prepared_header_metadata(None),
+            )
+            files_by_name[residual_filename] = row
+            _atomic_write_json(state_path, state)
+
+    _source_stats_unchanged(source, catalog)
+    weight_map: dict[str, str] = {}
+    output_files = [files_by_name[name] for name in sorted(files_by_name)]
+    for row in output_files:
+        for tensor_row in row["tensors"]:
+            name = tensor_row["name"]
+            if name in weight_map:
+                raise ContractError(f"duplicate prepared output tensor: {name}")
+            weight_map[name] = row["path"]
+    output_payload = sum(int(row["payload_bytes"]) for row in output_files)
+    if output_payload != expected_prepared_payload:
+        raise ContractError(
+            "prepared output payload arithmetic drifted: "
+            f"observed={output_payload} expected={expected_prepared_payload}"
+        )
+    index = {
+        "metadata": {
+            "total_size": output_payload,
+            "dspark_schema": PREPARED_SCHEMA,
+            "dspark_loader_contract": PREPARED_LOADER_CONTRACT,
+            "dspark_namespace": PREPARED_NAMESPACE,
+            "dspark_payload_stage": PREPARED_PAYLOAD_STAGE,
+            "dspark_required_backend": REQUIRED_BACKEND,
+            "dspark_vllm_layout_pin": VLLM_LAYOUT_PIN,
+            "dspark_flashinfer_layout_pin": FLASHINFER_LAYOUT_PIN,
+            "dspark_standard_loader_compatible": False,
+            "source_index_sha256": catalog.index_sha256,
+        },
+        "weight_map": weight_map,
+    }
+    index_path = partial / INDEX_NAME
+    _atomic_write_json(index_path, index)
+    output_index_sha256 = sha256_file(index_path)
+    output_config_sha256 = sha256_file(partial / "config.json")
+    manifest = {
+        "schema_version": PREPARED_SCHEMA_VERSION,
+        "format": PREPARED_SCHEMA,
+        "loader": _prepared_loader_contract(catalog.config),
+        "preparation": {
+            "identity": identity,
+            "layer_rank_proofs": state["layer_rank_proofs"],
+        },
+        "source": {
+            "checkpoint_name": source.name,
+            "config_sha256": catalog.config_sha256,
+            "index_sha256": catalog.index_sha256,
+            "indexed_tensor_count": len(catalog.tensors),
+            "payload_bytes": raw_source_payload,
+            "shards": source_shard_digests,
+        },
+        "output": {
+            "config_sha256": output_config_sha256,
+            "index_sha256": output_index_sha256,
+            "payload_bytes": output_payload,
+            "source_payload_delta_bytes": output_payload - raw_source_payload,
+            "tensor_count": len(weight_map),
+            "layer_file_count": layers,
+            "files": output_files,
+            "copied_metadata_files": copied_metadata,
+        },
+        "integrity": {
+            "source_shards_hashed": True,
+            "output_files_hashed": True,
+            "output_tensors_hashed": True,
+            "nonexpert_payloads_bitwise_copied": True,
+            "scalar_rank_copies_bitwise_equal": True,
+            "atomic_file_publication": True,
+            "resumable_partial_directory": True,
+            "atomic_directory_publication": True,
+        },
+    }
+    manifest_path = partial / MANIFEST_NAME
+    _atomic_write_json(manifest_path, manifest)
+    manifest_digest = sha256_file(manifest_path)
+    digest_temporary = partial / f".{MANIFEST_DIGEST_NAME}.tmp"
+    digest_temporary.write_text(
+        f"{manifest_digest}  {MANIFEST_NAME}\n", encoding="ascii"
+    )
+    os.replace(digest_temporary, partial / MANIFEST_DIGEST_NAME)
+    verification = verify_prepared_checkpoint(partial, allow_build_state=True)
+    if not verification["ok"]:
+        raise ContractError("internal prepared verification did not pass")
+    state_path.unlink()
+    os.rename(partial, output)
+    return {
+        "ok": True,
+        "output": str(output),
+        "manifest_sha256": manifest_digest,
+        "output_index_sha256": output_index_sha256,
+        "source_payload_bytes": raw_source_payload,
+        "output_payload_bytes": output_payload,
+        "source_payload_delta_bytes": output_payload - raw_source_payload,
+        "layer_file_count": layers,
+        "output_tensor_count": len(weight_map),
+        "loader_contract": PREPARED_LOADER_CONTRACT,
+        "namespace": PREPARED_NAMESPACE,
+    }
+
+
+def verify_prepared_checkpoint(
+    output: Path, *, allow_build_state: bool = False
+) -> dict[str, Any]:
+    """Verify every prepared payload byte and the fail-closed loader contract."""
+
+    output = output.resolve()
+    manifest_path = output / MANIFEST_NAME
+    digest_path = output / MANIFEST_DIGEST_NAME
+    if not manifest_path.is_file() or not digest_path.is_file():
+        raise ContractError("prepared manifest/digest sidecar is missing")
+    words = digest_path.read_text(encoding="ascii").strip().split()
+    if len(words) != 2 or words[1] != MANIFEST_NAME:
+        raise ContractError("prepared manifest digest sidecar is malformed")
+    expected_manifest_digest = parse_sha256(words[0], "manifest digest")
+    observed_manifest_digest = sha256_file(manifest_path)
+    if observed_manifest_digest != expected_manifest_digest:
+        raise ContractError("prepared manifest digest mismatch")
+    manifest = _read_json(manifest_path, "prepared manifest")
+    if (
+        manifest.get("schema_version") != PREPARED_SCHEMA_VERSION
+        or manifest.get("format") != PREPARED_SCHEMA
+    ):
+        raise ContractError("prepared manifest schema drifted")
+
+    output_config = _read_json(output / "config.json", "prepared config")
+    marker = output_config.get("dspark_nvfp4_prepared")
+    expected_marker = {
+        "schema": PREPARED_SCHEMA,
+        "loader_contract": PREPARED_LOADER_CONTRACT,
+        "namespace": PREPARED_NAMESPACE,
+        "payload_stage": PREPARED_PAYLOAD_STAGE,
+        "required_backend": REQUIRED_BACKEND,
+        "vllm_layout_pin": VLLM_LAYOUT_PIN,
+        "flashinfer_layout_pin": FLASHINFER_LAYOUT_PIN,
+        "tp_size": TP_SIZE,
+        "manifest": MANIFEST_NAME,
+        "manifest_digest": MANIFEST_DIGEST_NAME,
+    }
+    if marker != expected_marker:
+        raise ContractError("prepared config marker drifted")
+    loader = manifest.get("loader")
+    if loader != _prepared_loader_contract(output_config):
+        raise ContractError("prepared manifest loader contract drifted")
+    preparation = manifest.get("preparation")
+    if not isinstance(preparation, dict):
+        raise ContractError("prepared provenance is missing")
+    identity = preparation.get("identity")
+    if not isinstance(identity, dict):
+        raise ContractError("prepared engine identity is missing")
+    _validate_preparation_identity(identity)
+
+    source_section = manifest.get("source")
+    output_section = manifest.get("output")
+    integrity = manifest.get("integrity")
+    if not all(
+        isinstance(value, dict)
+        for value in (source_section, output_section, integrity)
+    ):
+        raise ContractError("prepared manifest sections are incomplete")
+    assert isinstance(source_section, dict)
+    assert isinstance(output_section, dict)
+    assert isinstance(integrity, dict)
+    required_integrity = {
+        "source_shards_hashed": True,
+        "output_files_hashed": True,
+        "output_tensors_hashed": True,
+        "nonexpert_payloads_bitwise_copied": True,
+        "scalar_rank_copies_bitwise_equal": True,
+        "atomic_file_publication": True,
+        "resumable_partial_directory": True,
+        "atomic_directory_publication": True,
+    }
+    if integrity != required_integrity:
+        raise ContractError("prepared integrity contract drifted")
+    if sha256_file(output / "config.json") != output_section.get("config_sha256"):
+        raise ContractError("prepared output config digest mismatch")
+
+    copied_metadata = output_section.get("copied_metadata_files")
+    if not isinstance(copied_metadata, list):
+        raise ContractError("prepared copied metadata list is missing")
+    copied_names: set[str] = set()
+    for row in copied_metadata:
+        if not isinstance(row, dict):
+            raise ContractError("prepared copied metadata row is malformed")
+        name = row.get("path")
+        if (
+            not isinstance(name, str)
+            or Path(name).name != name
+            or name in copied_names
+        ):
+            raise ContractError("prepared copied metadata path is unsafe")
+        copied_names.add(name)
+        path = output / name
+        if path.stat().st_size != row.get("size") or sha256_file(path) != row.get(
+            "sha256"
+        ):
+            raise ContractError(f"prepared metadata digest mismatch: {name}")
+
+    index_path = output / INDEX_NAME
+    if sha256_file(index_path) != output_section.get("index_sha256"):
+        raise ContractError("prepared output index digest mismatch")
+    index = _read_json(index_path, "prepared output index")
+    metadata = index.get("metadata")
+    weight_map = index.get("weight_map")
+    if not isinstance(metadata, dict) or not isinstance(weight_map, dict):
+        raise ContractError("prepared output index is malformed")
+    exact_index_contract = {
+        "dspark_schema": PREPARED_SCHEMA,
+        "dspark_loader_contract": PREPARED_LOADER_CONTRACT,
+        "dspark_namespace": PREPARED_NAMESPACE,
+        "dspark_payload_stage": PREPARED_PAYLOAD_STAGE,
+        "dspark_required_backend": REQUIRED_BACKEND,
+        "dspark_vllm_layout_pin": VLLM_LAYOUT_PIN,
+        "dspark_flashinfer_layout_pin": FLASHINFER_LAYOUT_PIN,
+        "dspark_standard_loader_compatible": False,
+        "source_index_sha256": source_section.get("index_sha256"),
+    }
+    for key, expected in exact_index_contract.items():
+        if metadata.get(key) != expected:
+            raise ContractError(f"prepared index contract field drifted: {key}")
+
+    files = output_section.get("files")
+    if not isinstance(files, list) or not files:
+        raise ContractError("prepared output file manifest is empty")
+    seen_names: set[str] = set()
+    manifest_file_names: set[str] = set()
+    payload_bytes = 0
+    file_rows: dict[str, Mapping[str, Any]] = {}
+    for row in files:
+        if not isinstance(row, dict):
+            raise ContractError("prepared output file row is malformed")
+        filename = row.get("path")
+        if (
+            not isinstance(filename, str)
+            or Path(filename).name != filename
+            or filename in manifest_file_names
+        ):
+            raise ContractError("prepared output file path is unsafe/duplicate")
+        manifest_file_names.add(filename)
+        file_rows[filename] = row
+        path = output / filename
+        if path.stat().st_size != row.get("size") or sha256_file(path) != row.get(
+            "sha256"
+        ):
+            raise ContractError(f"prepared output file digest mismatch: {filename}")
+        header, _, parsed = _read_safetensors_header(path)
+        layer_value = row.get("layer")
+        if layer_value is not None and not isinstance(layer_value, int):
+            raise ContractError("prepared file layer field is malformed")
+        if header.get("__metadata__") != _prepared_header_metadata(layer_value):
+            raise ContractError(f"prepared file contract drifted: {filename}")
+        tensor_rows = row.get("tensors")
+        if not isinstance(tensor_rows, list) or len(tensor_rows) != len(parsed):
+            raise ContractError(f"prepared tensor manifest count drifted: {filename}")
+        for tensor_row in tensor_rows:
+            if not isinstance(tensor_row, dict):
+                raise ContractError("prepared tensor row is malformed")
+            name = tensor_row.get("name")
+            if not isinstance(name, str) or name in seen_names or name not in parsed:
+                raise ContractError(f"prepared tensor name is invalid: {name!r}")
+            seen_names.add(name)
+            start, byte_length, _ = parsed[name]
+            entry = header[name]
+            if (
+                entry.get("dtype") != tensor_row.get("dtype")
+                or entry.get("shape") != tensor_row.get("shape")
+                or byte_length != tensor_row.get("bytes")
+            ):
+                raise ContractError(f"prepared tensor metadata drifted: {name}")
+            digest = _tensor_payload_digest(path, start, byte_length)
+            if digest != tensor_row.get("sha256"):
+                raise ContractError(f"prepared tensor payload digest mismatch: {name}")
+            if tensor_row.get("kind") == "bitwise_nonexpert" and tensor_row.get(
+                "source_payload_sha256"
+            ) != digest:
+                raise ContractError(f"prepared nonexpert copy proof failed: {name}")
+            if weight_map.get(name) != filename:
+                raise ContractError(f"prepared index file mapping drifted: {name}")
+            payload_bytes += byte_length
+
+    if seen_names != set(weight_map):
+        raise ContractError("prepared manifest/index tensor sets differ")
+    if payload_bytes != output_section.get("payload_bytes") or payload_bytes != metadata.get(
+        "total_size"
+    ):
+        raise ContractError("prepared payload-byte total drifted")
+    physical = {path.name for path in output.glob("*.safetensors") if path.is_file()}
+    if physical != manifest_file_names:
+        raise ContractError("prepared physical/manifested file sets differ")
+    if not allow_build_state and (output / PREPARED_STATE_NAME).exists():
+        raise ContractError("published prepared checkpoint retained build state")
+    if any(".partial" in child.name for child in output.iterdir()):
+        raise ContractError("prepared checkpoint retained a partial artifact")
+
+    layer_count = int(loader["num_hidden_layers"])
+    experts = int(loader["n_routed_experts"])
+    expected_shapes = _prepared_shapes(output_config)
+    for layer in range(layer_count):
+        prefix = f"{PREPARED_NAMESPACE}.layers.{layer}.experts."
+        names = {
+            name[len(prefix) :]
+            for name in weight_map
+            if name.startswith(prefix)
+        }
+        if names != set(PREPARED_FAMILY_ORDER):
+            raise ContractError(
+                f"prepared layer {layer} does not contain exactly eight families"
+            )
+        filename = _prepared_routed_filename(layer)
+        row = file_rows.get(filename)
+        if row is None:
+            raise ContractError(f"prepared routed layer file is missing: {layer}")
+        for family in PREPARED_FAMILY_ORDER:
+            name = _prepared_tensor_name(layer, family)
+            if weight_map.get(name) != filename:
+                raise ContractError(f"prepared family is not layer-local: {name}")
+            tensor_row = next(
+                value for value in row["tensors"] if value["name"] == name
+            )
+            if (
+                tensor_row.get("shape") != list(expected_shapes[family])
+                or tensor_row.get("dtype") != PREPARED_DTYPES[family]
+                or tensor_row.get("kind")
+                != "tp2_rank_major_cutlass_prepared"
+            ):
+                raise ContractError(f"prepared family contract drifted: {name}")
+    if any(EXPERT_RE.fullmatch(name) is not None for name in weight_map):
+        raise ContractError("prepared index retained original per-expert names")
+    if any(name.startswith(NAMESPACE + ".") for name in weight_map):
+        raise ContractError("prepared index retained raw-v1 expert names")
+    source_payload = source_section.get("payload_bytes")
+    expected_delta = layer_count * experts * 2 * 4
+    if (
+        not isinstance(source_payload, int)
+        or payload_bytes != source_payload + expected_delta
+        or output_section.get("source_payload_delta_bytes") != expected_delta
+    ):
+        raise ContractError("prepared source/output payload arithmetic drifted")
+
+    proofs = preparation.get("layer_rank_proofs")
+    if not isinstance(proofs, dict) or set(proofs) != {
+        str(layer) for layer in range(layer_count)
+    }:
+        raise ContractError("prepared per-layer provenance is incomplete")
+    if (
+        source_section.get("config_sha256")
+        == "0c5dc7303ff322d73e0cd5caf9cc1b65d6efeff68fab53514531c2e959b1d616"
+        and source_section.get("index_sha256")
+        == "2d83d58754cff11724f117d20d95e31803a48512d29f8e00463b2501905d6d72"
+    ):
+        layer0 = proofs.get("0")
+        if (
+            not isinstance(layer0, list)
+            or len(layer0) != TP_SIZE
+            or layer0[0].get("immutable_reference")
+            != {
+                "source_json_sha256": LAYER0_RANK0_REFERENCE_JSON_SHA256,
+                "fingerprints": LAYER0_RANK0_REFERENCE_FINGERPRINTS,
+                "passed": True,
+            }
+        ):
+            raise ContractError("immutable layer0/rank0 GPU reference proof is missing")
+    return {
+        "ok": True,
+        "manifest_sha256": observed_manifest_digest,
+        "file_count": len(files),
+        "tensor_count": len(seen_names),
+        "payload_bytes": payload_bytes,
+        "loader_contract": PREPARED_LOADER_CONTRACT,
+        "namespace": PREPARED_NAMESPACE,
+        "runtime_h2d_calls_per_layer": len(PREPARED_FAMILY_ORDER),
+    }
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -1486,8 +2867,31 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     build.add_argument("--expected-config-sha256", required=True)
     build.add_argument("--expected-index-sha256", required=True)
     build.add_argument("--chunk-mib", type=int, default=8)
+    prepared = subparsers.add_parser(
+        "build-prepared",
+        help="build/resume and verify the CPU-prepared CUTLASS checkpoint",
+    )
+    prepared.add_argument("--source", type=Path, required=True)
+    prepared.add_argument("--output", type=Path, required=True)
+    prepared.add_argument("--expected-config-sha256", required=True)
+    prepared.add_argument("--expected-index-sha256", required=True)
+    prepared.add_argument("--source-revision", required=True)
+    prepared.add_argument("--chunk-mib", type=int, default=8)
+    prepared.add_argument(
+        "--stop-after-layer",
+        type=int,
+        choices=(0,),
+        help=(
+            "publish and record physical layer 0, then exit cleanly so its "
+            "serialization boundary can be verified before resuming"
+        ),
+    )
     verify = subparsers.add_parser("verify", help="verify a completed repack")
     verify.add_argument("--checkpoint", type=Path, required=True)
+    verify_prepared = subparsers.add_parser(
+        "verify-prepared", help="verify a completed prepared repack"
+    )
+    verify_prepared.add_argument("--checkpoint", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -1503,8 +2907,20 @@ def main(argv: Sequence[str] | None = None) -> int:
                 expected_index_sha256=args.expected_index_sha256,
                 chunk_bytes=args.chunk_mib * 1024 * 1024,
             )
-        else:
+        elif args.command == "build-prepared":
+            result = build_prepared_checkpoint(
+                args.source,
+                args.output,
+                expected_config_sha256=args.expected_config_sha256,
+                expected_index_sha256=args.expected_index_sha256,
+                source_revision=args.source_revision,
+                chunk_bytes=args.chunk_mib * 1024 * 1024,
+                stop_after_layer=args.stop_after_layer,
+            )
+        elif args.command == "verify":
             result = verify_repacked_checkpoint(args.checkpoint)
+        else:
+            result = verify_prepared_checkpoint(args.checkpoint)
     except (ContractError, OSError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2

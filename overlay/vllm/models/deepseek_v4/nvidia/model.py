@@ -71,6 +71,12 @@ from vllm.models.deepseek_v4.nvidia.flashinfer_sparse import (
 )
 from vllm.models.deepseek_v4.nvidia.flashmla import DeepseekV4FlashMLAAttention
 from vllm.models.deepseek_v4.nvidia.ops.prepare_megamoe import prepare_megamoe_inputs
+from vllm.models.deepseek_v4.nvidia.prepared_weight_loading import (
+    PREPARED_NAMESPACE,
+    Nvfp4PreparedLoadSession,
+    maybe_create_nvfp4_prepared_loader,
+    prepared_load_requested,
+)
 from vllm.models.deepseek_v4.nvidia.staged_weight_loading import (
     Nvfp4LayerStagedLoadSession,
     maybe_create_nvfp4_layer_stager,
@@ -958,7 +964,9 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         self.quant_config = quant_config
         self.parallel_config = vllm_config.parallel_config
         self.load_format = str(vllm_config.load_config.load_format)
+        self.checkpoint_path = str(vllm_config.model_config.model)
         self._nvfp4_layer_staged_load_session = Nvfp4LayerStagedLoadSession()
+        self._nvfp4_prepared_load_session = Nvfp4PreparedLoadSession()
         self.use_mega_moe = (
             vllm_config.kernel_config.moe_backend == "deep_gemm_mega_moe"
         )
@@ -1142,12 +1150,18 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         return hidden_states
 
     def begin_nvfp4_layer_staged_load(self) -> None:
-        """Create one stager for the complete outer target-model load."""
+        """Create the one selected loader for the complete target load."""
 
         session = self._nvfp4_layer_staged_load_session
-        if session.active:
-            raise RuntimeError("NVFP4 staged-load session is already active")
+        prepared_session = self._nvfp4_prepared_load_session
+        if session.active or prepared_session.active:
+            raise RuntimeError("NVFP4 target load session is already active")
         requested = staged_load_requested()
+        prepared_requested = prepared_load_requested()
+        if requested and prepared_requested:
+            raise RuntimeError(
+                "Raw staged and prepared NVFP4 loaders are mutually exclusive"
+            )
         stager = None
         if requested:
             params_dict = dict(self.named_parameters())
@@ -1174,13 +1188,49 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
                 raise RuntimeError(
                     "NVFP4 staged-load factory declined an enabled outer session"
                 )
+        routed_layers = {}
+        for layer_index, decoder_layer in enumerate(self.layers):
+            if isinstance(decoder_layer, PPMissingLayer):
+                continue
+            ffn = getattr(decoder_layer, "ffn", None)
+            experts = getattr(ffn, "experts", None)
+            routed = getattr(experts, "routed_experts", None)
+            if routed is not None:
+                routed_layers[layer_index] = routed
+        prepared_loader = maybe_create_nvfp4_prepared_loader(
+            torch_module=torch,
+            checkpoint=self.checkpoint_path,
+            routed_layers=routed_layers,
+            start_layer=self.start_layer,
+            end_layer=self.end_layer,
+            num_hidden_layers=self.config.num_hidden_layers,
+            num_routed_experts=self.config.n_routed_experts,
+            tp_size=get_tensor_model_parallel_world_size(),
+            tp_rank=get_tensor_model_parallel_rank(),
+            use_mega_moe=self.use_mega_moe,
+            enable_expert_parallel=self.parallel_config.enable_expert_parallel,
+            num_redundant_experts=(
+                self.parallel_config.eplb_config.num_redundant_experts
+            ),
+            load_format=self.load_format,
+            quant_config=self.quant_config,
+        )
+        if (prepared_loader is not None) != prepared_requested:
+            raise RuntimeError(
+                "Prepared NVFP4 checkpoint/session selection drifted"
+            )
         session.begin(stager, staged_requested=requested)
+        prepared_session.begin(
+            prepared_loader, prepared_requested=prepared_requested
+        )
 
     def finish_nvfp4_layer_staged_load(self) -> None:
         self._nvfp4_layer_staged_load_session.finish()
+        self._nvfp4_prepared_load_session.finish()
 
     def abort_nvfp4_layer_staged_load(self) -> None:
         self._nvfp4_layer_staged_load_session.abort()
+        self._nvfp4_prepared_load_session.abort()
 
     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
         stacked_params_mapping = [
@@ -1197,6 +1247,11 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         expert_stager = (
             self._nvfp4_layer_staged_load_session.stager_for_nested_load(
                 staged_requested=staged_load_requested()
+            )
+        )
+        prepared_loader = (
+            self._nvfp4_prepared_load_session.loader_for_nested_load(
+                prepared_requested=prepared_load_requested()
             )
         )
 
@@ -1221,6 +1276,11 @@ class DeepseekV4Model(nn.Module, EagleModelMixin):
         )
 
         for name, loaded_weight in weights:
+            if prepared_loader is not None:
+                prepared_parameter = prepared_loader.consume(name, loaded_weight)
+                if prepared_parameter is not None:
+                    loaded_params.add(prepared_parameter)
+                    continue
             if pad_shared_expert and ".shared_experts." in name:
                 loaded_weight = self._pad_shared_expert_weight(name, loaded_weight)
             for param_name, weight_name, shard_id in stacked_params_mapping:
@@ -1404,6 +1464,7 @@ def _make_deepseek_v4_weights_mapper(expert_dtype: str) -> WeightsMapper:
         }
     return WeightsMapper(
         orig_to_new_prefix={
+            f"{PREPARED_NAMESPACE}.": f"model.{PREPARED_NAMESPACE}.",
             "layers.": "model.layers.",
             "embed.": "model.embed.",
             "norm.": "model.norm.",
