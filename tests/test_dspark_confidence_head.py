@@ -64,6 +64,21 @@ class ConfidenceConfigTests(unittest.TestCase):
 
 
 class ConfidencePrefixTests(unittest.TestCase):
+    def test_probability_policy_matches_deepspec_sigmoid_domain(self) -> None:
+        probabilities = torch.tensor(
+            [[0.8, 0.6, 0.4, 0.9, 0.9]], dtype=torch.float32
+        )
+        observed, below, prefix, lengths = (
+            confidence.confidence_probability_policy(
+                torch.logit(probabilities),
+                threshold=0.5,
+            )
+        )
+        self.assertTrue(torch.allclose(observed, probabilities))
+        self.assertEqual(below.tolist(), [[False, False, True, False, False]])
+        self.assertEqual(prefix.tolist(), [[True, True, False, False, False]])
+        self.assertEqual(lengths.tolist(), [2])
+
     def test_first_below_threshold_excludes_it_and_tail(self) -> None:
         draft_tokens = torch.tensor(
             [[10, 11, 12, 13, 14], [20, 21, 22, 23, 24]], dtype=torch.int64
@@ -124,6 +139,25 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("mask_draft_tokens_by_confidence", source)
         self.assertIn("confidence_head_loaded", source)
 
+    def test_real_score_telemetry_is_nonblocking_and_outside_graph(self) -> None:
+        source = (
+            ROOT
+            / "overlay/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py"
+        ).read_text()
+        self.assertIn("class _DSparkConfidenceTelemetry", source)
+        self.assertIn("self.events[slot].query()", source)
+        self.assertIn("copy_(confidence_logits, non_blocking=True)", source)
+        self.assertIn("and not dummy_run", source)
+        self.assertIn("self.confidence_logits[: input_batch.num_reqs]", source)
+
+    def test_real_score_metrics_pin_probability_domain_and_positions(self) -> None:
+        source = CONFIDENCE_PATH.read_text()
+        self.assertIn('"vllm:dspark_confidence_probability"', source)
+        self.assertIn('"vllm:dspark_confidence_below_threshold"', source)
+        self.assertIn('"vllm:dspark_confidence_prefix_length"', source)
+        self.assertIn('(\"position\", \"threshold\")', source)
+        self.assertIn("confidence_probability_policy(", source)
+
     def test_variable_lengths_are_transferred_only_when_enabled(self) -> None:
         source = (
             ROOT / "overlay/vllm/v1/worker/gpu/spec_decode/utils.py"
@@ -131,7 +165,7 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("self.variable_draft_lengths", source)
         self.assertIn("trim_invalid_draft_tail", source)
 
-    def test_probe_exercises_real_async_padding_and_metrics(self) -> None:
+    def test_probe_distinguishes_async_metrics_from_physical_work(self) -> None:
         source = PROBE_PATH.read_text()
         self.assertIn("Scheduler.update_draft_token_ids_in_output", source)
         self.assertIn("Scheduler.make_spec_decoding_stats", source)
@@ -141,6 +175,9 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("DraftTokenIds([\"probe\"], [list(truncated)])", source)
         self.assertIn('"truncated_proposal_length": truncated_length', source)
         self.assertIn('"metrics_proposed_equals_truncated"', source)
+        self.assertIn('"scheduled_slots_seen_by_runner": scheduled_slots', source)
+        self.assertIn('"physical_verifier_shortened"', source)
+        self.assertIn('"variable_length_verify_ready": False', source)
 
     def test_probe_pins_exact_confidence_input_width(self) -> None:
         source = PROBE_PATH.read_text()
@@ -180,6 +217,7 @@ class OverlayContractTests(unittest.TestCase):
             "39ebdfdc8de50d7fddc324aa011275dccd38f2dcc32c4e3268dbbf3ea915fe49",
             source,
         )
+        self.assertIn("sigmoid-prefix-v2-telemetry", source)
         self.assertNotIn("COPY overlay/vllm/ ", source)
 
 

@@ -25,4 +25,4 @@ RUN python3 -m py_compile \
       /usr/local/bin/dspark-probe-confidence-head
 
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
-LABEL org.opencontainers.image.dspark-confidence-scheduler="sigmoid-prefix-v1"
+LABEL org.opencontainers.image.dspark-confidence-scheduler="sigmoid-prefix-v2-telemetry"

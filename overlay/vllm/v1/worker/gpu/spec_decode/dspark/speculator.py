@@ -31,9 +31,12 @@ import torch
 from vllm.config import VllmConfig
 from vllm.config.compilation import CUDAGraphMode
 from vllm.logger import init_logger
+from vllm.v1.worker.gpu.input_batch import InputBatch
 from vllm.v1.worker.gpu.sample.gumbel import gumbel_sample
 from vllm.v1.worker.gpu.spec_decode.dflash.speculator import DFlashSpeculator
 from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
+    DSparkConfidenceMetrics,
+    get_confidence_metrics,
     mask_draft_tokens_by_confidence,
     parse_confidence_config,
 )
@@ -41,6 +44,59 @@ from vllm.v1.worker.gpu.spec_decode.dspark.utils import load_dspark_model
 
 
 logger = init_logger(__name__)
+
+
+class _DSparkConfidenceTelemetry:
+    """Non-blocking real-score capture outside the DSpark CUDA graph.
+
+    Two tiny pinned buffers allow the CPU to consume one batch while the next
+    D2H copy is in flight. If both are unexpectedly busy, telemetry drops that
+    batch and records the loss instead of stalling decode.
+    """
+
+    def __init__(
+        self,
+        *,
+        max_num_reqs: int,
+        num_steps: int,
+        threshold: float,
+        device: torch.device,
+    ) -> None:
+        self.device = device
+        self.metrics: DSparkConfidenceMetrics = get_confidence_metrics(threshold)
+        self.host_logits = [
+            torch.empty(
+                max_num_reqs,
+                num_steps,
+                dtype=torch.float32,
+                device="cpu",
+                pin_memory=True,
+            )
+            for _ in range(2)
+        ]
+        self.events = [torch.cuda.Event() for _ in range(2)]
+        self.pending_rows = [0, 0]
+
+    def _drain_ready(self) -> None:
+        for slot, rows in enumerate(self.pending_rows):
+            if rows and self.events[slot].query():
+                self.metrics.observe(self.host_logits[slot][:rows])
+                self.pending_rows[slot] = 0
+
+    def capture(self, confidence_logits: torch.Tensor) -> None:
+        self._drain_ready()
+        try:
+            slot = self.pending_rows.index(0)
+        except ValueError:
+            self.metrics.observe_dropped_batch()
+            return
+
+        rows = confidence_logits.shape[0]
+        # Enqueue the tiny copy on the current stream. This preserves ordering
+        # with the persistent logits buffer without a host-side synchronize.
+        self.host_logits[slot][:rows].copy_(confidence_logits, non_blocking=True)
+        self.events[slot].record(torch.cuda.current_stream(self.device))
+        self.pending_rows[slot] = rows
 
 
 class DSparkSpeculator(DFlashSpeculator):
@@ -97,6 +153,16 @@ class DSparkSpeculator(DFlashSpeculator):
             device=device,
         )
         self.confidence_head_ready = False
+        self._confidence_telemetry = (
+            _DSparkConfidenceTelemetry(
+                max_num_reqs=self.max_num_reqs,
+                num_steps=self.num_speculative_steps,
+                threshold=self.confidence_config.threshold,
+                device=device,
+            )
+            if self.confidence_config.enabled
+            else None
+        )
 
         logger.info_once(
             "DSpark confidence scheduler config: %s",
@@ -243,3 +309,47 @@ class DSparkSpeculator(DFlashSpeculator):
             cudagraph_runtime_mode,
         )
         self._sample_sequential(num_reqs, head_hidden)
+
+    @torch.inference_mode()
+    def propose(
+        self,
+        input_batch: InputBatch,
+        attn_metadata: dict[str, Any],
+        slot_mappings: dict[str, torch.Tensor],
+        last_hidden_states: torch.Tensor,
+        aux_hidden_states: list[torch.Tensor] | None,
+        num_sampled: torch.Tensor,
+        num_rejected: torch.Tensor,
+        last_sampled: torch.Tensor,
+        next_prefill_tokens: torch.Tensor,
+        temperature: torch.Tensor,
+        seeds: torch.Tensor,
+        num_tokens_across_dp: torch.Tensor | None = None,
+        dummy_run: bool = False,
+        skip_attn_for_dummy_run: bool = False,
+        mm_inputs: tuple[list[torch.Tensor], torch.Tensor] | None = None,
+        is_profile: bool = False,
+    ) -> torch.Tensor:
+        draft_tokens = super().propose(
+            input_batch=input_batch,
+            attn_metadata=attn_metadata,
+            slot_mappings=slot_mappings,
+            last_hidden_states=last_hidden_states,
+            aux_hidden_states=aux_hidden_states,
+            num_sampled=num_sampled,
+            num_rejected=num_rejected,
+            last_sampled=last_sampled,
+            next_prefill_tokens=next_prefill_tokens,
+            temperature=temperature,
+            seeds=seeds,
+            num_tokens_across_dp=num_tokens_across_dp,
+            dummy_run=dummy_run,
+            skip_attn_for_dummy_run=skip_attn_for_dummy_run,
+            mm_inputs=mm_inputs,
+            is_profile=is_profile,
+        )
+        if self._confidence_telemetry is not None and not dummy_run:
+            self._confidence_telemetry.capture(
+                self.confidence_logits[: input_batch.num_reqs]
+            )
+        return draft_tokens

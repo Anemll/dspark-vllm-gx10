@@ -1,14 +1,14 @@
 # DSpark confidence-head benchmark plan
 
-> Executed 2026-07-19. Result: keep the confidence scheduler OFF. The matched
-> no-draft denominator was 27.86 median output tok/s, the OFF control was
-> 48.77 tok/s, and thresholds 0.30/0.40/0.50 reached 46.98/45.07/42.25 tok/s.
-> See `benchmarks/results/decode-confidence-head-sweep.md` and its five raw
-> JSON artifacts.
+> Executed 2026-07-19, then invalidated as a confidence decision. The matched
+> no-draft denominator and confidence-OFF DSpark result remain valid, but every
+> enabled arm retained all five logical positions and the async verifier path
+> remained physically padded to five. See the corrected conclusion in
+> `benchmarks/results/decode-confidence-head-sweep.md`.
 
-## Status: integration gates passed; outage approval pending
+## Status: head integration passed; variable-length verifier gate failed
 
-The confidence-head integration is complete at source revision
+The historical confidence-head candidate was built at source revision
 `7f64c326c9566afb9bb345a55680195cabd4c895`. The final immutable candidate is
 `sha256:c78bd4cbbbe554bb18b348c8b23839da792fcab23eec2b043ed96ce64fc4daac`
 on both GX10 nodes and remains inert. Production was not stopped, restarted,
@@ -25,7 +25,8 @@ and HEAD CPU/CUDA all passed against the real draft checkpoint:
 - the forced policy example truncates a five-token proposal to a contiguous
   two-token prefix;
 - scheduler padding is `[10, 11, -1, -1, -1]`, with three invalid slots;
-- speculative metrics report proposed draft tokens = 2, not the padded five;
+- speculative metrics report two draft tokens after subtracting padding, but
+  the runner-facing scheduler list still has five physical slots;
 - both CUDA probes used one NVIDIA GB10, capability 12.1, with Torch
   `2.11.0+cu130`.
 
@@ -36,8 +37,9 @@ and CUDA JSON SHA is
 on each node. Node evidence is under
 `/home/anemll/nvfp4-artifacts/20260719-7f64c32-confidence-b1`.
 
-The benchmark outage described below is still **not authorized** until the
-user explicitly approves its final ceiling and arm sequence.
+That candidate is not valid for another confidence benchmark: its logical
+head/masking path passed, but its async target verification remained fixed at
+five physical slots. No new benchmark outage is authorized.
 
 ## Historical Gate 0: blocked on the pinned production image
 
@@ -76,11 +78,9 @@ This corrects the assumed env contract:
 
 ## Prerequisite before requesting an outage
 
-An immutable candidate image must first wire the existing V4 DSpark
-confidence head into proposal generation and add a fail-closed startup proof.
-That integration is now the active no-outage work item; this document still
-does not authorize a service restart.
-The free, production-live probe for such an image must prove:
+A future immutable candidate must retain the existing V4 DSpark confidence
+head integration and fix the physical variable-length verifier path. This
+document does not authorize a service restart. The free probe must prove:
 
 1. the `mtp.2.confidence_head.proj.weight` tensor is loaded rather than
    skipped;
@@ -92,8 +92,9 @@ The free, production-live probe for such an image must prove:
    `1.0` produces no speculative proposal for finite logits;
 5. the exact scheduler mode and threshold are emitted in startup logs and a
    machine-readable probe artifact;
-6. variable proposal lengths survive the installed async-scheduler padding
-   path, and invalid tail slots are excluded from speculative metrics.
+6. variable proposal lengths reduce both speculative metrics **and physical
+   target verification work**. The executed probe passed only the metrics half
+   and therefore did not satisfy this prerequisite.
 
 DeepSeek's [reference DSpark model](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-DSpark/blob/aa22cb07426656189b2573b8e77a9b7333b8ae0f/inference/model.py)
 returns an unbounded scalar logit from the confidence head. The official
@@ -102,7 +103,7 @@ applies sigmoid before comparing against a probability threshold, so the
 intended threshold domain is `[0.0, 1.0]`; it cannot be inferred from the
 current vLLM env placeholders.
 
-## Approved-shape experiment after the prerequisite passes
+## Historical experiment shape -- do not rerun before the prerequisite passes
 
 ### Fixed target and settings
 

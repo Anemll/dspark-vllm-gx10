@@ -14,11 +14,32 @@ trials. Speculative arms used five configured draft positions and required all
 four Prometheus speculative-counter families. The no-draft arm required those
 counters to remain absent or unchanged.
 
-## Result
+## Corrected validity result
 
-The confidence scheduler does not improve this workload. The best setting is
-the existing confidence-OFF control. DSpark itself is strongly beneficial:
-OFF is 1.75x the matched no-draft median output rate.
+**The confidence scheduler was never validly exercised by this sweep.** Every
+enabled arm retained all five logical draft positions, so thresholds 0.30-0.50
+measured confidence-scoring and synchronization overhead on the fixed-five
+path, not the value of confidence-controlled early stopping. The result is
+inconclusive about confidence scheduling and must not be presented as evidence
+that confidence does not help.
+
+The threshold domain was re-audited against DeepSpec after the run. DeepSpec
+compares `confidence_logits.sigmoid()` with the configured threshold, exactly
+matching this candidate's probability-domain policy. Therefore this was **not**
+a raw-logit-versus-sigmoid scale error. The remaining logical-truncation
+ambiguity is calibration (real probabilities all at least 0.50 for this prompt)
+versus a live wiring/execution problem; the sweep did not persist real scores,
+so it cannot distinguish them.
+
+Authoritative reference:
+[`deepspec/eval/dspark/draft_ops.py`](https://github.com/deepseek-ai/DeepSpec/blob/main/deepspec/eval/dspark/draft_ops.py).
+
+Only two performance claims survive the validity correction:
+
+1. Confidence-OFF DSpark delivered about **1.74x** the matched no-draft rate
+   (1.75x by median per-stream decode rate; 1.73x by aggregate request rate).
+2. Enabling confidence scoring adds real overhead when it removes no draft
+   positions.
 
 | Arm | Median output tok/s | Best aggregate tok/s | Mean TTFT | Mean proposed | Acceptance | Effective accepted | Delta vs OFF |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -38,15 +59,46 @@ Mean per-position acceptance rates remained monotonic within every arm:
 | Threshold 0.50 | 0.763 | 0.488 | 0.274 | 0.186 | 0.096 |
 
 The real requests reported a mean proposed length of exactly 5.000 at every
-tested threshold. Thus 0.30-0.50 did not produce a measurable proposal-length
+tested threshold. Thus 0.30-0.50 did not produce a logical proposal-length
 reduction, while scheduler overhead and/or the altered proposal path reduced
-throughput. No threshold meets the required +5% promotion gate.
+throughput. The threshold promotion gate is invalid because its prerequisite
+-- observed truncation -- never occurred.
+
+There is a second, independent execution confound. With async scheduling, a
+short confidence prefix is transferred to the scheduler and then padded back
+to the configured five slots with `-1`; the current runner derives target work
+from that padded list length. Statistics subtract the invalid slots, so a
+reported logical proposal length can be shorter than the physical verifier
+shape. Consequently, even a future arm that reports truncation cannot be
+called a valid confidence performance test until physical target work is also
+proven to shrink. The current CUDA-graph/rows-5-optimized path is a fixed-five
+kernel path, not a demonstrated variable-length verifier.
 
 The exact-output-hash gate also did not pass: the no-draft, 0.40, and 0.50
 arms were not even internally hash-stable across their two temperature-zero
 trials, and no confidence arm matched the no-draft hashes. This makes the
-cross-arm quality comparison inconclusive, but it does not affect the speed
-decision because all enabled thresholds are slower than OFF.
+cross-arm quality comparison inconclusive and rules out exact hashes as the
+promotion contract for this runtime. There is no confidence speed decision to
+make from these arms because no early stopping occurred.
+
+## Required next evidence
+
+No threshold or content-matrix sweep should be run from this result. A later
+candidate must first expose the real per-position sigmoid-probability
+distribution, below-threshold counts, and logical prefix-length histogram. It
+must then prove that a forced logical `5 -> 2` truncation also reduces the
+physical target verifier from five draft slots to two. Only after both gates
+pass is a threshold sweep meaningful.
+
+The next candidate now carries passive, confidence-enabled-only Prometheus
+telemetry for that first gate:
+
+- `vllm:dspark_confidence_probability` histogram, labeled by position and
+  threshold;
+- `vllm:dspark_confidence_below_threshold_total`, labeled identically;
+- `vllm:dspark_confidence_prefix_length` histogram;
+- `vllm:dspark_confidence_telemetry_dropped_batches_total`, which makes an
+  incomplete asynchronous sample visible rather than silently biasing it.
 
 ## Reproducibility notes
 

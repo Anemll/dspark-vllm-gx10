@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Physical DSpark confidence-head probe against one real checkpoint tensor."""
+"""DSpark confidence-head and async-accounting probe.
+
+This probe intentionally distinguishes logical proposal accounting from
+physical verifier work. The installed async scheduler pads a short proposal
+back to the configured width, so corrected statistics are not proof that the
+target executes a shorter verification shape.
+"""
 
 from __future__ import annotations
 
@@ -97,7 +103,7 @@ def verify_async_scheduler_contract() -> dict[str, object]:
     invalid = output.num_invalid_spec_tokens
     if padded != [10, 11, -1, -1, -1] or invalid != {"probe": 3}:
         raise RuntimeError(
-            "installed async scheduler did not preserve the variable draft prefix: "
+            "installed async scheduler did not expose the expected padded prefix: "
             f"padded={padded}, invalid={invalid}"
         )
 
@@ -125,16 +131,21 @@ def verify_async_scheduler_contract() -> dict[str, object]:
             "installed speculative metrics did not subtract invalid draft slots: "
             f"observed={observed}"
         )
+    scheduled_slots = len(padded)
     return {
         "raw_slots": 5,
         "truncated_proposal_length": truncated_length,
         "scheduled": padded,
+        "scheduled_slots_seen_by_runner": scheduled_slots,
         "invalid_slots": invalid["probe"],
         "metrics_draft_tokens": observed["draft"],
         "metrics_accepted_tokens": observed["accepted"],
         "metrics_proposed_equals_truncated": (
             observed["draft"] == truncated_length
         ),
+        "physical_verifier_shortened": scheduled_slots == truncated_length,
+        "variable_length_verify_ready": False,
+        "diagnosis": "metrics shorten, scheduler output remains padded",
     }
 
 

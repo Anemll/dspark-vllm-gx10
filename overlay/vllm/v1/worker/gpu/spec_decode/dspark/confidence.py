@@ -8,6 +8,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 import math
 import os
+from threading import Lock
+from typing import Any
 
 import torch
 
@@ -15,6 +17,10 @@ import torch
 SCHEDULER_ENV = "VLLM_DSPARK_CONFIDENCE_SCHEDULER"
 THRESHOLD_ENV = "VLLM_DSPARK_CONFIDENCE_THRESHOLD"
 VALID_SCHEDULERS = frozenset(("off", "on"))
+
+
+_metrics_lock = Lock()
+_metrics_instance: DSparkConfidenceMetrics | None = None
 
 
 def trim_invalid_draft_tail(token_ids: list[int]) -> list[int]:
@@ -117,8 +123,144 @@ def mask_draft_tokens_by_confidence(
         )
         return draft_tokens, lengths
 
-    keep = confidence_logits.sigmoid().ge(threshold)
-    prefix = keep.to(torch.int32).cumprod(dim=1).to(torch.bool)
-    lengths = prefix.sum(dim=1, dtype=torch.int32)
+    _, _, prefix, lengths = confidence_probability_policy(
+        confidence_logits,
+        threshold=threshold,
+    )
     invalid = torch.full_like(draft_tokens, -1)
     return torch.where(prefix, draft_tokens, invalid), lengths
+
+
+def confidence_probability_policy(
+    confidence_logits: torch.Tensor,
+    *,
+    threshold: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Apply DeepSpec's sigmoid-probability contiguous-prefix policy.
+
+    Returns ``(probabilities, below_threshold, prefix_mask, prefix_lengths)``.
+    Keeping this calculation shared by inference and telemetry prevents score
+    logging from silently using a different threshold domain.
+    """
+
+    if confidence_logits.ndim != 2:
+        raise ValueError(
+            "confidence logits must have [batch, steps] shape, got "
+            f"{tuple(confidence_logits.shape)}"
+        )
+    if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+        raise ValueError(
+            f"threshold must be finite and in [0.0, 1.0], got {threshold}"
+        )
+
+    probabilities = confidence_logits.sigmoid()
+    below_threshold = probabilities.lt(threshold)
+    prefix = (
+        below_threshold.logical_not()
+        .to(torch.int32)
+        .cumprod(dim=1)
+        .to(torch.bool)
+    )
+    prefix_lengths = prefix.sum(dim=1, dtype=torch.int32)
+    return probabilities, below_threshold, prefix, prefix_lengths
+
+
+class DSparkConfidenceMetrics:
+    """Prometheus observations for real DSpark confidence-head outputs.
+
+    The worker records sigmoid probabilities rather than raw logits because
+    that is the threshold domain used by DeepSpec and by the masking policy.
+    Position and threshold labels make the resulting distribution auditable.
+    """
+
+    def __init__(self, threshold: float, *, registry: Any | None = None):
+        from prometheus_client import Counter, Histogram
+
+        self.threshold = threshold
+        self.threshold_label = format(threshold, ".6g")
+        metric_kwargs = {} if registry is None else {"registry": registry}
+        probability_buckets = tuple(i / 100.0 for i in range(101))
+
+        self.probability = Histogram(
+            "vllm:dspark_confidence_probability",
+            "DSpark confidence-head sigmoid probability by draft position.",
+            ("position", "threshold"),
+            buckets=probability_buckets,
+            **metric_kwargs,
+        )
+        self.below_threshold = Counter(
+            "vllm:dspark_confidence_below_threshold",
+            "DSpark confidence positions below the active probability threshold.",
+            ("position", "threshold"),
+            **metric_kwargs,
+        )
+        self.prefix_length = Histogram(
+            "vllm:dspark_confidence_prefix_length",
+            "Logical DSpark proposal prefix length after confidence masking.",
+            ("threshold",),
+            buckets=tuple(range(6)),
+            **metric_kwargs,
+        )
+        self.dropped_batches = Counter(
+            "vllm:dspark_confidence_telemetry_dropped_batches",
+            "Confidence telemetry batches dropped because both D2H slots were busy.",
+            ("threshold",),
+            **metric_kwargs,
+        )
+
+    def observe(self, confidence_logits: torch.Tensor) -> dict[str, object]:
+        """Record one CPU-resident ``[batch, steps]`` logits tensor."""
+
+        if confidence_logits.device.type != "cpu":
+            raise ValueError("confidence telemetry must observe CPU-resident logits")
+        probabilities, below, _, prefix_lengths = confidence_probability_policy(
+            confidence_logits,
+            threshold=self.threshold,
+        )
+        probability_rows = probabilities.tolist()
+        below_counts = below.sum(dim=0, dtype=torch.int64).tolist()
+        prefix_values = prefix_lengths.tolist()
+
+        for position in range(probabilities.shape[1]):
+            labels = {
+                "position": str(position),
+                "threshold": self.threshold_label,
+            }
+            histogram = self.probability.labels(**labels)
+            for row in probability_rows:
+                histogram.observe(float(row[position]))
+            count = int(below_counts[position])
+            # inc(0) intentionally materializes a zero-valued series. An absent
+            # position must not be mistaken for missing telemetry.
+            self.below_threshold.labels(**labels).inc(count)
+
+        prefix_histogram = self.prefix_length.labels(
+            threshold=self.threshold_label
+        )
+        for length in prefix_values:
+            prefix_histogram.observe(int(length))
+
+        return {
+            "probabilities": probability_rows,
+            "below_threshold_per_position": [int(value) for value in below_counts],
+            "prefix_lengths": [int(value) for value in prefix_values],
+        }
+
+    def observe_dropped_batch(self) -> None:
+        self.dropped_batches.labels(threshold=self.threshold_label).inc()
+
+
+def get_confidence_metrics(threshold: float) -> DSparkConfidenceMetrics:
+    """Return the process-global collector for the worker's fixed threshold."""
+
+    global _metrics_instance
+    key = format(threshold, ".6g")
+    with _metrics_lock:
+        if _metrics_instance is None:
+            _metrics_instance = DSparkConfidenceMetrics(threshold)
+        elif _metrics_instance.threshold_label != key:
+            raise RuntimeError(
+                "one vLLM worker cannot register multiple DSpark confidence "
+                f"thresholds: {_metrics_instance.threshold_label} and {key}"
+            )
+        return _metrics_instance
