@@ -9,13 +9,15 @@ ARG BASE_SPEC_UTILS_SHA256=39ebdfdc8de50d7fddc324aa011275dccd38f2dcc32c4e3268dbb
 ARG BASE_V2_MODEL_RUNNER_SHA256=58f45c58969cdd9cba707863e82fefda818002de45c621032b58b6eb364deedf
 ARG BASE_OUTPUTS_SHA256=1e87bf44162452c1908d3a5003685937dbdc56f5634e35e11ed7b6a5322a1c15
 ARG BASE_ASYNC_SCHEDULER_SHA256=da6343d7e7c394a1738cf72905cbecc208003ffa461ccb441268333a3eb9f884
+ARG BASE_CUDAGRAPH_UTILS_SHA256=303d762141830cd8343976d5be14b34ef1666e7d1d459e089adfd4f5b8cd3ef6
 
 RUN echo "${BASE_DSPARK_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/dspark.py" | sha256sum -c - && \
     echo "${BASE_SPECULATOR_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py" | sha256sum -c - && \
     echo "${BASE_SPEC_UTILS_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/utils.py" | sha256sum -c - && \
     echo "${BASE_V2_MODEL_RUNNER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py" | sha256sum -c - && \
     echo "${BASE_OUTPUTS_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/outputs.py" | sha256sum -c - && \
-    echo "${BASE_ASYNC_SCHEDULER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/async_scheduler.py" | sha256sum -c -
+    echo "${BASE_ASYNC_SCHEDULER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/async_scheduler.py" | sha256sum -c - && \
+    echo "${BASE_CUDAGRAPH_UTILS_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/cudagraph_utils.py" | sha256sum -c -
 
 COPY overlay/vllm/models/deepseek_v4/nvidia/dspark.py /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/dspark.py
 COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py
@@ -37,8 +39,9 @@ RUN python3 -m py_compile \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/outputs.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/async_scheduler.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/cudagraph_utils.py \
       /usr/local/bin/patch-dspark-variable-verifier \
       /usr/local/bin/dspark-probe-confidence-head
 
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
-LABEL org.opencontainers.image.dspark-confidence-scheduler="sigmoid-prefix-v3-physical-verifier"
+LABEL org.opencontainers.image.dspark-confidence-scheduler="sigmoid-prefix-v4-exact-c1-verifier-graphs"

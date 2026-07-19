@@ -250,15 +250,17 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("inspect.getsource(GPUModelRunner.execute_model)", source)
         self.assertIn("compact_pos >= dispatch_pos", source)
         self.assertIn('"grammar_overlap_uses_max_not_sum": True', source)
+        self.assertIn('"exact_c1_cuda_graph_shapes_1_to_6": True', source)
 
     @unittest.skipUnless(UPSTREAM_ROOT.exists(), "pinned upstream checkout unavailable")
-    def test_patch_installs_only_the_three_pinned_integration_seams(self) -> None:
+    def test_patch_installs_only_the_four_pinned_integration_seams(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             package_root = Path(tmp)
             paths = (
                 "vllm/v1/worker/gpu/model_runner.py",
                 "vllm/v1/outputs.py",
                 "vllm/v1/core/sched/async_scheduler.py",
+                "vllm/v1/worker/gpu/cudagraph_utils.py",
             )
             for relative in paths:
                 destination = package_root / relative
@@ -276,6 +278,7 @@ class OverlayContractTests(unittest.TestCase):
             model_runner = (package_root / paths[0]).read_text()
             outputs = (package_root / paths[1]).read_text()
             scheduler = (package_root / paths[2]).read_text()
+            cudagraph = (package_root / paths[3]).read_text()
             self.assertIn(
                 "self.draft_tokens_handler.compact_scheduler_output(", model_runner
             )
@@ -287,6 +290,11 @@ class OverlayContractTests(unittest.TestCase):
             )
             self.assertIn(
                 "physical_invalid = (", scheduler
+            )
+            self.assertIn("variable_dspark = (", cudagraph)
+            self.assertIn(
+                "decode_query_lens = list(range(1, self.decode_query_len + 1))",
+                cudagraph,
             )
             for relative in paths:
                 subprocess.run(
@@ -344,7 +352,11 @@ class OverlayContractTests(unittest.TestCase):
             "da6343d7e7c394a1738cf72905cbecc208003ffa461ccb441268333a3eb9f884",
             source,
         )
-        self.assertIn("sigmoid-prefix-v3-physical-verifier", source)
+        self.assertIn(
+            "303d762141830cd8343976d5be14b34ef1666e7d1d459e089adfd4f5b8cd3ef6",
+            source,
+        )
+        self.assertIn("sigmoid-prefix-v4-exact-c1-verifier-graphs", source)
         self.assertIn("patch-dspark-variable-verifier", source)
         self.assertNotIn("COPY overlay/vllm/ ", source)
 

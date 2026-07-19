@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 """Install the DSpark physical variable-verifier hooks into pinned vLLM.
 
-The overlay intentionally patches three small integration seams instead of
+The overlay intentionally patches four small integration seams instead of
 forking thousands of lines of the pinned model runner and scheduler.  Every
 replacement is exact and fail-closed; the Dockerfile separately pins the
 complete pre-patch file hashes.
@@ -60,6 +60,29 @@ def patch_async_scheduler(path: Path) -> None:
     path.write_text(source, encoding="utf-8")
 
 
+def patch_cudagraph_utils(path: Path) -> None:
+    source = path.read_text(encoding="utf-8")
+    source = replace_once(
+        source,
+        """from collections import defaultdict\n""",
+        """import os\n\nfrom collections import defaultdict\n""",
+        label="cudagraph environment import",
+    )
+    source = replace_once(
+        source,
+        """        speculative_config = self.vllm_config.speculative_config\n        if (\n            speculative_config\n            and speculative_config.uses_dynamic_speculative_decoding()\n        ):\n""",
+        """        speculative_config = self.vllm_config.speculative_config\n        variable_dspark = (\n            speculative_config is not None\n            and speculative_config.use_dspark()\n            and os.environ.get(\n                \"VLLM_DSPARK_CONFIDENCE_SCHEDULER\", \"off\"\n            ) == \"on\"\n        )\n        if variable_dspark:\n            # Confidence scheduling can physically shorten a five-token DSpark\n            # proposal. Capture exact C=1 target shapes (bonus token plus the\n            # retained prefix) so the shorter verifier does not round back up.\n            decode_query_lens = list(range(1, self.decode_query_len + 1))\n        elif (\n            speculative_config\n            and speculative_config.uses_dynamic_speculative_decoding()\n        ):\n""",
+        label="cudagraph variable DSpark lengths",
+    )
+    source = replace_once(
+        source,
+        """                    rounded_num_tokens = round_up(num_tokens, decode_query_len)\n                    rounded_num_reqs = rounded_num_tokens // decode_query_len\n\n                    if (\n""",
+        """                    rounded_num_tokens = round_up(num_tokens, decode_query_len)\n                    rounded_num_reqs = rounded_num_tokens // decode_query_len\n\n                    # Only the normal full-width graph fans out across request\n                    # counts. The five shortened lengths are exact C=1 verifier\n                    # specializations, bounding the additional graph footprint.\n                    if (\n                        variable_dspark\n                        and decode_query_len != self.decode_query_len\n                        and rounded_num_reqs > 1\n                    ):\n                        continue\n\n                    if (\n""",
+        label="cudagraph C1 capture bound",
+    )
+    path.write_text(source, encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--package-root", type=Path, required=True)
@@ -68,6 +91,7 @@ def main() -> None:
     patch_model_runner(root / "vllm/v1/worker/gpu/model_runner.py")
     patch_outputs(root / "vllm/v1/outputs.py")
     patch_async_scheduler(root / "vllm/v1/core/sched/async_scheduler.py")
+    patch_cudagraph_utils(root / "vllm/v1/worker/gpu/cudagraph_utils.py")
 
 
 if __name__ == "__main__":

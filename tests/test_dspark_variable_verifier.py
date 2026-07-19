@@ -88,13 +88,14 @@ class PhysicalCompactionTests(unittest.TestCase):
 
 @unittest.skipUnless(UPSTREAM_ROOT.exists(), "pinned upstream checkout unavailable")
 class PinnedIntegrationPatchTests(unittest.TestCase):
-    def test_patch_and_compile_all_three_integration_seams(self) -> None:
+    def test_patch_and_compile_all_four_integration_seams(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             package_root = Path(tmp)
             paths = (
                 "vllm/v1/worker/gpu/model_runner.py",
                 "vllm/v1/outputs.py",
                 "vllm/v1/core/sched/async_scheduler.py",
+                "vllm/v1/worker/gpu/cudagraph_utils.py",
             )
             for relative in paths:
                 destination = package_root / relative
@@ -112,6 +113,7 @@ class PinnedIntegrationPatchTests(unittest.TestCase):
             model_runner = (package_root / paths[0]).read_text()
             outputs = (package_root / paths[1]).read_text()
             scheduler = (package_root / paths[2]).read_text()
+            cudagraph = (package_root / paths[3]).read_text()
             self.assertIn(
                 "self.draft_tokens_handler.compact_scheduler_output(", model_runner
             )
@@ -128,6 +130,15 @@ class PinnedIntegrationPatchTests(unittest.TestCase):
             self.assertIn(
                 "total = max(merged.get(req_id, 0), count)", scheduler
             )
+            self.assertIn("variable_dspark = (", cudagraph)
+            self.assertIn(
+                "decode_query_lens = list(range(1, self.decode_query_len + 1))",
+                cudagraph,
+            )
+            self.assertIn(
+                "and rounded_num_reqs > 1",
+                cudagraph,
+            )
             for relative in paths:
                 subprocess.run(
                     [sys.executable, "-m", "py_compile", str(package_root / relative)],
@@ -141,6 +152,7 @@ class PinnedIntegrationPatchTests(unittest.TestCase):
                 "vllm/v1/worker/gpu/model_runner.py",
                 "vllm/v1/outputs.py",
                 "vllm/v1/core/sched/async_scheduler.py",
+                "vllm/v1/worker/gpu/cudagraph_utils.py",
             )
             for relative in paths:
                 destination = package_root / relative

@@ -45,7 +45,9 @@ def compact_scheduler_output_for_variable_drafts(
             f"{len(req_ids)} request ids vs {len(draft_token_ids)} rows"
         )
 
-    actual_by_req = dict(zip(req_ids, draft_token_ids, strict=True))
+    # Length equality is checked above; avoid ``zip(strict=...)`` so the pure
+    # bookkeeping tests can also run under the repository's Python 3.9 tools.
+    actual_by_req = dict(zip(req_ids, draft_token_ids))
     invalid: dict[str, int] = {}
     for req_id in tuple(scheduled):
         if req_id not in actual_by_req:

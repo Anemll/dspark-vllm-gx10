@@ -50,6 +50,7 @@ def verify_async_scheduler_contract() -> dict[str, object]:
     from vllm.v1.core.sched.scheduler import Scheduler
     from vllm.v1.outputs import ModelRunnerOutput
     from vllm.v1.worker.gpu.model_runner import GPUModelRunner
+    from vllm.v1.worker.gpu.cudagraph_utils import CudaGraphManager
     from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
         mask_draft_tokens_by_confidence,
         trim_invalid_draft_tail,
@@ -133,6 +134,15 @@ def verify_async_scheduler_contract() -> dict[str, object]:
         or "max(merged.get(req_id, 0), count)" not in scheduler_source
     ):
         raise RuntimeError("async scheduler lacks physical verifier metric correction")
+    cudagraph_source = inspect.getsource(CudaGraphManager._init_candidates)
+    if (
+        "variable_dspark = (" not in cudagraph_source
+        or "list(range(1, self.decode_query_len + 1))" not in cudagraph_source
+        or "and rounded_num_reqs > 1" not in cudagraph_source
+    ):
+        raise RuntimeError(
+            "CUDA graph manager lacks bounded exact C=1 DSpark verifier shapes"
+        )
 
     observed: dict[str, int] = {}
 
@@ -178,6 +188,7 @@ def verify_async_scheduler_contract() -> dict[str, object]:
             "compaction_before_cuda_graph_dispatch": True,
             "physical_trim_returned_to_scheduler": True,
             "grammar_overlap_uses_max_not_sum": True,
+            "exact_c1_cuda_graph_shapes_1_to_6": True,
         },
     }
 
