@@ -8,7 +8,8 @@ import torch
 from vllm.v1.outputs import DraftTokenIds
 from vllm.v1.worker.gpu.async_utils import async_copy_to_np
 from vllm.v1.worker.gpu.input_batch import InputBatch
-from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
+from vllm.v1.worker.gpu.spec_decode.dspark.variable_verifier import (
+    compact_scheduler_output_for_variable_drafts,
     trim_invalid_draft_tail,
 )
 
@@ -66,6 +67,25 @@ class DraftTokensHandler:
             # This case only happens when async scheduling is disabled.
             draft_token_ids = [[-1] * self.num_draft_tokens for _ in self.req_ids]
         return DraftTokenIds(self.req_ids, draft_token_ids)
+
+    def compact_scheduler_output(self, scheduler_output) -> dict[str, int]:
+        """Apply the previous DSpark proposal length before target dispatch."""
+
+        if not self.variable_draft_lengths:
+            return {}
+        if not scheduler_output.scheduled_spec_decode_tokens:
+            return {}
+        if self.draft_tokens_np is None or not self.req_ids:
+            raise RuntimeError(
+                "DSpark confidence scheduling has target draft rows but no "
+                "completed prior proposal transfer"
+            )
+        self.copy_event.synchronize()
+        return compact_scheduler_output_for_variable_drafts(
+            scheduler_output,
+            self.req_ids,
+            self.draft_tokens_np.tolist(),
+        )
 
 
 def get_parallel_drafting_token_id(hf_config) -> int:

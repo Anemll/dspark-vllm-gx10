@@ -3,7 +3,11 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import shutil
+import subprocess
 import sys
+import tempfile
+from types import SimpleNamespace
 import unittest
 
 import torch
@@ -11,8 +15,24 @@ import torch
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIDENCE_PATH = ROOT / "overlay/vllm/v1/worker/gpu/spec_decode/dspark/confidence.py"
+VARIABLE_VERIFIER_PATH = (
+    ROOT / "overlay/vllm/v1/worker/gpu/spec_decode/dspark/variable_verifier.py"
+)
 PROBE_PATH = ROOT / "scripts/probe_dspark_confidence_head.py"
 DOCKERFILE_PATH = ROOT / "docker/Dockerfile.dspark-confidence-overlay"
+PATCHER_PATH = ROOT / "scripts/patch_dspark_variable_verifier.py"
+UPSTREAM_ROOT = Path(
+    "/Users/anemll/SourceRelease/GITHUB/ML_playground/dspark-vllm-gx10/"
+    ".build/vllm-upstream"
+)
+VARIABLE_SPEC = importlib.util.spec_from_file_location(
+    "vllm.v1.worker.gpu.spec_decode.dspark.variable_verifier",
+    VARIABLE_VERIFIER_PATH,
+)
+assert VARIABLE_SPEC and VARIABLE_SPEC.loader
+variable_verifier = importlib.util.module_from_spec(VARIABLE_SPEC)
+sys.modules[VARIABLE_SPEC.name] = variable_verifier
+VARIABLE_SPEC.loader.exec_module(variable_verifier)
 SPEC = importlib.util.spec_from_file_location("dspark_confidence", CONFIDENCE_PATH)
 assert SPEC and SPEC.loader
 confidence = importlib.util.module_from_spec(SPEC)
@@ -119,6 +139,48 @@ class ConfidencePrefixTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid negative"):
             confidence.trim_invalid_draft_tail([1, -2, -1])
 
+    def test_physical_compaction_shrinks_target_rows_per_request(self) -> None:
+        output = SimpleNamespace(
+            scheduled_spec_decode_tokens={"a": [-1] * 5, "b": [-1] * 5},
+            num_scheduled_tokens={"a": 6, "b": 6},
+            total_num_scheduled_tokens=12,
+        )
+        invalid = confidence.compact_scheduler_output_for_variable_drafts(
+            output,
+            ["a", "b"],
+            [[10, 11, -1, -1, -1], [-1, -1, -1, -1, -1]],
+        )
+        self.assertEqual(invalid, {"a": 3, "b": 5})
+        self.assertEqual(output.scheduled_spec_decode_tokens, {"a": [10, 11]})
+        self.assertEqual(output.num_scheduled_tokens, {"a": 3, "b": 1})
+        self.assertEqual(output.total_num_scheduled_tokens, 4)
+
+    def test_physical_compaction_preserves_full_prefix(self) -> None:
+        output = SimpleNamespace(
+            scheduled_spec_decode_tokens={"a": [-1] * 5},
+            num_scheduled_tokens={"a": 6},
+            total_num_scheduled_tokens=6,
+        )
+        invalid = confidence.compact_scheduler_output_for_variable_drafts(
+            output, ["a"], [[10, 11, 12, 13, 14]]
+        )
+        self.assertEqual(invalid, {})
+        self.assertEqual(
+            output.scheduled_spec_decode_tokens["a"], [10, 11, 12, 13, 14]
+        )
+        self.assertEqual(output.num_scheduled_tokens["a"], 6)
+
+    def test_physical_compaction_fails_closed_on_missing_row(self) -> None:
+        output = SimpleNamespace(
+            scheduled_spec_decode_tokens={"missing": [-1] * 5},
+            num_scheduled_tokens={"missing": 6},
+            total_num_scheduled_tokens=6,
+        )
+        with self.assertRaisesRegex(RuntimeError, "missing the prior proposal"):
+            confidence.compact_scheduler_output_for_variable_drafts(
+                output, ["other"], [[1, 2, 3, 4, 5]]
+            )
+
 
 class OverlayContractTests(unittest.TestCase):
     def test_deepseek_model_loads_exact_head_parameter(self) -> None:
@@ -164,20 +226,73 @@ class OverlayContractTests(unittest.TestCase):
         ).read_text()
         self.assertIn("self.variable_draft_lengths", source)
         self.assertIn("trim_invalid_draft_tail", source)
+        self.assertIn("compact_scheduler_output_for_variable_drafts", source)
+        self.assertIn("self.copy_event.synchronize()", source)
+        confidence_source = VARIABLE_VERIFIER_PATH.read_text()
+        self.assertIn(
+            "scheduler_output.total_num_scheduled_tokens -= removed",
+            confidence_source,
+        )
 
-    def test_probe_distinguishes_async_metrics_from_physical_work(self) -> None:
+    def test_probe_proves_physical_rows_and_metrics_match_prefix(self) -> None:
         source = PROBE_PATH.read_text()
-        self.assertIn("Scheduler.update_draft_token_ids_in_output", source)
+        self.assertIn("compact_scheduler_output_for_variable_drafts", source)
         self.assertIn("Scheduler.make_spec_decoding_stats", source)
-        self.assertIn('padded != [10, 11, -1, -1, -1]', source)
+        self.assertIn('physical != [10, 11]', source)
+        self.assertIn('output.num_scheduled_tokens != {"probe": 3}', source)
         self.assertIn('observed != {"draft": 2, "accepted": 1}', source)
         self.assertIn("truncated_length = len(truncated)", source)
-        self.assertIn("DraftTokenIds([\"probe\"], [list(truncated)])", source)
         self.assertIn('"truncated_proposal_length": truncated_length', source)
         self.assertIn('"metrics_proposed_equals_truncated"', source)
         self.assertIn('"scheduled_slots_seen_by_runner": scheduled_slots', source)
         self.assertIn('"physical_verifier_shortened"', source)
-        self.assertIn('"variable_length_verify_ready": False', source)
+        self.assertIn('"variable_length_verify_ready": True', source)
+        self.assertIn("inspect.getsource(GPUModelRunner.execute_model)", source)
+        self.assertIn("compact_pos >= dispatch_pos", source)
+        self.assertIn('"grammar_overlap_uses_max_not_sum": True', source)
+
+    @unittest.skipUnless(UPSTREAM_ROOT.exists(), "pinned upstream checkout unavailable")
+    def test_patch_installs_only_the_three_pinned_integration_seams(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            package_root = Path(tmp)
+            paths = (
+                "vllm/v1/worker/gpu/model_runner.py",
+                "vllm/v1/outputs.py",
+                "vllm/v1/core/sched/async_scheduler.py",
+            )
+            for relative in paths:
+                destination = package_root / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(UPSTREAM_ROOT / relative, destination)
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(PATCHER_PATH),
+                    "--package-root",
+                    str(package_root),
+                ],
+                check=True,
+            )
+            model_runner = (package_root / paths[0]).read_text()
+            outputs = (package_root / paths[1]).read_text()
+            scheduler = (package_root / paths[2]).read_text()
+            self.assertIn(
+                "self.draft_tokens_handler.compact_scheduler_output(", model_runner
+            )
+            self.assertIn(
+                "confidence_invalid_spec_tokens=", model_runner
+            )
+            self.assertIn(
+                "confidence_invalid_spec_tokens: dict[str, int] | None", outputs
+            )
+            self.assertIn(
+                "physical_invalid = (", scheduler
+            )
+            for relative in paths:
+                subprocess.run(
+                    [sys.executable, "-m", "py_compile", str(package_root / relative)],
+                    check=True,
+                )
 
     def test_probe_pins_exact_confidence_input_width(self) -> None:
         source = PROBE_PATH.read_text()
@@ -217,7 +332,20 @@ class OverlayContractTests(unittest.TestCase):
             "39ebdfdc8de50d7fddc324aa011275dccd38f2dcc32c4e3268dbbf3ea915fe49",
             source,
         )
-        self.assertIn("sigmoid-prefix-v2-telemetry", source)
+        self.assertIn(
+            "58f45c58969cdd9cba707863e82fefda818002de45c621032b58b6eb364deedf",
+            source,
+        )
+        self.assertIn(
+            "1e87bf44162452c1908d3a5003685937dbdc56f5634e35e11ed7b6a5322a1c15",
+            source,
+        )
+        self.assertIn(
+            "da6343d7e7c394a1738cf72905cbecc208003ffa461ccb441268333a3eb9f884",
+            source,
+        )
+        self.assertIn("sigmoid-prefix-v3-physical-verifier", source)
+        self.assertIn("patch-dspark-variable-verifier", source)
         self.assertNotIn("COPY overlay/vllm/ ", source)
 
 

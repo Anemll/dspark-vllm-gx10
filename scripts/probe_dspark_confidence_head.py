@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""DSpark confidence-head and async-accounting probe.
-
-This probe intentionally distinguishes logical proposal accounting from
-physical verifier work. The installed async scheduler pads a short proposal
-back to the configured width, so corrected statistics are not proof that the
-target executes a shorter verification shape.
-"""
+"""DSpark confidence-head and physical variable-verifier probe."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -48,14 +43,19 @@ def load_checkpoint_weight(checkpoint: Path) -> tuple[torch.Tensor, Path]:
 
 
 def verify_async_scheduler_contract() -> dict[str, object]:
-    """Exercise the installed async padding and metric-adjustment contract."""
+    """Exercise physical row compaction and truthful metric adjustment."""
 
     from vllm.v1.core.sched.output import SchedulerOutput
+    from vllm.v1.core.sched.async_scheduler import AsyncScheduler
     from vllm.v1.core.sched.scheduler import Scheduler
-    from vllm.v1.outputs import DraftTokenIds
+    from vllm.v1.outputs import ModelRunnerOutput
+    from vllm.v1.worker.gpu.model_runner import GPUModelRunner
     from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
         mask_draft_tokens_by_confidence,
         trim_invalid_draft_tail,
+    )
+    from vllm.v1.worker.gpu.spec_decode.utils import (
+        compact_scheduler_output_for_variable_drafts,
     )
 
     class Request:
@@ -92,20 +92,47 @@ def verify_async_scheduler_contract() -> dict[str, object]:
     truncated_length = len(truncated)
 
     output = SchedulerOutput.make_empty()
-    output.scheduled_spec_decode_tokens = {"probe": [0] * 5}
-    # The scheduler pads its list in place. Give it a copy so the immutable
-    # pre-padding proposal length remains honest evidence in this probe.
-    draft_token_ids = DraftTokenIds(["probe"], [list(truncated)])
-    Scheduler.update_draft_token_ids_in_output(
-        scheduler, draft_token_ids, output
+    output.num_scheduled_tokens = {"probe": 6}
+    output.total_num_scheduled_tokens = 6
+    output.scheduled_spec_decode_tokens = {"probe": [-1] * 5}
+    invalid = compact_scheduler_output_for_variable_drafts(
+        output,
+        ["probe"],
+        [masked.tolist()[0]],
     )
-    padded = output.scheduled_spec_decode_tokens["probe"]
-    invalid = output.num_invalid_spec_tokens
-    if padded != [10, 11, -1, -1, -1] or invalid != {"probe": 3}:
+    physical = output.scheduled_spec_decode_tokens["probe"]
+    if (
+        physical != [10, 11]
+        or invalid != {"probe": 3}
+        or output.num_scheduled_tokens != {"probe": 3}
+        or output.total_num_scheduled_tokens != 3
+    ):
         raise RuntimeError(
-            "installed async scheduler did not expose the expected padded prefix: "
-            f"padded={padded}, invalid={invalid}"
+            "physical verifier compaction failed: "
+            f"tokens={physical}, invalid={invalid}, "
+            f"scheduled={output.num_scheduled_tokens}, "
+            f"total={output.total_num_scheduled_tokens}"
         )
+
+    runner_output = ModelRunnerOutput(
+        req_ids=["probe"],
+        req_id_to_index={"probe": 0},
+        confidence_invalid_spec_tokens=invalid,
+    )
+    if runner_output.confidence_invalid_spec_tokens != {"probe": 3}:
+        raise RuntimeError("physical trim evidence was not preserved in runner output")
+
+    runner_source = inspect.getsource(GPUModelRunner.execute_model)
+    compact_pos = runner_source.index("compact_scheduler_output(")
+    dispatch_pos = runner_source.index("dispatch_cg_and_sync_dp(")
+    if compact_pos >= dispatch_pos:
+        raise RuntimeError("physical compaction is not before CUDA-graph dispatch")
+    scheduler_source = inspect.getsource(AsyncScheduler.update_from_output)
+    if (
+        "confidence_invalid_spec_tokens" not in scheduler_source
+        or "max(merged.get(req_id, 0), count)" not in scheduler_source
+    ):
+        raise RuntimeError("async scheduler lacks physical verifier metric correction")
 
     observed: dict[str, int] = {}
 
@@ -123,7 +150,7 @@ def verify_async_scheduler_contract() -> dict[str, object]:
         stats,
         num_draft_tokens=5,
         num_accepted_tokens=1,
-        num_invalid_spec_tokens=invalid,
+        num_invalid_spec_tokens=runner_output.confidence_invalid_spec_tokens,
         request_id="probe",
     )
     if returned is not stats or observed != {"draft": 2, "accepted": 1}:
@@ -131,21 +158,27 @@ def verify_async_scheduler_contract() -> dict[str, object]:
             "installed speculative metrics did not subtract invalid draft slots: "
             f"observed={observed}"
         )
-    scheduled_slots = len(padded)
+    scheduled_slots = len(physical)
     return {
         "raw_slots": 5,
         "truncated_proposal_length": truncated_length,
-        "scheduled": padded,
+        "scheduled": physical,
         "scheduled_slots_seen_by_runner": scheduled_slots,
         "invalid_slots": invalid["probe"],
+        "target_rows_including_bonus": output.num_scheduled_tokens["probe"],
         "metrics_draft_tokens": observed["draft"],
         "metrics_accepted_tokens": observed["accepted"],
         "metrics_proposed_equals_truncated": (
             observed["draft"] == truncated_length
         ),
         "physical_verifier_shortened": scheduled_slots == truncated_length,
-        "variable_length_verify_ready": False,
-        "diagnosis": "metrics shorten, scheduler output remains padded",
+        "variable_length_verify_ready": True,
+        "diagnosis": "confidence prefix physically compacts target rows",
+        "integration": {
+            "compaction_before_cuda_graph_dispatch": True,
+            "physical_trim_returned_to_scheduler": True,
+            "grammar_overlap_uses_max_not_sum": True,
+        },
     }
 
 

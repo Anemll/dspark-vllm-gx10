@@ -13,6 +13,11 @@ from typing import Any
 
 import torch
 
+from vllm.v1.worker.gpu.spec_decode.dspark.variable_verifier import (
+    compact_scheduler_output_for_variable_drafts,
+    trim_invalid_draft_tail,
+)
+
 
 SCHEDULER_ENV = "VLLM_DSPARK_CONFIDENCE_SCHEDULER"
 THRESHOLD_ENV = "VLLM_DSPARK_CONFIDENCE_THRESHOLD"
@@ -21,20 +26,6 @@ VALID_SCHEDULERS = frozenset(("off", "on"))
 
 _metrics_lock = Lock()
 _metrics_instance: DSparkConfidenceMetrics | None = None
-
-
-def trim_invalid_draft_tail(token_ids: list[int]) -> list[int]:
-    """Trim a ``-1`` confidence tail and reject holes or invalid negatives."""
-
-    if any(token_id < -1 for token_id in token_ids):
-        raise ValueError(f"invalid negative draft token id: {token_ids}")
-    try:
-        first_invalid = token_ids.index(-1)
-    except ValueError:
-        return token_ids
-    if any(token_id != -1 for token_id in token_ids[first_invalid:]):
-        raise ValueError(f"non-contiguous confidence draft prefix: {token_ids}")
-    return token_ids[:first_invalid]
 
 
 @dataclass(frozen=True)
