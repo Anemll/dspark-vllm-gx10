@@ -1,5 +1,11 @@
 # DSpark confidence-head benchmark plan
 
+> Executed 2026-07-19. Result: keep the confidence scheduler OFF. The matched
+> no-draft denominator was 27.86 median output tok/s, the OFF control was
+> 48.77 tok/s, and thresholds 0.30/0.40/0.50 reached 46.98/45.07/42.25 tok/s.
+> See `benchmarks/results/decode-confidence-head-sweep.md` and its five raw
+> JSON artifacts.
+
 ## Status: integration gates passed; outage approval pending
 
 The confidence-head integration is complete at source revision

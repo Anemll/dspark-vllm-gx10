@@ -1,0 +1,74 @@
+{
+  "base_url": "http://192.168.1.68:8888",
+  "model": "deepseek-v4-flash-dspark-abliterated",
+  "max_tokens": 512,
+  "spec_decode_metric_source": {
+    "num_drafts": "vllm:spec_decode_num_drafts_total",
+    "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+    "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+    "accepted_per_position": "vllm:spec_decode_num_accepted_tokens_per_pos_total"
+  },
+  "spec_decode_metric_mode": "inactive_required",
+  "trials": [
+    {
+      "concurrency": 1,
+      "trial": 1,
+      "wall_s": 18.517782791983336,
+      "total_tokens": 512,
+      "aggregate_token_tps": 27.649098477472883,
+      "mean_ttft_s": 0.1796452499984298,
+      "streams": [
+        {
+          "request": 0,
+          "prompt_tokens": 35,
+          "completion_tokens": 512,
+          "chunks": 508,
+          "ttft_s": 0.1796452499984298,
+          "decode_s": 18.33738258399535,
+          "elapsed_s": 18.51725574999,
+          "token_tps": 27.921105842382737,
+          "chunk_tps": 27.70297220298912,
+          "finish_reason": "length",
+          "output_sha256": "924066296a40374c9cba2ffc5b48eb51ed9ae6453b20403e35720614ec478071"
+        }
+      ],
+      "spec_decode": {
+        "enabled": false,
+        "counter_state": "absent",
+        "num_drafts": 0,
+        "draft_tokens": 0,
+        "accepted_tokens": 0
+      }
+    },
+    {
+      "concurrency": 1,
+      "trial": 2,
+      "wall_s": 18.59696854199865,
+      "total_tokens": 512,
+      "aggregate_token_tps": 27.53136882732902,
+      "mean_ttft_s": 0.1766503339749761,
+      "streams": [
+        {
+          "request": 0,
+          "prompt_tokens": 35,
+          "completion_tokens": 512,
+          "chunks": 502,
+          "ttft_s": 0.1766503339749761,
+          "decode_s": 18.41886775000603,
+          "elapsed_s": 18.595716708980035,
+          "token_tps": 27.797582725997497,
+          "chunk_tps": 27.25466118838036,
+          "finish_reason": "length",
+          "output_sha256": "2a2a63f5da3313f2a626a34a915aa58586257c47fb0d178d27529a86ad24c8b3"
+        }
+      ],
+      "spec_decode": {
+        "enabled": false,
+        "counter_state": "absent",
+        "num_drafts": 0,
+        "draft_tokens": 0,
+        "accepted_tokens": 0
+      }
+    }
+  ]
+}
