@@ -1,6 +1,39 @@
 # DSpark confidence-head benchmark plan
 
-## Decision: Gate 0 is blocked on the pinned production image
+## Status: integration gates passed; outage approval pending
+
+The confidence-head integration is complete at source revision
+`7f64c326c9566afb9bb345a55680195cabd4c895`. The final immutable candidate is
+`sha256:c78bd4cbbbe554bb18b348c8b23839da792fcab23eec2b043ed96ce64fc4daac`
+on both GX10 nodes and remains inert. Production was not stopped, restarted,
+removed, or exec'd during the no-outage gate.
+
+The candidate bakes probe SHA
+`c94741c6e64515a2b56597797b24526ad205458194925024d6be5907825ec234`,
+exactly matching the prior bind-mounted physical micro-gate. Worker CPU/CUDA
+and HEAD CPU/CUDA all passed against the real draft checkpoint:
+
+- `mtp.2.confidence_head.proj.weight` is BF16 `[1, 4352]` on disk and loads
+  into an FP32 runtime parameter;
+- the forward input is exactly hidden 4096 + Markov 256 = 4352;
+- the forced policy example truncates a five-token proposal to a contiguous
+  two-token prefix;
+- scheduler padding is `[10, 11, -1, -1, -1]`, with three invalid slots;
+- speculative metrics report proposed draft tokens = 2, not the padded five;
+- both CUDA probes used one NVIDIA GB10, capability 12.1, with Torch
+  `2.11.0+cu130`.
+
+CPU JSON SHA is
+`70cc750ce43c6c1e647d306b72102decc314bdfe08b501c4483c4ec80a2e63d5`
+and CUDA JSON SHA is
+`2b6121962367150e357cc10725bbb16160ff9a5cca136012ebb2a22777e8e43b`
+on each node. Node evidence is under
+`/home/anemll/nvfp4-artifacts/20260719-7f64c32-confidence-b1`.
+
+The benchmark outage described below is still **not authorized** until the
+user explicitly approves its final ceiling and arm sequence.
+
+## Historical Gate 0: blocked on the pinned production image
 
 Do **not** run the proposed restart sweep on the current production image.
 The two Compose variables exist, but the pinned vLLM build does not consume
@@ -78,7 +111,7 @@ current vLLM env placeholders.
 
 ### Required denominator and arms
 
-Run the current five-token OFF control first without a restart. Then run the
+Run a fresh five-token OFF control on the candidate image first. Then run the
 same model with speculation completely disabled. This **no-draft** result is
 the denominator for every DSpark claim; DSpark throughput must be reported as
 speedup versus this result, not as a standalone token rate. Then run these
@@ -166,9 +199,9 @@ result is valid.
 - Acquire a fresh cluster lock.
 - Capture the exact live image digest, both role envs, five-token speculation,
   model name, health, version, and current metric counters once.
-- Proposed global ceiling: **40 minutes** from the first HEAD stop, subject to
+- Proposed global ceiling: **45 minutes** from the first HEAD stop, subject to
   explicit user approval after the free probe passes.
-- Decision deadline: **34 minutes**, preserving six minutes for rollback.
+- Decision deadline: **38 minutes**, preserving seven minutes for rollback.
 - Stop order for every transition: HEAD first, then WORKER.
 - Start and restore order: WORKER first, then HEAD.
 - Bank each arm's JSON, before/after metrics, output hashes, rendered env,
@@ -181,10 +214,11 @@ result is valid.
   health/version/models/dashboard pass, deterministic chat returns `OK`, and
   no benchmark/SSH/transfer process remains.
 
-Recent production readiness is about 313--328 seconds per restart. The OFF
-control needs no initial restart; NoDraft, three ON arms, and final restoration
-mean five starts, projecting 26--28 minutes of readiness plus roughly 5--7
-minutes of C1 measurement and evidence banking. That is why the corrected
-single-window request is 40 minutes rather than the old 30-minute ceiling.
+Recent production readiness is about 313--328 seconds per restart. A rigorous
+comparison uses the candidate image for the OFF control, so candidate OFF,
+NoDraft, three ON arms, and final production restoration mean six starts. That
+projects 31--33 minutes of readiness plus roughly 5--7 minutes of C1
+measurement and evidence banking. The honest hard ceiling is therefore 45
+minutes, with a 38-minute decision deadline and seven-minute rollback reserve.
 C2/C4 are optional and run only if the decision deadline still has at least
 eight minutes of margin.
