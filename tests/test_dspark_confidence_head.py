@@ -137,6 +137,13 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("Scheduler.make_spec_decoding_stats", source)
         self.assertIn('padded != [10, 11, -1, -1, -1]', source)
         self.assertIn('observed != {"draft": 2, "accepted": 1}', source)
+        self.assertIn('"truncated_proposal_length": len(truncated)', source)
+        self.assertIn('"metrics_proposed_equals_truncated"', source)
+
+    def test_probe_pins_exact_confidence_input_width(self) -> None:
+        source = PROBE_PATH.read_text()
+        self.assertIn("head.proj.input_size != 4352", source)
+        self.assertIn('"input_width": inputs.shape[-1]', source)
 
     def test_minimal_image_pins_exact_production_sources(self) -> None:
         source = DOCKERFILE_PATH.read_text()

@@ -47,6 +47,10 @@ def verify_async_scheduler_contract() -> dict[str, object]:
     from vllm.v1.core.sched.output import SchedulerOutput
     from vllm.v1.core.sched.scheduler import Scheduler
     from vllm.v1.outputs import DraftTokenIds
+    from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
+        mask_draft_tokens_by_confidence,
+        trim_invalid_draft_tail,
+    )
 
     class Request:
         @staticmethod
@@ -64,9 +68,25 @@ def verify_async_scheduler_contract() -> dict[str, object]:
         log_stats=True,
         num_spec_tokens=5,
     )
+    raw_tokens = torch.tensor([[10, 11, 12, 13, 14]], dtype=torch.int64)
+    probabilities = torch.tensor(
+        [[0.9, 0.8, 0.2, 0.99, 0.99]], dtype=torch.float32
+    )
+    masked, prefix_lengths = mask_draft_tokens_by_confidence(
+        raw_tokens,
+        torch.logit(probabilities),
+        threshold=0.5,
+    )
+    truncated = trim_invalid_draft_tail(masked.tolist()[0])
+    if prefix_lengths.tolist() != [2] or truncated != [10, 11]:
+        raise RuntimeError(
+            "confidence policy did not produce the expected two-token prefix: "
+            f"lengths={prefix_lengths.tolist()}, tokens={truncated}"
+        )
+
     output = SchedulerOutput.make_empty()
     output.scheduled_spec_decode_tokens = {"probe": [0] * 5}
-    draft_token_ids = DraftTokenIds(["probe"], [[10, 11]])
+    draft_token_ids = DraftTokenIds(["probe"], [truncated])
     Scheduler.update_draft_token_ids_in_output(
         scheduler, draft_token_ids, output
     )
@@ -103,10 +123,15 @@ def verify_async_scheduler_contract() -> dict[str, object]:
             f"observed={observed}"
         )
     return {
+        "raw_slots": 5,
+        "truncated_proposal_length": len(truncated),
         "scheduled": padded,
         "invalid_slots": invalid["probe"],
         "metrics_draft_tokens": observed["draft"],
         "metrics_accepted_tokens": observed["accepted"],
+        "metrics_proposed_equals_truncated": (
+            observed["draft"] == len(truncated)
+        ),
     }
 
 
@@ -171,6 +196,11 @@ def main() -> None:
         2, 256
     )
     inputs = torch.cat((hidden, markov), dim=-1)
+    if inputs.shape[-1] != EXPECTED_SHAPE[1] or head.proj.input_size != 4352:
+        raise RuntimeError(
+            "confidence head input width drifted: "
+            f"concat={inputs.shape[-1]}, projection={head.proj.input_size}"
+        )
     expected_logits = F.linear(inputs, weight.float()).squeeze(-1)
     actual_logits = head(hidden.to(device), markov.to(device)).float().cpu()
     if not torch.isfinite(actual_logits).all() or not torch.allclose(
@@ -229,6 +259,7 @@ def main() -> None:
         "forward": {
             "finite": True,
             "logits": actual_logits.tolist(),
+            "input_width": inputs.shape[-1],
             "input_contract": "concat(backbone_hidden_4096,markov_embed_256)",
         },
         "policy": {
