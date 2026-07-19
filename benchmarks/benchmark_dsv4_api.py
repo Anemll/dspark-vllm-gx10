@@ -136,6 +136,12 @@ def spec_metrics_delta(
         raise ValueError("per-position and total accepted-token counters disagree")
     return {
         **deltas,
+        "mean_draft_length": (
+            deltas["draft_tokens"] / deltas["num_drafts"]
+        ),
+        "accepted_excess_length": (
+            deltas["accepted_tokens"] / deltas["num_drafts"]
+        ),
         "aggregate_acceptance_rate": (
             deltas["accepted_tokens"] / deltas["draft_tokens"]
         ),
@@ -278,7 +284,8 @@ def main() -> None:
                 print(
                     "    spec: acceptance "
                     f"{100 * spec['aggregate_acceptance_rate']:.1f}% | "
-                    f"mean length {spec['mean_acceptance_length']:.3f} | "
+                    f"proposed {spec['mean_draft_length']:.3f} | "
+                    f"effective accepted {spec['mean_acceptance_length']:.3f} | "
                     "per-position "
                     + ", ".join(
                         f"{value:.3f}"

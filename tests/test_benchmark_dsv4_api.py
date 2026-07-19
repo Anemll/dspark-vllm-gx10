@@ -40,6 +40,8 @@ class SpecMetricsTests(unittest.TestCase):
         self.assertEqual(delta["accepted_tokens"], 21)
         self.assertEqual(delta["accepted_tokens_per_position"], [10, 7, 4])
         self.assertEqual(delta["per_position_acceptance_rates"], [1.0, 0.7, 0.4])
+        self.assertAlmostEqual(delta["mean_draft_length"], 3.0)
+        self.assertAlmostEqual(delta["accepted_excess_length"], 2.1)
         self.assertAlmostEqual(delta["aggregate_acceptance_rate"], 0.7)
         self.assertAlmostEqual(delta["mean_acceptance_length"], 3.1)
 

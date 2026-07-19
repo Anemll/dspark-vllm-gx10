@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "decision": "blocked_feature_not_wired",
+  "observed_at": "2026-07-19",
+  "production": {
+    "container_id": "66ecceea6eb0",
+    "image": "sha256:3430d6614a8e2925f34d059af6caf05aff42387326db4d05639a60f10f2654d8",
+    "vllm_version": "0.25.2.dev0+g752a3a504.d20260714",
+    "vllm_revision": "752a3a504485790a2e8491cacbb35c137339ad34",
+    "health": 200,
+    "model": "deepseek-v4-flash-dspark-abliterated"
+  },
+  "compose_environment": {
+    "VLLM_DSPARK_CONFIDENCE_SCHEDULER": "off",
+    "VLLM_DSPARK_CONFIDENCE_THRESHOLD": "0.0"
+  },
+  "implementation": {
+    "exact_environment_string_matches_in_installed_vllm": 0,
+    "speculator": {
+      "path": "/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py",
+      "sha256": "935900f2fd98bcc1b16312f478d80fb63f32ca0aa900c61b3cd333dfaebfa81a",
+      "behavior": "fixed for-loop over every configured speculative position; no confidence input or early-stop branch"
+    },
+    "model": {
+      "path": "/usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/dspark.py",
+      "sha256": "efe33c32d37ed7f26d869d94626f1415906d31218ec0ee44d79bb2b815b8cf39",
+      "evidence_lines": [474, 475, 476],
+      "behavior": "confidence_head weights are explicitly dropped because the head is not wired into inference"
+    }
+  },
+  "contract": {
+    "scheduler_parser": null,
+    "threshold_parser": null,
+    "allowed_scheduler_values": [],
+    "threshold_range": null,
+    "runtime_effect_of_current_environment_variables": "none"
+  },
+  "benchmark_metric_fix": {
+    "required_cli": [
+      "--require-spec-metrics",
+      "--expected-spec-positions",
+      "5"
+    ],
+    "prometheus_counters": {
+      "drafts": "vllm:spec_decode_num_drafts_total",
+      "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+      "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+      "accepted_per_position": "vllm:spec_decode_num_accepted_tokens_per_pos_total"
+    }
+  },
+  "production_mutated": false,
+  "outage_performed": false
+}
