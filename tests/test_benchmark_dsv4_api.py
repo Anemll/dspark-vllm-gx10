@@ -67,6 +67,25 @@ class SpecMetricsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not monotonic"):
             bench.spec_metrics_delta(before, after, expected_positions=3)
 
+    def test_no_draft_accepts_absent_or_unchanged_counters(self) -> None:
+        absent = bench.spec_metrics_inactive(
+            "vllm:request_success_total 2\n",
+            "vllm:request_success_total 3\n",
+        )
+        self.assertEqual(absent["counter_state"], "absent")
+        self.assertEqual(absent["num_drafts"], 0)
+
+        snapshot = metrics(10, 30, 18, [9, 6, 3])
+        unchanged = bench.spec_metrics_inactive(snapshot, snapshot)
+        self.assertEqual(unchanged["counter_state"], "present_unchanged")
+        self.assertEqual(unchanged["draft_tokens"], 0)
+
+    def test_no_draft_rejects_counter_movement(self) -> None:
+        before = metrics(10, 30, 18, [9, 6, 3])
+        after = metrics(11, 33, 20, [10, 7, 3])
+        with self.assertRaisesRegex(ValueError, "moved during no-draft"):
+            bench.spec_metrics_inactive(before, after)
+
 
 if __name__ == "__main__":
     unittest.main()

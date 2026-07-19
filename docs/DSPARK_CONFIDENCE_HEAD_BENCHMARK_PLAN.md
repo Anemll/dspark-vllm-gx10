@@ -39,7 +39,8 @@ This corrects the assumed env contract:
 
 An immutable candidate image must first wire the existing V4 DSpark
 confidence head into proposal generation and add a fail-closed startup proof.
-That integration is outside this plan and is not authorized by this document.
+That integration is now the active no-outage work item; this document still
+does not authorize a service restart.
 The free, production-live probe for such an image must prove:
 
 1. the `mtp.2.confidence_head.proj.weight` tensor is loaded rather than
@@ -51,7 +52,9 @@ The free, production-live probe for such an image must prove:
 4. threshold `0.0` produces the full five-token proposal, while threshold
    `1.0` produces no speculative proposal for finite logits;
 5. the exact scheduler mode and threshold are emitted in startup logs and a
-   machine-readable metric.
+   machine-readable probe artifact;
+6. variable proposal lengths survive the installed async-scheduler padding
+   path, and invalid tail slots are excluded from speculative metrics.
 
 DeepSeek's [reference DSpark model](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-DSpark/blob/aa22cb07426656189b2573b8e77a9b7333b8ae0f/inference/model.py)
 returns an unbounded scalar logit from the confidence head. The official
@@ -73,22 +76,33 @@ current vLLM env placeholders.
 - 512 generated tokens, temperature zero, `ignore_eos=true`;
 - no W4A4, model-layout, kernel, KV, context, or sampling change.
 
-### Arms
+### Required denominator and arms
 
-Run the OFF control first in the same window, then these probability
-thresholds in ascending order:
+Run the current five-token OFF control first without a restart. Then run the
+same model with speculation completely disabled. This **no-draft** result is
+the denominator for every DSpark claim; DSpark throughput must be reported as
+speedup versus this result, not as a standalone token rate. Then run these
+probability thresholds in ascending order:
 
-| Arm | Scheduler | Threshold | Purpose |
-|---|---|---:|---|
-| Control | off | 0.0 | fresh same-window production baseline |
-| T25 | on | 0.25 | permissive pruning |
-| T50 | on | 0.50 | midpoint |
-| T75 | on | 0.75 | aggressive pruning |
+| Arm | Speculation | Scheduler | Threshold | Contract |
+|---|---|---|---:|---|
+| NoDraft | disabled | n/a | n/a | Mode A denominator |
+| Control | five-token DSpark | off | 0.0 | fresh production control |
+| T30 | five-token DSpark | on | 0.30 | permissive low-region point |
+| T40 | five-token DSpark | on | 0.40 | DS4 reference optimum |
+| T50 | five-token DSpark | on | 0.50 | upper low-region point |
 
-The three points span the sigmoid probability range without pretending that
-the unobserved logit distribution is calibrated. If the free probe can emit a
-confidence histogram, replace these fixed points with its 25th/50th/75th
-percentiles before freezing the outage batch.
+The low `0.30--0.50` range comes from the DS4 evidence; high thresholds were
+associated with a quality cliff and are excluded. The free probe uses the real
+weight but synthetic hidden states, so its score distribution is **not** a
+calibrated runtime histogram and must not select thresholds. If a later
+production-live, no-restart probe can collect real hidden-state confidence
+percentiles without changing execution, prefer those percentiles. Otherwise
+freeze `0.30/0.40/0.50`; do not adapt thresholds inside the outage.
+
+Confidence only controls how much speculative work is proposed. It is not a
+quality gate. The unchanged target rejection sampler remains the quality
+authority, and every arm in this batch is tagged **Mode A Strict**.
 
 ### Workload and metrics
 
@@ -105,6 +119,20 @@ python3 benchmarks/benchmark_dsv4_api.py \
   --expected-spec-positions 5 \
   --output ARM.json
 ```
+
+The no-draft denominator uses the same command, prompt, model, 512-token
+limit, temperature-zero request, and two trials, but replaces the last two
+metric options with:
+
+```bash
+  --require-no-spec-metrics
+```
+
+That mode accepts either absent speculative counters or a complete unchanged
+counter family and fails if any draft/acceptance counter moves. Every stream
+also records a SHA-256 of the generated text. All confidence-arm output hashes
+must match the no-draft Mode-A reference for the corresponding deterministic
+request.
 
 `--require-spec-metrics` is mandatory. It closes the earlier acceptance gap:
 the run fails if the four Prometheus counter families or any of positions
@@ -123,11 +151,13 @@ must never displace C1 or rollback reserve.
 
 ### Promotion decision
 
-No single acceptance-rate increase is sufficient. Select a threshold only if
-both trials are valid and its median C1 output tokens/s exceeds the fresh OFF
-control by at least 5%, without TTFT regression above 10% or any non-monotonic
-per-position acceptance. Report the entire Pareto table even if no threshold
-passes. A no-promotion result is valid.
+No single acceptance-rate increase is sufficient. First report each DSpark
+arm's median C1 speedup versus NoDraft. Select a threshold only if both trials
+are valid, its median C1 output tokens/s exceeds the fresh OFF control by at
+least 5%, its output hash matches the Mode-A no-draft reference, TTFT does not
+regress by more than 10%, and per-position acceptance remains monotonic.
+Report the entire Pareto table even if no threshold passes. A no-promotion
+result is valid.
 
 ## Outage contract
 
@@ -136,12 +166,13 @@ passes. A no-promotion result is valid.
 - Acquire a fresh cluster lock.
 - Capture the exact live image digest, both role envs, five-token speculation,
   model name, health, version, and current metric counters once.
-- Global ceiling: **30 minutes** from the first HEAD stop.
-- Decision deadline: **24 minutes**, preserving six minutes for rollback.
+- Proposed global ceiling: **40 minutes** from the first HEAD stop, subject to
+  explicit user approval after the free probe passes.
+- Decision deadline: **34 minutes**, preserving six minutes for rollback.
 - Stop order for every transition: HEAD first, then WORKER.
 - Start and restore order: WORKER first, then HEAD.
-- Bank each arm's JSON, before/after metrics, rendered env, readiness time, and
-  both-rank logs before moving to the next threshold.
+- Bank each arm's JSON, before/after metrics, output hashes, rendered env,
+  readiness time, and both-rank logs before moving to the next threshold.
 - No retry of a failed arm. Any missing counter, wrong env, failed readiness,
   OOM, swap growth, or deadline breach jumps directly to rollback.
 - Unconditionally restore the exact pinned production env
@@ -151,6 +182,9 @@ passes. A no-promotion result is valid.
   no benchmark/SSH/transfer process remains.
 
 Recent production readiness is about 313--328 seconds per restart. The OFF
-control needs no initial restart; three ON arms plus final restoration project
-to about 22 minutes of restart time and 3--5 minutes of C1 measurement and
-banking, fitting the 30-minute ceiling narrowly. C2/C4 are therefore optional.
+control needs no initial restart; NoDraft, three ON arms, and final restoration
+mean five starts, projecting 26--28 minutes of readiness plus roughly 5--7
+minutes of C1 measurement and evidence banking. That is why the corrected
+single-window request is 40 minutes rather than the old 30-minute ceiling.
+C2/C4 are optional and run only if the decision deadline still has at least
+eight minutes of margin.

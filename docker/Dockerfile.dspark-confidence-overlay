@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_REVISION=unknown
+ARG BASE_DSPARK_SHA256=efe33c32d37ed7f26d869d94626f1415906d31218ec0ee44d79bb2b815b8cf39
+ARG BASE_SPECULATOR_SHA256=935900f2fd98bcc1b16312f478d80fb63f32ca0aa900c61b3cd333dfaebfa81a
+ARG BASE_SPEC_UTILS_SHA256=39ebdfdc8de50d7fddc324aa011275dccd38f2dcc32c4e3268dbbf3ea915fe49
+
+RUN echo "${BASE_DSPARK_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/dspark.py" | sha256sum -c - && \
+    echo "${BASE_SPECULATOR_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py" | sha256sum -c - && \
+    echo "${BASE_SPEC_UTILS_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/utils.py" | sha256sum -c -
+
+COPY overlay/vllm/models/deepseek_v4/nvidia/dspark.py /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/dspark.py
+COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py
+COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/confidence.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/confidence.py
+COPY overlay/vllm/v1/worker/gpu/spec_decode/utils.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/utils.py
+COPY scripts/probe_dspark_confidence_head.py /usr/local/bin/dspark-probe-confidence-head
+
+RUN python3 -m py_compile \
+      /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/dspark.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/confidence.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/utils.py \
+      /usr/local/bin/dspark-probe-confidence-head
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.dspark-confidence-scheduler="sigmoid-prefix-v1"

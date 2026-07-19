@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 import math
 import re
@@ -47,6 +48,7 @@ class StreamResult:
     token_tps: float
     chunk_tps: float
     finish_reason: str | None
+    output_sha256: str
 
 
 @dataclass(frozen=True)
@@ -95,8 +97,49 @@ def parse_spec_metrics(text: str) -> SpecMetricsSnapshot:
 
 
 def fetch_spec_metrics(base_url: str) -> SpecMetricsSnapshot:
-    with urllib.request.urlopen(f"{base_url.rstrip('/')}/metrics", timeout=10) as response:
-        return parse_spec_metrics(response.read().decode("utf-8", "strict"))
+    return parse_spec_metrics(fetch_metrics_text(base_url))
+
+
+def fetch_metrics_text(base_url: str) -> str:
+    with urllib.request.urlopen(
+        f"{base_url.rstrip('/')}/metrics", timeout=10
+    ) as response:
+        return response.read().decode("utf-8", "strict")
+
+
+def spec_metrics_inactive(before_text: str, after_text: str) -> dict[str, object]:
+    """Prove that a no-draft arm emitted no speculative-decoding activity."""
+
+    metric_names = tuple(SPEC_METRICS.values())
+    before_present = any(name in before_text for name in metric_names)
+    after_present = any(name in after_text for name in metric_names)
+    if before_present != after_present:
+        raise ValueError("speculative counter presence changed during no-draft arm")
+    if not before_present:
+        return {
+            "enabled": False,
+            "counter_state": "absent",
+            "num_drafts": 0,
+            "draft_tokens": 0,
+            "accepted_tokens": 0,
+        }
+
+    before = parse_spec_metrics(before_text)
+    after = parse_spec_metrics(after_text)
+    if before.accepted_per_position != after.accepted_per_position:
+        raise ValueError("per-position counters moved during no-draft arm")
+    deltas = {
+        "num_drafts": after.num_drafts - before.num_drafts,
+        "draft_tokens": after.draft_tokens - before.draft_tokens,
+        "accepted_tokens": after.accepted_tokens - before.accepted_tokens,
+    }
+    if any(value != 0 for value in deltas.values()):
+        raise ValueError(f"speculative counters moved during no-draft arm: {deltas}")
+    return {
+        "enabled": False,
+        "counter_state": "present_unchanged",
+        **deltas,
+    }
 
 
 def spec_metrics_delta(
@@ -176,6 +219,7 @@ def run_stream(base_url: str, model: str, max_tokens: int, request_id: int) -> S
     chunks = 0
     usage: dict[str, int] = {}
     finish_reason = None
+    output_parts: list[str] = []
     with urllib.request.urlopen(req, timeout=900) as response:
         for raw in response:
             line = raw.decode("utf-8", "replace").strip()
@@ -194,6 +238,7 @@ def run_stream(base_url: str, model: str, max_tokens: int, request_id: int) -> S
                     first_token = first_token or now
                     last_token = now
                     chunks += 1
+                    output_parts.append(content)
                 if choice.get("finish_reason"):
                     finish_reason = choice["finish_reason"]
     finished = time.perf_counter()
@@ -212,6 +257,9 @@ def run_stream(base_url: str, model: str, max_tokens: int, request_id: int) -> S
         token_tps=completion_tokens / decode_s,
         chunk_tps=chunks / decode_s,
         finish_reason=finish_reason,
+        output_sha256=hashlib.sha256(
+            "".join(output_parts).encode("utf-8")
+        ).hexdigest(),
     )
 
 
@@ -222,7 +270,9 @@ def main() -> None:
     parser.add_argument("--concurrency", default="1,2,4")
     parser.add_argument("--trials", type=int, default=2)
     parser.add_argument("--max-tokens", type=int, default=512)
-    parser.add_argument("--require-spec-metrics", action="store_true")
+    metric_group = parser.add_mutually_exclusive_group()
+    metric_group.add_argument("--require-spec-metrics", action="store_true")
+    metric_group.add_argument("--require-no-spec-metrics", action="store_true")
     parser.add_argument("--expected-spec-positions", type=int, default=5)
     parser.add_argument("--output")
     args = parser.parse_args()
@@ -231,15 +281,28 @@ def main() -> None:
         "base_url": args.base_url,
         "model": args.model,
         "max_tokens": args.max_tokens,
-        "spec_decode_metric_source": SPEC_METRICS if args.require_spec_metrics else None,
+        "spec_decode_metric_source": (
+            SPEC_METRICS
+            if args.require_spec_metrics or args.require_no_spec_metrics
+            else None
+        ),
+        "spec_decode_metric_mode": (
+            "required"
+            if args.require_spec_metrics
+            else "inactive_required"
+            if args.require_no_spec_metrics
+            else None
+        ),
         "trials": [],
     }
     print(f"target {args.base_url} model {args.model}", flush=True)
     for concurrency in (int(value) for value in args.concurrency.split(",")):
         print(f"=== concurrency {concurrency} ===", flush=True)
         for trial in range(1, args.trials + 1):
-            spec_before = (
-                fetch_spec_metrics(args.base_url) if args.require_spec_metrics else None
+            metrics_before_text = (
+                fetch_metrics_text(args.base_url)
+                if args.require_spec_metrics or args.require_no_spec_metrics
+                else None
             )
             wall_started = time.perf_counter()
             with ThreadPoolExecutor(max_workers=concurrency) as executor:
@@ -262,13 +325,21 @@ def main() -> None:
                 "mean_ttft_s": statistics.mean(result.ttft_s for result in results),
                 "streams": [asdict(result) for result in results],
             }
-            if spec_before is not None:
-                spec_after = fetch_spec_metrics(args.base_url)
-                trial_result["spec_decode"] = spec_metrics_delta(
-                    spec_before,
-                    spec_after,
-                    expected_positions=args.expected_spec_positions,
-                )
+            if metrics_before_text is not None:
+                metrics_after_text = fetch_metrics_text(args.base_url)
+                if args.require_spec_metrics:
+                    trial_result["spec_decode"] = {
+                        "enabled": True,
+                        **spec_metrics_delta(
+                            parse_spec_metrics(metrics_before_text),
+                            parse_spec_metrics(metrics_after_text),
+                            expected_positions=args.expected_spec_positions,
+                        ),
+                    }
+                else:
+                    trial_result["spec_decode"] = spec_metrics_inactive(
+                        metrics_before_text, metrics_after_text
+                    )
             report["trials"].append(trial_result)
             token_rates = ", ".join(f"{result.token_tps:.1f}" for result in results)
             chunk_rates = ", ".join(f"{result.chunk_tps:.1f}" for result in results)
@@ -279,7 +350,7 @@ def main() -> None:
                 f"TTFT {trial_result['mean_ttft_s']:.2f}s",
                 flush=True,
             )
-            if "spec_decode" in trial_result:
+            if trial_result.get("spec_decode", {}).get("enabled"):
                 spec = trial_result["spec_decode"]
                 print(
                     "    spec: acceptance "
