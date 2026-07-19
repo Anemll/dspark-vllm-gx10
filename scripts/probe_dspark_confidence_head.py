@@ -180,6 +180,7 @@ def main() -> None:
     linear_module.get_tensor_model_parallel_rank = lambda: 0
     linear_module.get_tensor_model_parallel_world_size = lambda: 1
     parameter_module.get_tensor_model_parallel_rank = lambda: 0
+    parameter_module.get_tensor_model_parallel_world_size = lambda: 1
     head = DSparkConfidenceHead(EXPECTED_SHAPE[1], prefix="probe.confidence_head")
     head.proj.weight_loader(head.proj.weight, weight)
     if head.proj.weight.dtype != torch.float32 or not torch.equal(

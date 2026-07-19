@@ -156,6 +156,10 @@ class OverlayContractTests(unittest.TestCase):
             source,
         )
         self.assertIn(
+            "parameter_module.get_tensor_model_parallel_world_size = lambda: 1",
+            source,
+        )
+        self.assertIn(
             "linear_module.get_tensor_model_parallel_world_size = lambda: 1",
             source,
         )
