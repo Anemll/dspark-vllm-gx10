@@ -83,10 +83,13 @@ def verify_async_scheduler_contract() -> dict[str, object]:
             "confidence policy did not produce the expected two-token prefix: "
             f"lengths={prefix_lengths.tolist()}, tokens={truncated}"
         )
+    truncated_length = len(truncated)
 
     output = SchedulerOutput.make_empty()
     output.scheduled_spec_decode_tokens = {"probe": [0] * 5}
-    draft_token_ids = DraftTokenIds(["probe"], [truncated])
+    # The scheduler pads its list in place. Give it a copy so the immutable
+    # pre-padding proposal length remains honest evidence in this probe.
+    draft_token_ids = DraftTokenIds(["probe"], [list(truncated)])
     Scheduler.update_draft_token_ids_in_output(
         scheduler, draft_token_ids, output
     )
@@ -124,13 +127,13 @@ def verify_async_scheduler_contract() -> dict[str, object]:
         )
     return {
         "raw_slots": 5,
-        "truncated_proposal_length": len(truncated),
+        "truncated_proposal_length": truncated_length,
         "scheduled": padded,
         "invalid_slots": invalid["probe"],
         "metrics_draft_tokens": observed["draft"],
         "metrics_accepted_tokens": observed["accepted"],
         "metrics_proposed_equals_truncated": (
-            observed["draft"] == len(truncated)
+            observed["draft"] == truncated_length
         ),
     }
 
