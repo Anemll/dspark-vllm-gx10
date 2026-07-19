@@ -17,3 +17,5 @@
 !scripts/
 !scripts/probe_dspark_confidence_head.py
 !scripts/patch_dspark_variable_verifier.py
+!benchmarks/
+!benchmarks/probe_dspark_variable_verifier_hw.py

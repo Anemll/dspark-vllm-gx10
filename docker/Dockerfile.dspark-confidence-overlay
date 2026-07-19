@@ -25,6 +25,7 @@ COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/confidence.py /usr/local/lib/
 COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/variable_verifier.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/variable_verifier.py
 COPY overlay/vllm/v1/worker/gpu/spec_decode/utils.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/utils.py
 COPY scripts/probe_dspark_confidence_head.py /usr/local/bin/dspark-probe-confidence-head
+COPY benchmarks/probe_dspark_variable_verifier_hw.py /usr/local/bin/dspark-probe-variable-verifier-hw
 COPY scripts/patch_dspark_variable_verifier.py /usr/local/bin/patch-dspark-variable-verifier
 
 RUN python3 /usr/local/bin/patch-dspark-variable-verifier \
@@ -41,7 +42,8 @@ RUN python3 -m py_compile \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/core/sched/async_scheduler.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/cudagraph_utils.py \
       /usr/local/bin/patch-dspark-variable-verifier \
-      /usr/local/bin/dspark-probe-confidence-head
+      /usr/local/bin/dspark-probe-confidence-head \
+      /usr/local/bin/dspark-probe-variable-verifier-hw
 
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
 LABEL org.opencontainers.image.dspark-confidence-scheduler="sigmoid-prefix-v4-exact-c1-verifier-graphs"
