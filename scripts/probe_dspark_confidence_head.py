@@ -56,7 +56,11 @@ def verify_async_scheduler_contract() -> dict[str, object]:
         trim_invalid_draft_tail,
     )
     from vllm.v1.worker.gpu.spec_decode.utils import (
+        DraftTokensHandler,
         compact_scheduler_output_for_variable_drafts,
+    )
+    from vllm.v1.worker.gpu.spec_decode.dspark.variable_verifier import (
+        complete_async_copy_if_needed,
     )
 
     class Request:
@@ -144,6 +148,21 @@ def verify_async_scheduler_contract() -> dict[str, object]:
             "CUDA graph manager lacks bounded exact C=1 DSpark verifier shapes"
         )
 
+    get_draft_source = inspect.getsource(DraftTokensHandler.get_draft_tokens)
+    compact_source = inspect.getsource(DraftTokensHandler.compact_scheduler_output)
+    completion_source = inspect.getsource(complete_async_copy_if_needed)
+    if (
+        "self.scheduler_requires_draft_tokens" not in get_draft_source
+        or "complete_async_copy_if_needed" not in compact_source
+        or "observe_d2h_copy_completion" not in compact_source
+        or completion_source.index("event.query()")
+        >= completion_source.index("event.synchronize()")
+    ):
+        raise RuntimeError(
+            "DSpark proposal D2H copy is not overlap-first with a measured "
+            "fail-closed wait"
+        )
+
     observed: dict[str, int] = {}
 
     class Stats:
@@ -189,6 +208,8 @@ def verify_async_scheduler_contract() -> dict[str, object]:
             "physical_trim_returned_to_scheduler": True,
             "grammar_overlap_uses_max_not_sum": True,
             "exact_c1_cuda_graph_shapes_1_to_6": True,
+            "unstructured_scheduler_copy_wait_elided": True,
+            "d2h_completion_ready_vs_fallback_telemetry": True,
         },
     }
 

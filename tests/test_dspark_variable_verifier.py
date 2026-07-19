@@ -28,6 +28,36 @@ SPEC.loader.exec_module(verifier)
 
 
 class PhysicalCompactionTests(unittest.TestCase):
+    def test_completed_async_copy_avoids_blocking_fallback(self) -> None:
+        class Event:
+            synchronized = 0
+
+            @staticmethod
+            def query() -> bool:
+                return True
+
+            def synchronize(self) -> None:
+                self.synchronized += 1
+
+        event = Event()
+        self.assertFalse(verifier.complete_async_copy_if_needed(event))
+        self.assertEqual(event.synchronized, 0)
+
+    def test_pending_async_copy_uses_one_fail_closed_wait(self) -> None:
+        class Event:
+            synchronized = 0
+
+            @staticmethod
+            def query() -> bool:
+                return False
+
+            def synchronize(self) -> None:
+                self.synchronized += 1
+
+        event = Event()
+        self.assertTrue(verifier.complete_async_copy_if_needed(event))
+        self.assertEqual(event.synchronized, 1)
+
     def test_two_requests_shrink_to_distinct_physical_rows(self) -> None:
         output = SimpleNamespace(
             scheduled_spec_decode_tokens={"a": [-1] * 5, "b": [-1] * 5},

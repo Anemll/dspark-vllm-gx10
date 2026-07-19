@@ -5,6 +5,20 @@
 from __future__ import annotations
 
 
+def complete_async_copy_if_needed(event) -> bool:
+    """Wait only when an earlier asynchronous D2H copy is still in flight.
+
+    Returns whether a blocking fallback was required. The normal unstructured
+    DSpark path launches this copy one engine turn before physical compaction,
+    so a completed event avoids the former unconditional per-block sync.
+    """
+
+    if event.query():
+        return False
+    event.synchronize()
+    return True
+
+
 def trim_invalid_draft_tail(token_ids: list[int]) -> list[int]:
     """Trim a ``-1`` confidence tail and reject holes or invalid negatives."""
 

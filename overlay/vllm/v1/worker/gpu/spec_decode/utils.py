@@ -9,6 +9,7 @@ from vllm.v1.outputs import DraftTokenIds
 from vllm.v1.worker.gpu.async_utils import async_copy_to_np
 from vllm.v1.worker.gpu.input_batch import InputBatch
 from vllm.v1.worker.gpu.spec_decode.dspark.variable_verifier import (
+    complete_async_copy_if_needed,
     compact_scheduler_output_for_variable_drafts,
     trim_invalid_draft_tail,
 )
@@ -24,6 +25,8 @@ class DraftTokensHandler:
         self.req_ids: list[str] = []
         self.draft_tokens_np: np.ndarray | None = None
         self.num_draft_tokens: int = 0
+        self.scheduler_requires_draft_tokens = False
+        self.copy_wait_fallbacks = 0
         self.variable_draft_lengths = (
             os.environ.get("VLLM_DSPARK_CONFIDENCE_SCHEDULER", "off") == "on"
         )
@@ -33,6 +36,9 @@ class DraftTokensHandler:
     ) -> None:
         self.req_ids = input_batch.req_ids
         self.num_draft_tokens = draft_tokens.shape[1]
+        self.scheduler_requires_draft_tokens = (
+            input_batch.has_structured_output_reqs
+        )
         if (
             not input_batch.has_structured_output_reqs
             and not self.variable_draft_lengths
@@ -55,8 +61,13 @@ class DraftTokensHandler:
             self.copy_event.record()
 
     def get_draft_tokens(self) -> DraftTokenIds | None:
-        if self.draft_tokens_np is not None:
-            self.copy_event.synchronize()
+        if (
+            self.draft_tokens_np is not None
+            and self.scheduler_requires_draft_tokens
+        ):
+            self.copy_wait_fallbacks += int(
+                complete_async_copy_if_needed(self.copy_event)
+            )
             draft_token_ids = self.draft_tokens_np.tolist()
             if self.variable_draft_lengths:
                 draft_token_ids = [
@@ -64,7 +75,9 @@ class DraftTokensHandler:
                     for token_ids in draft_token_ids
                 ]
         else:
-            # This case only happens when async scheduling is disabled.
+            # The normal unstructured async path intentionally returns the
+            # fixed reservation without waiting. Its already-enqueued D2H copy
+            # is consumed one engine turn later by physical compaction.
             draft_token_ids = [[-1] * self.num_draft_tokens for _ in self.req_ids]
         return DraftTokenIds(self.req_ids, draft_token_ids)
 
@@ -80,12 +93,26 @@ class DraftTokensHandler:
                 "DSpark confidence scheduling has target draft rows but no "
                 "completed prior proposal transfer"
             )
-        self.copy_event.synchronize()
-        return compact_scheduler_output_for_variable_drafts(
+        fallback_wait = complete_async_copy_if_needed(self.copy_event)
+        self.copy_wait_fallbacks += int(fallback_wait)
+        invalid = compact_scheduler_output_for_variable_drafts(
             scheduler_output,
             self.req_ids,
             self.draft_tokens_np.tolist(),
         )
+        from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
+            get_confidence_metrics,
+            parse_confidence_config,
+        )
+
+        metrics = get_confidence_metrics(parse_confidence_config().threshold)
+        metrics.observe_d2h_copy_completion(fallback_wait=fallback_wait)
+        metrics.observe_physical_target_rows(
+            scheduler_output.num_scheduled_tokens[req_id]
+            for req_id in self.req_ids
+            if req_id in scheduler_output.num_scheduled_tokens
+        )
+        return invalid
 
 
 def get_parallel_drafting_token_id(hf_config) -> int:

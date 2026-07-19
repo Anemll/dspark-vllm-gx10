@@ -192,6 +192,25 @@ class DSparkConfidenceMetrics:
             buckets=tuple(range(6)),
             **metric_kwargs,
         )
+        self.position_exposed = Counter(
+            "vllm:dspark_confidence_position_exposed",
+            "DSpark draft positions retained by the confidence prefix policy.",
+            ("position", "threshold"),
+            **metric_kwargs,
+        )
+        self.physical_target_rows = Histogram(
+            "vllm:dspark_confidence_physical_target_rows",
+            "Physical target verifier rows after confidence compaction.",
+            ("threshold",),
+            buckets=tuple(range(1, 7)),
+            **metric_kwargs,
+        )
+        self.d2h_copy_completion = Counter(
+            "vllm:dspark_confidence_d2h_copy_completion",
+            "DSpark proposal D2H copies ready at compaction or requiring a wait.",
+            ("result", "threshold"),
+            **metric_kwargs,
+        )
         self.dropped_batches = Counter(
             "vllm:dspark_confidence_telemetry_dropped_batches",
             "Confidence telemetry batches dropped because both D2H slots were busy.",
@@ -204,12 +223,15 @@ class DSparkConfidenceMetrics:
 
         if confidence_logits.device.type != "cpu":
             raise ValueError("confidence telemetry must observe CPU-resident logits")
-        probabilities, below, _, prefix_lengths = confidence_probability_policy(
-            confidence_logits,
-            threshold=self.threshold,
+        probabilities, below, prefix, prefix_lengths = (
+            confidence_probability_policy(
+                confidence_logits,
+                threshold=self.threshold,
+            )
         )
         probability_rows = probabilities.tolist()
         below_counts = below.sum(dim=0, dtype=torch.int64).tolist()
+        exposed_counts = prefix.sum(dim=0, dtype=torch.int64).tolist()
         prefix_values = prefix_lengths.tolist()
 
         for position in range(probabilities.shape[1]):
@@ -224,6 +246,9 @@ class DSparkConfidenceMetrics:
             # inc(0) intentionally materializes a zero-valued series. An absent
             # position must not be mistaken for missing telemetry.
             self.below_threshold.labels(**labels).inc(count)
+            self.position_exposed.labels(**labels).inc(
+                int(exposed_counts[position])
+            )
 
         prefix_histogram = self.prefix_length.labels(
             threshold=self.threshold_label
@@ -234,8 +259,28 @@ class DSparkConfidenceMetrics:
         return {
             "probabilities": probability_rows,
             "below_threshold_per_position": [int(value) for value in below_counts],
+            "exposed_per_position": [int(value) for value in exposed_counts],
             "prefix_lengths": [int(value) for value in prefix_values],
         }
+
+    def observe_physical_target_rows(self, rows) -> None:
+        histogram = self.physical_target_rows.labels(
+            threshold=self.threshold_label
+        )
+        for value in rows:
+            value = int(value)
+            if not 1 <= value <= 6:
+                raise ValueError(
+                    f"DSpark physical target rows must be in [1, 6], got {value}"
+                )
+            histogram.observe(value)
+
+    def observe_d2h_copy_completion(self, *, fallback_wait: bool) -> None:
+        result = "fallback_wait" if fallback_wait else "ready"
+        self.d2h_copy_completion.labels(
+            result=result,
+            threshold=self.threshold_label,
+        ).inc()
 
     def observe_dropped_batch(self) -> None:
         self.dropped_batches.labels(threshold=self.threshold_label).inc()

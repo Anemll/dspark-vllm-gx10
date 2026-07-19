@@ -181,6 +181,36 @@ class ConfidencePrefixTests(unittest.TestCase):
                 output, ["other"], [[1, 2, 3, 4, 5]]
             )
 
+    def test_telemetry_records_exposure_and_physical_rows(self) -> None:
+        try:
+            from prometheus_client import CollectorRegistry, generate_latest
+        except ModuleNotFoundError:
+            self.skipTest("prometheus_client unavailable in local test runtime")
+
+        registry = CollectorRegistry()
+        metrics = confidence.DSparkConfidenceMetrics(0.5, registry=registry)
+        probabilities = torch.tensor(
+            [[0.9, 0.8, 0.2, 0.9, 0.9], [0.9, 0.2, 0.9, 0.9, 0.9]],
+            dtype=torch.float32,
+        )
+        observed = metrics.observe(torch.logit(probabilities))
+        self.assertEqual(observed["exposed_per_position"], [2, 1, 0, 0, 0])
+        self.assertEqual(observed["prefix_lengths"], [2, 1])
+        metrics.observe_physical_target_rows([3, 2])
+        metrics.observe_d2h_copy_completion(fallback_wait=False)
+        metrics.observe_d2h_copy_completion(fallback_wait=True)
+        exposition = generate_latest(registry).decode()
+        self.assertIn("vllm:dspark_confidence_position_exposed_total", exposition)
+        self.assertIn("vllm:dspark_confidence_physical_target_rows_count", exposition)
+        self.assertIn(
+            'vllm:dspark_confidence_d2h_copy_completion_total{result="ready"',
+            exposition,
+        )
+        self.assertIn(
+            'vllm:dspark_confidence_d2h_copy_completion_total{result="fallback_wait"',
+            exposition,
+        )
+
 
 class OverlayContractTests(unittest.TestCase):
     def test_deepseek_model_loads_exact_head_parameter(self) -> None:
@@ -217,6 +247,9 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn('"vllm:dspark_confidence_probability"', source)
         self.assertIn('"vllm:dspark_confidence_below_threshold"', source)
         self.assertIn('"vllm:dspark_confidence_prefix_length"', source)
+        self.assertIn('"vllm:dspark_confidence_position_exposed"', source)
+        self.assertIn('"vllm:dspark_confidence_physical_target_rows"', source)
+        self.assertIn('"vllm:dspark_confidence_d2h_copy_completion"', source)
         self.assertIn('(\"position\", \"threshold\")', source)
         self.assertIn("confidence_probability_policy(", source)
 
@@ -227,7 +260,9 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("self.variable_draft_lengths", source)
         self.assertIn("trim_invalid_draft_tail", source)
         self.assertIn("compact_scheduler_output_for_variable_drafts", source)
-        self.assertIn("self.copy_event.synchronize()", source)
+        self.assertIn("self.scheduler_requires_draft_tokens", source)
+        self.assertIn("complete_async_copy_if_needed", source)
+        self.assertIn("observe_physical_target_rows", source)
         confidence_source = VARIABLE_VERIFIER_PATH.read_text()
         self.assertIn(
             "scheduler_output.total_num_scheduled_tokens -= removed",
@@ -251,6 +286,10 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("compact_pos >= dispatch_pos", source)
         self.assertIn('"grammar_overlap_uses_max_not_sum": True', source)
         self.assertIn('"exact_c1_cuda_graph_shapes_1_to_6": True', source)
+        self.assertIn('"unstructured_scheduler_copy_wait_elided": True', source)
+        self.assertIn(
+            '"d2h_completion_ready_vs_fallback_telemetry": True', source
+        )
 
     @unittest.skipUnless(UPSTREAM_ROOT.exists(), "pinned upstream checkout unavailable")
     def test_patch_installs_only_the_four_pinned_integration_seams(self) -> None:
