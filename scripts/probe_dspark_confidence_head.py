@@ -144,6 +144,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
+    from vllm.model_executor import parameter as parameter_module
     from vllm.model_executor.layers import linear as linear_module
     from vllm.models.deepseek_v4.nvidia.dspark import (
         DSparkConfidenceHead,
@@ -172,10 +173,13 @@ def main() -> None:
     async_scheduler = verify_async_scheduler_contract()
 
     # ReplicatedLinear normally reads the initialized TP group. This isolated
-    # one-parameter probe is intentionally TP=1 and patches only those two rank
-    # accessors before constructing the real vLLM head class.
+    # one-parameter probe is intentionally TP=1 and patches only the imported
+    # rank/world-size accessors used while constructing the real vLLM head.
+    # ModelWeightParameter keeps its own imported rank symbol, so patching the
+    # linear module alone is insufficient.
     linear_module.get_tensor_model_parallel_rank = lambda: 0
     linear_module.get_tensor_model_parallel_world_size = lambda: 1
+    parameter_module.get_tensor_model_parallel_rank = lambda: 0
     head = DSparkConfidenceHead(EXPECTED_SHAPE[1], prefix="probe.confidence_head")
     head.proj.weight_loader(head.proj.weight, weight)
     if head.proj.weight.dtype != torch.float32 or not torch.equal(

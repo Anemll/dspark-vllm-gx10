@@ -145,6 +145,21 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("head.proj.input_size != 4352", source)
         self.assertIn('"input_width": inputs.shape[-1]', source)
 
+    def test_probe_patches_parameter_modules_single_rank_accessor(self) -> None:
+        source = PROBE_PATH.read_text()
+        self.assertIn(
+            "from vllm.model_executor import parameter as parameter_module",
+            source,
+        )
+        self.assertIn(
+            "parameter_module.get_tensor_model_parallel_rank = lambda: 0",
+            source,
+        )
+        self.assertIn(
+            "linear_module.get_tensor_model_parallel_world_size = lambda: 1",
+            source,
+        )
+
     def test_minimal_image_pins_exact_production_sources(self) -> None:
         source = DOCKERFILE_PATH.read_text()
         self.assertIn(
