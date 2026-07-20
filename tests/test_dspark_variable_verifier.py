@@ -160,6 +160,12 @@ class PinnedIntegrationPatchTests(unittest.TestCase):
                 model_runner,
             )
             self.assertIn("confidence_invalid_spec_tokens=", model_runner)
+            self.assertIn(
+                "self.draft_tokens_handler.get_last_compaction_telemetry()",
+                model_runner,
+            )
+            self.assertIn("confidence_physical_target_rows", model_runner)
+            self.assertIn("confidence_d2h_copy_fallback", model_runner)
             compact_pos = model_runner.index("compact_scheduler_output(")
             save_pos = model_runner.index(
                 "confidence_invalid_spec_tokens=confidence_invalid_spec_tokens,"
@@ -180,7 +186,14 @@ class PinnedIntegrationPatchTests(unittest.TestCase):
             self.assertIn(
                 "confidence_invalid_spec_tokens: dict[str, int] | None", outputs
             )
+            self.assertIn(
+                "confidence_physical_target_rows: list[int] | None", outputs
+            )
+            self.assertIn(
+                "confidence_d2h_copy_fallback: bool | None", outputs
+            )
             self.assertIn("physical_invalid = (", scheduler)
+            self.assertIn("observe_engine_compaction_telemetry", scheduler)
             self.assertIn(
                 "total = max(merged.get(req_id, 0), count)", scheduler
             )

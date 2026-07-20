@@ -27,6 +27,11 @@ class DraftTokensHandler:
         self.num_draft_tokens: int = 0
         self.scheduler_requires_draft_tokens = False
         self.copy_wait_fallbacks = 0
+        # Per-execute evidence carried to the engine process with
+        # ModelRunnerOutput. Emitting Prometheus observations only inside the
+        # GPU worker made the live API physical-row series disappear.
+        self.last_physical_target_rows: list[int] | None = None
+        self.last_d2h_copy_fallback: bool | None = None
         self.variable_draft_lengths = (
             os.environ.get("VLLM_DSPARK_CONFIDENCE_SCHEDULER", "off") == "on"
         )
@@ -84,6 +89,9 @@ class DraftTokensHandler:
     def compact_scheduler_output(self, scheduler_output) -> dict[str, int]:
         """Apply the previous DSpark proposal length before target dispatch."""
 
+        # Do not leak evidence from a prior execute through an early return.
+        self.last_physical_target_rows = None
+        self.last_d2h_copy_fallback = None
         if not self.variable_draft_lengths:
             return {}
         if not scheduler_output.scheduled_spec_decode_tokens:
@@ -100,19 +108,32 @@ class DraftTokensHandler:
             self.req_ids,
             self.draft_tokens_np.tolist(),
         )
-        from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
-            get_confidence_metrics,
-            parse_confidence_config,
-        )
-
-        metrics = get_confidence_metrics(parse_confidence_config().threshold)
-        metrics.observe_d2h_copy_completion(fallback_wait=fallback_wait)
-        metrics.observe_physical_target_rows(
-            scheduler_output.num_scheduled_tokens[req_id]
+        physical_rows = [
+            int(scheduler_output.num_scheduled_tokens[req_id])
             for req_id in self.req_ids
             if req_id in scheduler_output.num_scheduled_tokens
-        )
+        ]
+        if not physical_rows:
+            raise RuntimeError(
+                "DSpark confidence scheduling compacted a proposal but did not "
+                "dispatch any physical target rows"
+            )
+        if any(not 1 <= rows <= 6 for rows in physical_rows):
+            raise RuntimeError(
+                "DSpark confidence scheduling produced invalid physical target "
+                f"rows: {physical_rows}"
+            )
+        self.last_physical_target_rows = physical_rows
+        self.last_d2h_copy_fallback = fallback_wait
         return invalid
+
+    def get_last_compaction_telemetry(
+        self,
+    ) -> tuple[list[int] | None, bool | None]:
+        """Return evidence for the immediately preceding execute call."""
+
+        rows = self.last_physical_target_rows
+        return (None if rows is None else list(rows), self.last_d2h_copy_fallback)
 
 
 def get_parallel_drafting_token_id(hf_config) -> int:

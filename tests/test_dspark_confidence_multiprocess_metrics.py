@@ -15,8 +15,12 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI_MAIN = ROOT / "overlay/vllm/entrypoints/cli/main.py"
 PROBE = ROOT / "scripts/probe_dspark_confidence_multiprocess_metrics.py"
 DOCKERFILE = ROOT / "docker/Dockerfile.nvfp4-aot-overlay"
+CONFIDENCE_DOCKERFILE = ROOT / "docker/Dockerfile.dspark-confidence-overlay"
 RUNTIME_DOCKERFILE = ROOT / "docker/Dockerfile.runtime"
 DOCKERIGNORE = ROOT / "docker/Dockerfile.nvfp4-aot-overlay.dockerignore"
+CONFIDENCE_DOCKERIGNORE = (
+    ROOT / "docker/Dockerfile.dspark-confidence-overlay.dockerignore"
+)
 
 
 class PrometheusBootstrapTests(unittest.TestCase):
@@ -124,6 +128,10 @@ class CrossProcessProbeContractTests(unittest.TestCase):
         self.assertIn("probability_bucket", source)
         self.assertIn("physical_target_rows", source)
         self.assertIn("d2h_copy_completion", source)
+        self.assertIn("DraftTokensHandler.__new__", source)
+        self.assertIn("handler.compact_scheduler_output(output)", source)
+        self.assertIn("handler.get_last_compaction_telemetry()", source)
+        self.assertIn("observe_engine_compaction_telemetry(rows, fallback)", source)
 
     def test_probe_compiles_and_help_parses_without_vllm_dependencies(self):
         with mock.patch.object(sys, "argv", [str(PROBE), "--help"]):
@@ -132,7 +140,7 @@ class CrossProcessProbeContractTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 0)
 
     def test_overlay_image_bakes_cross_process_probe(self):
-        for dockerfile in (DOCKERFILE, RUNTIME_DOCKERFILE):
+        for dockerfile in (DOCKERFILE, CONFIDENCE_DOCKERFILE, RUNTIME_DOCKERFILE):
             source = dockerfile.read_text()
             self.assertIn(
                 "scripts/probe_dspark_confidence_multiprocess_metrics.py",
@@ -145,6 +153,10 @@ class CrossProcessProbeContractTests(unittest.TestCase):
         self.assertIn(
             "!scripts/probe_dspark_confidence_multiprocess_metrics.py",
             DOCKERIGNORE.read_text(),
+        )
+        self.assertIn(
+            "!scripts/probe_dspark_confidence_multiprocess_metrics.py",
+            CONFIDENCE_DOCKERIGNORE.read_text(),
         )
 
 

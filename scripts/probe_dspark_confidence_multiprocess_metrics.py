@@ -87,11 +87,19 @@ def _run_api(port: int) -> None:
 
 
 def _run_worker(threshold: float) -> None:
+    from types import SimpleNamespace
+
+    import numpy as np
     import torch
 
     from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
         get_confidence_metrics,
+        observe_engine_compaction_telemetry,
     )
+    from vllm.v1.worker.gpu.spec_decode.utils import DraftTokensHandler
+
+    os.environ["VLLM_DSPARK_CONFIDENCE_SCHEDULER"] = "on"
+    os.environ["VLLM_DSPARK_CONFIDENCE_THRESHOLD"] = str(threshold)
 
     probabilities = torch.tensor(
         [
@@ -104,9 +112,59 @@ def _run_worker(threshold: float) -> None:
     observed = metrics.observe(torch.logit(probabilities))
     if observed["prefix_lengths"] != [3, 2]:
         raise RuntimeError(f"unexpected confidence prefix: {observed}")
-    metrics.observe_physical_target_rows([4, 3])
-    metrics.observe_d2h_copy_completion(fallback_wait=False)
-    metrics.observe_d2h_copy_completion(fallback_wait=True)
+
+    class CopyEvent:
+        def __init__(self, ready: bool):
+            self.ready = ready
+            self.synchronized = False
+
+        def query(self) -> bool:
+            return self.ready
+
+        def synchronize(self) -> None:
+            self.synchronized = True
+            self.ready = True
+
+    def compact_and_export(
+        req_ids: list[str],
+        proposals: list[list[int]],
+        *,
+        ready: bool,
+    ) -> tuple[dict[str, int], list[int], bool]:
+        handler = DraftTokensHandler.__new__(DraftTokensHandler)
+        handler.variable_draft_lengths = True
+        handler.req_ids = req_ids
+        handler.draft_tokens_np = np.asarray(proposals, dtype=np.int32)
+        handler.copy_event = CopyEvent(ready)
+        handler.copy_wait_fallbacks = 0
+        handler.last_physical_target_rows = None
+        handler.last_d2h_copy_fallback = None
+        output = SimpleNamespace(
+            scheduled_spec_decode_tokens={req_id: [-1] * 5 for req_id in req_ids},
+            num_scheduled_tokens={req_id: 6 for req_id in req_ids},
+            total_num_scheduled_tokens=6 * len(req_ids),
+        )
+        invalid = handler.compact_scheduler_output(output)
+        rows, fallback = handler.get_last_compaction_telemetry()
+        if rows is None or fallback is None:
+            raise RuntimeError("real compaction did not produce telemetry evidence")
+        observe_engine_compaction_telemetry(rows, fallback)
+        return invalid, rows, fallback
+
+    ready_result = compact_and_export(
+        ["a", "b"],
+        [[10, 11, 12, -1, -1], [20, 21, -1, -1, -1]],
+        ready=True,
+    )
+    if ready_result != ({"a": 2, "b": 3}, [4, 3], False):
+        raise RuntimeError(f"bad ready compaction evidence: {ready_result}")
+    fallback_result = compact_and_export(
+        ["c"],
+        [[30, 31, -1, -1, -1]],
+        ready=False,
+    )
+    if fallback_result != ({"c": 3}, [3], True):
+        raise RuntimeError(f"bad fallback compaction evidence: {fallback_result}")
     metrics.observe_dropped_batch()
 
 
@@ -160,6 +218,24 @@ def _assert_fixed_exposition(exposition: str) -> dict[str, object]:
     if missing:
         raise AssertionError(f"missing confidence metric families: {missing}")
 
+    physical_count = lines_by_family["physical_target_rows"]
+    if len(physical_count) != 1 or _numeric_value(physical_count[0]) != 3.0:
+        raise AssertionError(
+            f"physical-row count did not cross the real compaction path: "
+            f"{physical_count}"
+        )
+    physical_sum = [
+        line
+        for line in _metric_lines(
+            exposition, METRIC_PREFIX + "physical_target_rows_sum"
+        )
+        if 'threshold="0.4"' in line
+    ]
+    if len(physical_sum) != 1 or _numeric_value(physical_sum[0]) != 10.0:
+        raise AssertionError(
+            f"physical-row sum did not preserve [4, 3, 3]: {physical_sum}"
+        )
+
     d2h = lines_by_family["d2h_copy_completion"]
     for result in ("ready", "fallback_wait"):
         matches = [line for line in d2h if f'result="{result}"' in line]
@@ -169,6 +245,8 @@ def _assert_fixed_exposition(exposition: str) -> dict[str, object]:
     return {
         "probability_count_by_position": probability_counts,
         "probability_bucket_series_by_position": probability_buckets,
+        "physical_target_rows_count": _numeric_value(physical_count[0]),
+        "physical_target_rows_sum": _numeric_value(physical_sum[0]),
         "families": {key: len(lines) for key, lines in lines_by_family.items()},
     }
 

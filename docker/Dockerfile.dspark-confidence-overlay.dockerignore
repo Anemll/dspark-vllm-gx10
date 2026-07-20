@@ -17,6 +17,7 @@
 !scripts/
 !scripts/probe_dspark_confidence_head.py
 !scripts/probe_dspark_execute_sample_split.py
+!scripts/probe_dspark_confidence_multiprocess_metrics.py
 !scripts/patch_dspark_variable_verifier.py
 !benchmarks/
 !benchmarks/probe_dspark_variable_verifier_hw.py

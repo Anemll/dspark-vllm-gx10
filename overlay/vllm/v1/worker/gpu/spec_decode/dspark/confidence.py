@@ -300,3 +300,21 @@ def get_confidence_metrics(threshold: float) -> DSparkConfidenceMetrics:
                 f"thresholds: {_metrics_instance.threshold_label} and {key}"
             )
         return _metrics_instance
+
+
+def observe_engine_compaction_telemetry(
+    physical_rows: list[int] | None,
+    d2h_fallback: bool | None,
+) -> None:
+    """Export worker compaction evidence after the engine result boundary."""
+
+    if (physical_rows is None) != (d2h_fallback is None):
+        raise RuntimeError(
+            "incomplete DSpark physical-row telemetry handoff: "
+            f"rows={physical_rows}, d2h_fallback={d2h_fallback}"
+        )
+    if physical_rows is None:
+        return
+    metrics = get_confidence_metrics(parse_confidence_config().threshold)
+    metrics.observe_physical_target_rows(physical_rows)
+    metrics.observe_d2h_copy_completion(fallback_wait=d2h_fallback)

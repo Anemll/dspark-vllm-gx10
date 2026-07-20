@@ -213,6 +213,12 @@ class ConfidencePrefixTests(unittest.TestCase):
             exposition,
         )
 
+    def test_engine_compaction_telemetry_rejects_partial_handoff(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "incomplete DSpark"):
+            confidence.observe_engine_compaction_telemetry([3], None)
+        with self.assertRaisesRegex(RuntimeError, "incomplete DSpark"):
+            confidence.observe_engine_compaction_telemetry(None, False)
+
 
 class OverlayContractTests(unittest.TestCase):
     def test_deepseek_model_loads_exact_head_parameter(self) -> None:
@@ -264,7 +270,8 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("compact_scheduler_output_for_variable_drafts", source)
         self.assertIn("self.scheduler_requires_draft_tokens", source)
         self.assertIn("complete_async_copy_if_needed", source)
-        self.assertIn("observe_physical_target_rows", source)
+        self.assertIn("last_physical_target_rows", source)
+        self.assertIn("get_last_compaction_telemetry", source)
         confidence_source = VARIABLE_VERIFIER_PATH.read_text()
         self.assertIn(
             "scheduler_output.total_num_scheduled_tokens -= removed",

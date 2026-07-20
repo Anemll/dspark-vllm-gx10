@@ -69,6 +69,9 @@ class _DraftTokensHandler:
         self.calls += 1
         return dict(self.trim)
 
+    def get_last_compaction_telemetry(self):
+        return ([3], False)
+
 
 class _ModelState:
     @staticmethod
@@ -282,9 +285,20 @@ def main() -> None:
             raise RuntimeError("old code unexpectedly survived the split boundary")
         trimmed = trimmed_output.model_runner_output.confidence_invalid_spec_tokens
         warmup = warmup_output.model_runner_output.confidence_invalid_spec_tokens
+        trimmed_rows = (
+            trimmed_output.model_runner_output.confidence_physical_target_rows
+        )
+        trimmed_d2h = (
+            trimmed_output.model_runner_output.confidence_d2h_copy_fallback
+        )
         if trimmed != EXPECTED_TRIM or warmup is not None:
             raise RuntimeError(
                 f"split evidence drift: trimmed={trimmed}, warmup={warmup}"
+            )
+        if trimmed_rows != [3] or trimmed_d2h is not False:
+            raise RuntimeError(
+                "physical telemetry split drift: "
+                f"rows={trimmed_rows}, d2h_fallback={trimmed_d2h}"
             )
         if compact_calls != 1 or warmup_compact_calls != 0:
             raise RuntimeError(
@@ -300,6 +314,8 @@ def main() -> None:
             "state_fields": list(state_fields),
             "warmup_state_fields": list(warmup_fields),
             "trimmed_output": trimmed,
+            "trimmed_physical_target_rows": trimmed_rows,
+            "trimmed_d2h_copy_fallback": trimmed_d2h,
             "warmup_output": warmup,
             "execute_compaction_calls": compact_calls,
             "warmup_compaction_calls": warmup_compact_calls,

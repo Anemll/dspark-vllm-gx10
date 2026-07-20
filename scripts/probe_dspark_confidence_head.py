@@ -123,6 +123,8 @@ def verify_async_scheduler_contract() -> dict[str, object]:
         req_ids=["probe"],
         req_id_to_index={"probe": 0},
         confidence_invalid_spec_tokens=invalid,
+        confidence_physical_target_rows=[3],
+        confidence_d2h_copy_fallback=False,
     )
     if runner_output.confidence_invalid_spec_tokens != {"probe": 3}:
         raise RuntimeError("physical trim evidence was not preserved in runner output")
@@ -136,6 +138,7 @@ def verify_async_scheduler_contract() -> dict[str, object]:
     if (
         "confidence_invalid_spec_tokens" not in scheduler_source
         or "max(merged.get(req_id, 0), count)" not in scheduler_source
+        or "observe_engine_compaction_telemetry" not in scheduler_source
     ):
         raise RuntimeError("async scheduler lacks physical verifier metric correction")
     cudagraph_source = inspect.getsource(CudaGraphManager._init_candidates)
@@ -154,7 +157,8 @@ def verify_async_scheduler_contract() -> dict[str, object]:
     if (
         "self.scheduler_requires_draft_tokens" not in get_draft_source
         or "complete_async_copy_if_needed" not in compact_source
-        or "observe_d2h_copy_completion" not in compact_source
+        or "last_physical_target_rows" not in compact_source
+        or "last_d2h_copy_fallback" not in compact_source
         or completion_source.index("event.query()")
         >= completion_source.index("event.synchronize()")
     ):
