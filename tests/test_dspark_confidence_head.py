@@ -322,9 +322,13 @@ class OverlayContractTests(unittest.TestCase):
         dockerfile = DOCKERFILE_PATH.read_text()
         dockerignore = DOCKERIGNORE_PATH.read_text()
         self.assertIn('TRACE_ENV = "VLLM_DSPARK_OVERLAP_TRACE"', source)
+        self.assertIn(
+            'TRACE_JSONL_ENV = "VLLM_DSPARK_OVERLAP_TRACE_JSONL"', source
+        )
         self.assertIn("end_verify_and_measure_rank_wait", source)
         self.assertIn("end_draft_and_gather", source)
         self.assertIn("overlap phase conservation drift", source)
+        self.assertIn("_append_trace_jsonl(trace)", source)
         self.assertIn("dspark/overlap_trace.py", dockerfile)
         self.assertIn(
             "!overlay/vllm/v1/worker/gpu/spec_decode/dspark/overlap_trace.py",

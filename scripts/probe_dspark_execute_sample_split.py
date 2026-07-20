@@ -141,6 +141,7 @@ def _make_runner(model_runner_module, *, device: torch.device, trim: dict[str, i
     sampled = torch.tensor([[7]], dtype=torch.int64, device=device)
     input_batch = _input_batch(device)
     runner = SimpleNamespace(
+        device=device,
         execute_model_state=None,
         is_last_pp_rank=True,
         is_first_pp_rank=True,

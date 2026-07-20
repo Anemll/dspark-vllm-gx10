@@ -27,6 +27,7 @@ from pathlib import Path
 
 METRIC_PREFIX = "vllm:dspark_confidence_"
 OVERLAP_PREFIX = "vllm:dspark_overlap_"
+OVERLAP_JSONL_ENV = "VLLM_DSPARK_OVERLAP_TRACE_JSONL"
 
 
 def _free_port() -> int:
@@ -318,6 +319,35 @@ def _assert_fixed_exposition(exposition: str) -> dict[str, object]:
     }
 
 
+def _assert_overlap_jsonl(path: Path) -> dict[str, object]:
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    if len(records) != 2:
+        raise AssertionError(f"expected two lossless block rows, got {records!r}")
+    sequences = [record.get("sequence") for record in records]
+    if sequences != sorted(sequences) or len(set(sequences)) != 2:
+        raise AssertionError(f"JSONL sequence drift: {sequences}")
+    for record in records:
+        if record.get("schema_version") != 1:
+            raise AssertionError(f"JSONL schema drift: {record!r}")
+        if not isinstance(record.get("observed_unix_ns"), int):
+            raise AssertionError(f"JSONL timestamp missing: {record!r}")
+        trace = record.get("trace")
+        if not isinstance(trace, dict) or trace.get("world_size") != 2:
+            raise AssertionError(f"JSONL trace handoff drift: {trace!r}")
+        rows = trace.get("rank_traces")
+        if not isinstance(rows, list) or [row.get("rank") for row in rows] != [0, 1]:
+            raise AssertionError(f"JSONL rank rows drift: {rows!r}")
+        for row in rows:
+            for phase in ("draft", "verify", "commit", "nccl_wait", "overhead", "total"):
+                if not isinstance(row.get(phase), (int, float)):
+                    raise AssertionError(f"JSONL {phase} missing: {row!r}")
+    return {
+        "row_count": len(records),
+        "rank_rows": sum(len(record["trace"]["rank_traces"]) for record in records),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
 def _start_api_and_worker(
     *,
     env: dict[str, str],
@@ -387,11 +417,14 @@ def _run_controller(output: Path) -> None:
         if multiprocess_dir is None or not Path(multiprocess_dir).is_dir():
             raise AssertionError("CLI bootstrap did not create multiprocess storage")
         fixed_env = os.environ.copy()
+        overlap_jsonl = Path(multiprocess_dir) / "overlap-traces.jsonl"
+        fixed_env[OVERLAP_JSONL_ENV] = str(overlap_jsonl)
         fixed, fixed_api_pid, fixed_worker_pid = _start_api_and_worker(
             env=fixed_env,
             threshold=0.4,
         )
         summary = _assert_fixed_exposition(fixed)
+        jsonl_summary = _assert_overlap_jsonl(overlap_jsonl)
         files = sorted(path.name for path in Path(multiprocess_dir).iterdir())
         if not any(name.startswith("histogram_") for name in files):
             raise AssertionError(f"worker histogram mmap missing: {files}")
@@ -412,6 +445,7 @@ def _run_controller(output: Path) -> None:
                 "multiprocess_dir": multiprocess_dir,
                 "multiprocess_files": files,
                 "http_metrics_sha256": hashlib.sha256(fixed.encode()).hexdigest(),
+                "overlap_jsonl": jsonl_summary,
                 **summary,
             },
         }

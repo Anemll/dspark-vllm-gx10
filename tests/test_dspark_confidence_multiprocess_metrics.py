@@ -136,6 +136,9 @@ class CrossProcessProbeContractTests(unittest.TestCase):
         self.assertIn('OVERLAP_PREFIX + "phase_ms_count"', source)
         self.assertIn("overlap block count drift", source)
         self.assertIn("overlap {phase} count drift", source)
+        self.assertIn('OVERLAP_JSONL_ENV = "VLLM_DSPARK_OVERLAP_TRACE_JSONL"', source)
+        self.assertIn("_assert_overlap_jsonl(overlap_jsonl)", source)
+        self.assertIn('"row_count": len(records)', source)
 
     def test_probe_compiles_and_help_parses_without_vllm_dependencies(self):
         with mock.patch.object(sys, "argv", [str(PROBE), "--help"]):

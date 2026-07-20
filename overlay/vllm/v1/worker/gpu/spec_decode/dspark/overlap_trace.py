@@ -14,6 +14,7 @@ normal serving configuration.
 
 from __future__ import annotations
 
+import json
 import math
 import os
 import time
@@ -24,6 +25,7 @@ import torch
 
 
 TRACE_ENV = "VLLM_DSPARK_OVERLAP_TRACE"
+TRACE_JSONL_ENV = "VLLM_DSPARK_OVERLAP_TRACE_JSONL"
 TRACE_SCHEMA_VERSION = 1
 PHASES = ("draft", "verify", "commit", "nccl_wait", "overhead", "total")
 
@@ -31,6 +33,8 @@ _metrics_lock = Lock()
 _metrics_instance: DSparkOverlapMetrics | None = None
 _signal_lock = Lock()
 _signals: dict[str, torch.Tensor] = {}
+_jsonl_lock = Lock()
+_jsonl_sequence = 0
 
 
 def overlap_trace_enabled(environment: dict[str, str] | None = None) -> bool:
@@ -247,6 +251,50 @@ def get_overlap_metrics() -> DSparkOverlapMetrics:
         return _metrics_instance
 
 
+def _append_trace_jsonl(trace: dict[str, Any]) -> None:
+    """Persist one validated block handoff without buffering or aggregation."""
+
+    path = os.environ.get(TRACE_JSONL_ENV)
+    if path is None:
+        return
+    if not path or not os.path.isabs(path):
+        raise ValueError(
+            f"{TRACE_JSONL_ENV} must be an absolute path when set, got {path!r}"
+        )
+    parent = os.path.dirname(path)
+    if not os.path.isdir(parent):
+        raise FileNotFoundError(
+            f"{TRACE_JSONL_ENV} parent directory does not exist: {parent}"
+        )
+
+    global _jsonl_sequence
+    with _jsonl_lock:
+        _jsonl_sequence += 1
+        record = {
+            "schema_version": TRACE_SCHEMA_VERSION,
+            "sequence": _jsonl_sequence,
+            "observed_unix_ns": time.time_ns(),
+            "trace": trace,
+        }
+        payload = (
+            json.dumps(record, sort_keys=True, separators=(",", ":")) + "\n"
+        ).encode("utf-8")
+        descriptor = os.open(
+            path,
+            os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_CLOEXEC,
+            0o600,
+        )
+        try:
+            written = os.write(descriptor, payload)
+            if written != len(payload):
+                raise OSError(
+                    f"short overlap trace write: {written} of {len(payload)} bytes"
+                )
+        finally:
+            os.close(descriptor)
+
+
 def observe_engine_overlap_trace(trace: dict[str, Any] | None) -> None:
     if trace is not None:
         get_overlap_metrics().observe(trace)
+        _append_trace_jsonl(trace)
