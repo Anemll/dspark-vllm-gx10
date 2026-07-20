@@ -26,6 +26,7 @@ COPY LICENSES/Apache-2.0.txt \
 
 ENV FLASHINFER_DISABLE_VERSION_CHECK=""
 COPY scripts/verify_flashinfer_runtime.py /usr/local/bin/dspark-verify-flashinfer-runtime
+COPY scripts/probe_dspark_confidence_multiprocess_metrics.py /usr/local/bin/dspark-probe-confidence-multiprocess-metrics
 RUN python3 -m pip install --no-cache-dir \
       "cuda-python==${CUDA_PYTHON_VERSION}" \
       "nvidia-cutlass-dsl==${CUTLASS_DSL_VERSION}" \

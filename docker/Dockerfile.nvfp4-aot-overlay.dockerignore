@@ -5,6 +5,7 @@
 !.local/wheels/flashinfer_cubin-0.6.15-py3-none-any.whl
 !scripts/
 !scripts/verify_flashinfer_runtime.py
+!scripts/probe_dspark_confidence_multiprocess_metrics.py
 !benchmarks/
 !benchmarks/probe_nvfp4_staged_routed_loader.py
 !benchmarks/probe_nvfp4_prepared_layer.py
