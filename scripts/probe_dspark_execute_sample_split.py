@@ -136,6 +136,7 @@ def _make_runner(model_runner_module, *, device: torch.device, trim: dict[str, i
         kv_cache_config=None,
         attn_groups=None,
         vllm_config=None,
+        input_buffers=None,
         block_tables=_BlockTables(),
         model_state=_ModelState(),
         draft_tokens_handler=_DraftTokensHandler(trim),
