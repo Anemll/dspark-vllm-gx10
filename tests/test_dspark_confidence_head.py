@@ -19,7 +19,9 @@ VARIABLE_VERIFIER_PATH = (
     ROOT / "overlay/vllm/v1/worker/gpu/spec_decode/dspark/variable_verifier.py"
 )
 PROBE_PATH = ROOT / "scripts/probe_dspark_confidence_head.py"
+SPLIT_PROBE_PATH = ROOT / "scripts/probe_dspark_execute_sample_split.py"
 DOCKERFILE_PATH = ROOT / "docker/Dockerfile.dspark-confidence-overlay"
+DOCKERIGNORE_PATH = ROOT / "docker/Dockerfile.dspark-confidence-overlay.dockerignore"
 PATCHER_PATH = ROOT / "scripts/patch_dspark_variable_verifier.py"
 UPSTREAM_ROOT = Path(
     "/Users/anemll/SourceRelease/GITHUB/ML_playground/dspark-vllm-gx10/"
@@ -291,6 +293,17 @@ class OverlayContractTests(unittest.TestCase):
             '"d2h_completion_ready_vs_fallback_telemetry": True', source
         )
 
+    def test_split_probe_executes_real_sample_tokens_body(self) -> None:
+        source = SPLIT_PROBE_PATH.read_text()
+        self.assertIn("inspect.unwrap(model_runner_module.GPUModelRunner.execute_model)", source)
+        self.assertIn("inspect.unwrap(model_runner_module.GPUModelRunner.sample_tokens)", source)
+        self.assertIn('choices=("old-nameerror", "pass")', source)
+        self.assertIn("trim=EXPECTED_TRIM, dummy_run=False", source)
+        self.assertIn("trim={}, dummy_run=True", source)
+        self.assertIn("self.execute_model_state.confidence_invalid_spec_tokens", source)
+        self.assertIn('"trimmed_output": trimmed', source)
+        self.assertIn('"warmup_output": warmup', source)
+
     @unittest.skipUnless(UPSTREAM_ROOT.exists(), "pinned upstream checkout unavailable")
     def test_patch_installs_only_the_four_pinned_integration_seams(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -367,6 +380,12 @@ class OverlayContractTests(unittest.TestCase):
 
     def test_minimal_image_pins_exact_production_sources(self) -> None:
         source = DOCKERFILE_PATH.read_text()
+        dockerignore = DOCKERIGNORE_PATH.read_text()
+        self.assertIn(
+            "COPY scripts/probe_dspark_execute_sample_split.py ", source
+        )
+        self.assertIn("dspark-probe-execute-sample-split", source)
+        self.assertIn("!scripts/probe_dspark_execute_sample_split.py", dockerignore)
         self.assertIn(
             "efe33c32d37ed7f26d869d94626f1415906d31218ec0ee44d79bb2b815b8cf39",
             source,

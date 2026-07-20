@@ -31,9 +31,27 @@ def patch_model_runner(path: Path) -> None:
     )
     source = replace_once(
         source,
+        """            aux_hidden_states=aux_hidden_states,\n            finished_req_ids=finished_req_ids,\n        )\n""",
+        """            aux_hidden_states=aux_hidden_states,\n            finished_req_ids=finished_req_ids,\n            confidence_invalid_spec_tokens=confidence_invalid_spec_tokens,\n        )\n""",
+        label="model_runner execute state evidence",
+    )
+    source = replace_once(
+        source,
+        """        aux_hidden_states = self.execute_model_state.aux_hidden_states\n        finished_req_ids = self.execute_model_state.finished_req_ids\n        self.execute_model_state = None\n""",
+        """        aux_hidden_states = self.execute_model_state.aux_hidden_states\n        finished_req_ids = self.execute_model_state.finished_req_ids\n        confidence_invalid_spec_tokens = (\n            self.execute_model_state.confidence_invalid_spec_tokens\n        )\n        self.execute_model_state = None\n""",
+        label="model_runner sample state handoff",
+    )
+    source = replace_once(
+        source,
         """            sampled_token_ids=None,  # type: ignore\n            prompt_logprobs_dict=prompt_logprobs_dict,  # type: ignore[arg-type]\n        )\n""",
         """            sampled_token_ids=None,  # type: ignore\n            prompt_logprobs_dict=prompt_logprobs_dict,  # type: ignore[arg-type]\n            confidence_invalid_spec_tokens=(\n                confidence_invalid_spec_tokens or None\n            ),\n        )\n""",
         label="model_runner output evidence",
+    )
+    source = replace_once(
+        source,
+        """    aux_hidden_states: list[torch.Tensor] | None\n    finished_req_ids: set[str]\n""",
+        """    aux_hidden_states: list[torch.Tensor] | None\n    finished_req_ids: set[str]\n    # Physical proposal slots omitted before target CUDA-graph dispatch.\n    # V2 executes the target and sampling in separate calls, so this evidence\n    # must cross that asynchronous boundary with the other per-step state.\n    confidence_invalid_spec_tokens: dict[str, int]\n""",
+        label="model_runner execute state field",
     )
     path.write_text(source, encoding="utf-8")
 

@@ -147,12 +147,36 @@ class PinnedIntegrationPatchTests(unittest.TestCase):
             self.assertIn(
                 "self.draft_tokens_handler.compact_scheduler_output(", model_runner
             )
+            self.assertIn(
+                "confidence_invalid_spec_tokens=confidence_invalid_spec_tokens,",
+                model_runner,
+            )
+            self.assertIn(
+                "self.execute_model_state.confidence_invalid_spec_tokens",
+                model_runner,
+            )
+            self.assertIn(
+                "confidence_invalid_spec_tokens: dict[str, int]",
+                model_runner,
+            )
             self.assertIn("confidence_invalid_spec_tokens=", model_runner)
             compact_pos = model_runner.index("compact_scheduler_output(")
+            save_pos = model_runner.index(
+                "confidence_invalid_spec_tokens=confidence_invalid_spec_tokens,"
+            )
+            read_pos = model_runner.index(
+                "self.execute_model_state.confidence_invalid_spec_tokens"
+            )
+            output_pos = model_runner.index(
+                "confidence_invalid_spec_tokens=(", read_pos
+            )
             self.assertLess(
                 compact_pos,
                 model_runner.index("dispatch_cg_and_sync_dp(", compact_pos),
             )
+            self.assertLess(compact_pos, save_pos)
+            self.assertLess(save_pos, read_pos)
+            self.assertLess(read_pos, output_pos)
             self.assertIn(
                 "confidence_invalid_spec_tokens: dict[str, int] | None", outputs
             )
