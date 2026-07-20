@@ -1,0 +1,680 @@
+{
+  "base_url": "http://192.168.1.68:8888",
+  "cases": [
+    {
+      "aggregate_decode_token_tps": 75.19809815030835,
+      "aggregate_wall_token_tps": 73.23749656082241,
+      "concurrency": 1,
+      "fleet_decode_s": 6.795384625002043,
+      "max_tokens": 512,
+      "mean_stream_token_tps": 75.34525685510349,
+      "mean_ttft_s": 0.19489341700682417,
+      "metrics_after_sha256": "0a14cadc845d9b6bf7b4fae59abb04a2adc0c53bec710b11da185d92095b3094",
+      "metrics_before_sha256": "9c2d77f884c74f00d47605f080be95dd2627047b5c286928cc4663c4c8190d4d",
+      "overlap": {
+        "average_ms_by_rank": {
+          "0": {
+            "commit": 2.6449590794091087,
+            "draft": 7.938948367405864,
+            "nccl_wait": 0.013551844754120678,
+            "overhead": 1.8523298883901058,
+            "total": 66.57176138127892,
+            "verify": 54.12197238959155
+          },
+          "1": {
+            "commit": 2.635975462719075,
+            "draft": 7.9389666909153025,
+            "nccl_wait": 0.01814928159877224,
+            "overhead": 1.6527559502610882,
+            "total": 66.59745477472694,
+            "verify": 54.35160775786465
+          }
+        },
+        "blocks": {
+          "0": 103.0,
+          "1": 103.0
+        },
+        "phase": {
+          "0:commit": {
+            "count": 103.0,
+            "sum_ms": 272.4307851791382
+          },
+          "0:draft": {
+            "count": 103.0,
+            "sum_ms": 817.711681842804
+          },
+          "0:nccl_wait": {
+            "count": 103.0,
+            "sum_ms": 1.39584000967443
+          },
+          "0:overhead": {
+            "count": 103.0,
+            "sum_ms": 190.7899785041809
+          },
+          "0:total": {
+            "count": 103.0,
+            "sum_ms": 6856.8914222717285
+          },
+          "0:verify": {
+            "count": 103.0,
+            "sum_ms": 5574.56315612793
+          },
+          "1:commit": {
+            "count": 103.0,
+            "sum_ms": 271.5054726600647
+          },
+          "1:draft": {
+            "count": 103.0,
+            "sum_ms": 817.7135691642761
+          },
+          "1:nccl_wait": {
+            "count": 103.0,
+            "sum_ms": 1.8693760046735406
+          },
+          "1:overhead": {
+            "count": 103.0,
+            "sum_ms": 170.2338628768921
+          },
+          "1:total": {
+            "count": 103.0,
+            "sum_ms": 6859.537841796875
+          },
+          "1:verify": {
+            "count": 103.0,
+            "sum_ms": 5598.215599060059
+          }
+        }
+      },
+      "prompt": "tool_agentic",
+      "prompt_sha256": "6173a7ae0ea3c64b364d0c405be28808efb8486c68a7011e966d31ce222c1736",
+      "quality": {
+        "long_code_html_gate": false,
+        "passed": true,
+        "rows": [
+          {
+            "automated_no_collapse": true,
+            "characters": 1726,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9950248756218906,
+            "words": 204
+          }
+        ]
+      },
+      "spec_decode": {
+        "accepted": 408,
+        "accepted_tokens_per_position": [
+          99,
+          90,
+          79,
+          74,
+          66
+        ],
+        "aggregate_acceptance_rate": 0.796875,
+        "draft_tokens": 512,
+        "drafts": 103,
+        "mean_acceptance_length": 4.961165048543689,
+        "mean_draft_length": 4.970873786407767,
+        "p_full": 0.6407766990291263,
+        "per_position_acceptance_rates": [
+          0.9611650485436893,
+          0.8737864077669902,
+          0.7669902912621359,
+          0.7184466019417476,
+          0.6407766990291263
+        ]
+      },
+      "streams": [
+        {
+          "chunks": 104,
+          "completion_tokens": 512,
+          "decode_s": 6.795384625002043,
+          "finish_reason": "length",
+          "finished": 260565.945953541,
+          "first_token": 260559.150322208,
+          "last_token": 260565.945706833,
+          "output": "I'll create a Space Invaders game project for you. Let me set up the files and test everything.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nBLUE = (0, 0, 255)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            self.bullets.append(Bullet(self.x + self.width//2 - 2, self.y))\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        pygame.draw.polygon(screen, GREEN, [\n            (self.x + 5, self.y),\n            (self.x + self.width - 5, self.y),\n            (self.x + self.width//2, self.y - 15)\n        ])\n        for bullet in self.bullets:\n            bullet.draw(screen)\n\nclass Enemy:\n    def __init__(",
+          "output_sha256": "dc6779c6f77d9f23820916c50faaa2d2134070ba44856645e0133878279cf7a2",
+          "prompt_tokens": 40,
+          "request": 0,
+          "started": 260558.955428791,
+          "token_tps": 75.34525685510349,
+          "ttft_s": 0.19489341700682417
+        }
+      ],
+      "total_tokens": 512,
+      "wall_s": 6.990954416018212
+    },
+    {
+      "aggregate_decode_token_tps": 168.13478594687183,
+      "aggregate_wall_token_tps": 159.8221822148085,
+      "concurrency": 4,
+      "fleet_decode_s": 12.156913207989419,
+      "max_tokens": 512,
+      "mean_stream_token_tps": 230.82491321596365,
+      "mean_ttft_s": 0.4035216979973484,
+      "metrics_after_sha256": "6168a93de7a4b8438d1fd7ede12880fca7360a0259cc9ae5b8be1a8d86fd8e06",
+      "metrics_before_sha256": "0a14cadc845d9b6bf7b4fae59abb04a2adc0c53bec710b11da185d92095b3094",
+      "overlap": {
+        "average_ms_by_rank": {
+          "0": {
+            "commit": 3.4224602510263256,
+            "draft": 11.033413242649388,
+            "nccl_wait": 0.018303423381603515,
+            "overhead": 1.9167461142883644,
+            "total": 114.90593657622466,
+            "verify": 98.51501344560504
+          },
+          "1": {
+            "commit": 3.4217507774765425,
+            "draft": 11.032954817419654,
+            "nccl_wait": 0.02235935135064898,
+            "overhead": 1.6510865661475036,
+            "total": 114.9199329066921,
+            "verify": 98.79178093575142
+          }
+        },
+        "blocks": {
+          "0": 111.0,
+          "1": 111.0
+        },
+        "phase": {
+          "0:commit": {
+            "count": 111.0,
+            "sum_ms": 379.8930878639221
+          },
+          "0:draft": {
+            "count": 111.0,
+            "sum_ms": 1224.708869934082
+          },
+          "0:nccl_wait": {
+            "count": 111.0,
+            "sum_ms": 2.0316799953579903
+          },
+          "0:overhead": {
+            "count": 111.0,
+            "sum_ms": 212.75881868600845
+          },
+          "0:total": {
+            "count": 111.0,
+            "sum_ms": 12754.558959960938
+          },
+          "0:verify": {
+            "count": 111.0,
+            "sum_ms": 10935.166492462158
+          },
+          "1:commit": {
+            "count": 111.0,
+            "sum_ms": 379.81433629989624
+          },
+          "1:draft": {
+            "count": 111.0,
+            "sum_ms": 1224.6579847335815
+          },
+          "1:nccl_wait": {
+            "count": 111.0,
+            "sum_ms": 2.481887999922037
+          },
+          "1:overhead": {
+            "count": 111.0,
+            "sum_ms": 183.2706088423729
+          },
+          "1:total": {
+            "count": 111.0,
+            "sum_ms": 12756.112552642822
+          },
+          "1:verify": {
+            "count": 111.0,
+            "sum_ms": 10965.887683868408
+          }
+        }
+      },
+      "prompt": "tool_agentic",
+      "prompt_sha256": "6173a7ae0ea3c64b364d0c405be28808efb8486c68a7011e966d31ce222c1736",
+      "quality": {
+        "long_code_html_gate": false,
+        "passed": true,
+        "rows": [
+          {
+            "automated_no_collapse": true,
+            "characters": 1699,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9656862745098039,
+            "words": 207
+          },
+          {
+            "automated_no_collapse": false,
+            "characters": 128,
+            "max_repeated_4gram_count": 1,
+            "unique_4gram_ratio": 1.0,
+            "words": 22
+          },
+          {
+            "automated_no_collapse": true,
+            "characters": 1699,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9656862745098039,
+            "words": 207
+          },
+          {
+            "automated_no_collapse": true,
+            "characters": 1739,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9751243781094527,
+            "words": 204
+          }
+        ]
+      },
+      "spec_decode": {
+        "accepted": 1641,
+        "accepted_tokens_per_position": [
+          388,
+          363,
+          329,
+          296,
+          265
+        ],
+        "aggregate_acceptance_rate": 0.8147964250248262,
+        "draft_tokens": 2014,
+        "drafts": 406,
+        "mean_acceptance_length": 5.041871921182266,
+        "mean_draft_length": 4.960591133004926,
+        "p_full": 0.6527093596059114,
+        "per_position_acceptance_rates": [
+          0.9556650246305419,
+          0.8940886699507389,
+          0.8103448275862069,
+          0.729064039408867,
+          0.6527093596059114
+        ]
+      },
+      "streams": [
+        {
+          "chunks": 100,
+          "completion_tokens": 512,
+          "decode_s": 11.746082915982697,
+          "finish_reason": "length",
+          "finished": 260577.911732208,
+          "first_token": 260566.16548475,
+          "last_token": 260577.911567666,
+          "output": "I'll create a Space Invaders game project for you. Let me set up the files and test everything.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nBLUE = (0, 0, 255)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            self.bullets.append(Bullet(self.x + self.width//2 - 2, self.y))\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        # Draw gun\n        pygame.draw.rect(screen, GREEN, (self.x + self.width//2 - 5, self.y - 10, 10, 10))\n        for bullet in self.bullets:\n            bullet.draw(screen)\n\nclass Enemy:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y",
+          "output_sha256": "fef15887d1809a535db3fe1e0a18c10916cef287453655823783723a467c7212",
+          "prompt_tokens": 40,
+          "request": 0,
+          "started": 260566.002638458,
+          "token_tps": 43.58899929978616,
+          "ttft_s": 0.16284629199071787
+        },
+        {
+          "chunks": 7,
+          "completion_tokens": 512,
+          "decode_s": 0.646387084008893,
+          "finish_reason": "length",
+          "finished": 260578.815748041,
+          "first_token": 260566.486456041,
+          "last_token": 260567.132843125,
+          "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n",
+          "output_sha256": "0b3ef29f99451ed5aac3a14bfddf2034bc7a04554957731c25a6fabef877ba3f",
+          "prompt_tokens": 40,
+          "request": 1,
+          "started": 260566.00269525,
+          "token_tps": 792.0950351058622,
+          "ttft_s": 0.48376079098670743
+        },
+        {
+          "chunks": 102,
+          "completion_tokens": 512,
+          "decode_s": 11.836118457984412,
+          "finish_reason": "length",
+          "finished": 260578.322510375,
+          "first_token": 260566.4862795,
+          "last_token": 260578.322397958,
+          "output": "I'll create a Space Invaders game project for you. Let me set up the files and test everything.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nBLUE = (0, 0, 255)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            self.bullets.append(Bullet(self.x + self.width//2 - 2, self.y))\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        # Draw gun\n        pygame.draw.rect(screen, GREEN, (self.x + self.width//2 - 5, self.y - 10, 10, 10))\n        for bullet in self.bullets:\n            bullet.draw(screen)\n\nclass Enemy:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y",
+          "output_sha256": "fef15887d1809a535db3fe1e0a18c10916cef287453655823783723a467c7212",
+          "prompt_tokens": 40,
+          "request": 2,
+          "started": 260566.002760541,
+          "token_tps": 43.257424451900015,
+          "ttft_s": 0.4835189589939546
+        },
+        {
+          "chunks": 99,
+          "completion_tokens": 512,
+          "decode_s": 11.542399582976941,
+          "finish_reason": "length",
+          "finished": 260578.029030375,
+          "first_token": 260566.486509375,
+          "last_token": 260578.028908958,
+          "output": "I'll create a Space Invaders game project for you. Let me set up the files and test everything.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            self.bullets.append(Bullet(self.x + self.width//2 - 2, self.y))\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        pygame.draw.polygon(screen, GREEN, [\n            (self.x + 5, self.y),\n            (self.x + self.width - 5, self.y),\n            (self.x + self.width//2, self.y - 15)\n        ])\n        for bullet in self.bullets:\n            bullet.draw(screen)\n\nclass Enemy:\n    def __init__(self, x, y):\n        self.x = x\n",
+          "output_sha256": "bf6ef3d0895d8f1394e879f5dc7c1b343608c31e256f3c970ddd77b1b983f9bb",
+          "prompt_tokens": 40,
+          "request": 3,
+          "started": 260566.002548625,
+          "token_tps": 44.35819400630629,
+          "ttft_s": 0.48396075001801364
+        }
+      ],
+      "total_tokens": 2048,
+      "wall_s": 12.81424124998739
+    },
+    {
+      "aggregate_decode_token_tps": 178.44739330603338,
+      "aggregate_wall_token_tps": 138.77404831013527,
+      "concurrency": 8,
+      "fleet_decode_s": 22.908712333999574,
+      "max_tokens": 512,
+      "mean_stream_token_tps": 39.805234543822564,
+      "mean_ttft_s": 6.787753510121547,
+      "metrics_after_sha256": "7943d98695894307ce054ce7fe36bac3a43baff4d101fb9740e75da8149ce6c6",
+      "metrics_before_sha256": "6168a93de7a4b8438d1fd7ede12880fca7360a0259cc9ae5b8be1a8d86fd8e06",
+      "overlap": {
+        "average_ms_by_rank": {
+          "0": {
+            "commit": 3.798507707459586,
+            "draft": 21.828498125076294,
+            "nccl_wait": 0.01893342865930338,
+            "overhead": 1.9369986089212554,
+            "total": 262.95941155297413,
+            "verify": 235.37647570882524
+          },
+          "1": {
+            "commit": 3.7967308461666107,
+            "draft": 21.821481551442826,
+            "nccl_wait": 0.02347228565486148,
+            "overhead": 2.0276776206280505,
+            "total": 262.92426586151123,
+            "verify": 235.25490290778023
+          }
+        },
+        "blocks": {
+          "0": 112.0,
+          "1": 112.0
+        },
+        "phase": {
+          "0:commit": {
+            "count": 112.0,
+            "sum_ms": 425.43286323547363
+          },
+          "0:draft": {
+            "count": 112.0,
+            "sum_ms": 2444.791790008545
+          },
+          "0:nccl_wait": {
+            "count": 112.0,
+            "sum_ms": 2.1205440098419785
+          },
+          "0:overhead": {
+            "count": 112.0,
+            "sum_ms": 216.9438441991806
+          },
+          "0:total": {
+            "count": 112.0,
+            "sum_ms": 29451.454093933105
+          },
+          "0:verify": {
+            "count": 112.0,
+            "sum_ms": 26362.165279388428
+          },
+          "1:commit": {
+            "count": 112.0,
+            "sum_ms": 425.2338547706604
+          },
+          "1:draft": {
+            "count": 112.0,
+            "sum_ms": 2444.0059337615967
+          },
+          "1:nccl_wait": {
+            "count": 112.0,
+            "sum_ms": 2.6288959933444858
+          },
+          "1:overhead": {
+            "count": 112.0,
+            "sum_ms": 227.09989351034164
+          },
+          "1:total": {
+            "count": 112.0,
+            "sum_ms": 29447.517776489258
+          },
+          "1:verify": {
+            "count": 112.0,
+            "sum_ms": 26348.549125671387
+          }
+        }
+      },
+      "prompt": "tool_agentic",
+      "prompt_sha256": "6173a7ae0ea3c64b364d0c405be28808efb8486c68a7011e966d31ce222c1736",
+      "quality": {
+        "long_code_html_gate": false,
+        "passed": true,
+        "rows": [
+          {
+            "automated_no_collapse": true,
+            "characters": 1770,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9903381642512077,
+            "words": 210
+          },
+          {
+            "automated_no_collapse": true,
+            "characters": 1763,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9951456310679612,
+            "words": 209
+          },
+          {
+            "automated_no_collapse": true,
+            "characters": 1766,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.990521327014218,
+            "words": 214
+          },
+          {
+            "automated_no_collapse": true,
+            "characters": 1788,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9951219512195122,
+            "words": 208
+          },
+          {
+            "automated_no_collapse": true,
+            "characters": 1715,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9485981308411215,
+            "words": 217
+          },
+          {
+            "automated_no_collapse": true,
+            "characters": 1743,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9950738916256158,
+            "words": 206
+          },
+          {
+            "automated_no_collapse": false,
+            "characters": 163,
+            "max_repeated_4gram_count": 1,
+            "unique_4gram_ratio": 1.0,
+            "words": 23
+          },
+          {
+            "automated_no_collapse": true,
+            "characters": 1757,
+            "max_repeated_4gram_count": 2,
+            "unique_4gram_ratio": 0.9903846153846154,
+            "words": 211
+          }
+        ]
+      },
+      "spec_decode": {
+        "accepted": 3298,
+        "accepted_tokens_per_position": [
+          767,
+          724,
+          657,
+          599,
+          551
+        ],
+        "aggregate_acceptance_rate": 0.8326180257510729,
+        "draft_tokens": 3961,
+        "drafts": 804,
+        "mean_acceptance_length": 5.101990049751244,
+        "mean_draft_length": 4.926616915422885,
+        "p_full": 0.6853233830845771,
+        "per_position_acceptance_rates": [
+          0.9539800995024875,
+          0.900497512437811,
+          0.8171641791044776,
+          0.7450248756218906,
+          0.6853233830845771
+        ]
+      },
+      "streams": [
+        {
+          "chunks": 99,
+          "completion_tokens": 512,
+          "decode_s": 14.89262904098723,
+          "finish_reason": "length",
+          "finished": 260601.499345875,
+          "first_token": 260586.606612875,
+          "last_token": 260601.499241916,
+          "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            bullet = Bullet(self.x + self.width // 2 - 2, self.y)\n            self.bullets.append(bullet)\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        pygame.draw.polygon(screen, GREEN, [\n            (self.x + 5, self.y),\n            (self.x + self.width - 5, self.y),\n            (self.x + self.width // 2, self.y - 15)\n        ])\n        for bullet in self.bullets:\n            bullet.draw(screen)\n\nclass Enemy:\n    def __init__(",
+          "output_sha256": "ceb63c1bac38ae399cbae823f8ba3c1bcb97ffaa959d34f7a2c26afd2e48320f",
+          "prompt_tokens": 40,
+          "request": 0,
+          "started": 260578.873579125,
+          "token_tps": 34.37942344436853,
+          "ttft_s": 7.733033750002505
+        },
+        {
+          "chunks": 100,
+          "completion_tokens": 512,
+          "decode_s": 22.289777624973794,
+          "finish_reason": "length",
+          "finished": 260601.3357645,
+          "first_token": 260579.045725416,
+          "last_token": 260601.335503041,
+          "output": "I'll create a Space Invaders game project for you. Let me set up the files and test everything.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x -= self.speed\n        if self.x < 0:\n            self.x = 0\n            \n    def move_right(self):\n        self.x += self.speed\n        if self.x > SCREEN_WIDTH - self.width:\n            self.x = SCREEN_WIDTH - self.width\n            \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            bullet = Bullet(self.x + self.width//2 - 2, self.y)\n            self.bullets.append(bullet)\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        # Draw gun\n        pygame.draw.rect(screen, GREEN, (self.x + self.width//2 - 5, self.y - 10, 10, 10))\n        for bullet in self.bullets:\n            bullet.draw(screen)\n\nclass Enemy:\n    def __init__(self, x, y):\n",
+          "output_sha256": "ec1efd1be53725ff04c9cc6d46ab112601e144c16318a34a268530a6a63426ec",
+          "prompt_tokens": 40,
+          "request": 1,
+          "started": 260578.873640583,
+          "token_tps": 22.970170838597674,
+          "ttft_s": 0.17208483300055377
+        },
+        {
+          "chunks": 101,
+          "completion_tokens": 512,
+          "decode_s": 15.221689042024082,
+          "finish_reason": "length",
+          "finished": 260601.828523291,
+          "first_token": 260586.606453083,
+          "last_token": 260601.828142125,
+          "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nBLUE = (0, 0, 255)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x -= self.speed\n        if self.x < 0:\n            self.x = 0\n            \n    def move_right(self):\n        self.x += self.speed\n        if self.x > SCREEN_WIDTH - self.width:\n            self.x = SCREEN_WIDTH - self.width\n            \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            bullet = Bullet(self.x + self.width // 2 - 2, self.y)\n            self.bullets.append(bullet)\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        pygame.draw.polygon(screen, GREEN, [\n            (self.x + 5, self.y),\n            (self.x + self.width - 5, self.y),\n            (self.x + self.width // 2, self.y -",
+          "output_sha256": "f29d409515f73d91f8665241f2f99c25993b006fd07e6578a5737247ed1af6cd",
+          "prompt_tokens": 40,
+          "request": 2,
+          "started": 260578.873866791,
+          "token_tps": 33.63621465308278,
+          "ttft_s": 7.732586291996995
+        },
+        {
+          "chunks": 100,
+          "completion_tokens": 512,
+          "decode_s": 15.046610791992862,
+          "finish_reason": "length",
+          "finished": 260601.653410125,
+          "first_token": 260586.606703458,
+          "last_token": 260601.65331425,
+          "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            bullet = Bullet(self.x + self.width // 2 - 2, self.y)\n            self.bullets.append(bullet)\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n            \n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        pygame.draw.polygon(screen, GREEN, [\n            (self.x, self.y),\n            (self.x + self.width // 2, self.y - 15),\n            (self.x + self.width, self.y)\n        ])\n        for bullet in self.bullets:\n            bullet.draw(screen)\n\nclass Enemy:\n    def __init__(self, x, y):\n",
+          "output_sha256": "bb64efc553237bb9dd41f5d124b955cf3ad1820bf9691ac3289eea8ac01db1a4",
+          "prompt_tokens": 40,
+          "request": 3,
+          "started": 260578.873706958,
+          "token_tps": 34.02759645198397,
+          "ttft_s": 7.732996500009904
+        },
+        {
+          "chunks": 102,
+          "completion_tokens": 512,
+          "decode_s": 15.347778459021356,
+          "finish_reason": "length",
+          "finished": 260601.954563625,
+          "first_token": 260586.606659291,
+          "last_token": 260601.95443775,
+          "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            bullet = Bullet(self.x + self.width // 2 - 2, self.y)\n            self.bullets.append(bullet)\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n            \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        # Draw gun\n        pygame.draw.rect(screen, GREEN, (self.x + self.width // 2 - 5, self.y - 10, 10, 10))\n\nclass Enemy:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 40\n        self.height = 30\n        self.direction = 1\n        self.speed = 1\n        \n    def move(self):\n        self.x += self.speed * self.direction\n        \n",
+          "output_sha256": "9ea64444be8c2344d178e4c1452c6059439ffac27ce41d17de180bbfbb25ea2c",
+          "prompt_tokens": 40,
+          "request": 4,
+          "started": 260578.873765625,
+          "token_tps": 33.35987689469473,
+          "ttft_s": 7.732893665990559
+        },
+        {
+          "chunks": 99,
+          "completion_tokens": 512,
+          "decode_s": 14.89230120900902,
+          "finish_reason": "length",
+          "finished": 260601.499087375,
+          "first_token": 260586.606563666,
+          "last_token": 260601.498864875,
+          "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nBLUE = (0, 0, 255)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            self.bullets.append(Bullet(self.x + self.width//2 - 2, self.y))\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        pygame.draw.polygon(screen, GREEN, [\n            (self.x + 5, self.y),\n            (self.x + self.width - 5, self.y),\n            (self.x + self.width//2, self.y - 15)\n        ])\n        for bullet in self.bullets:\n            bullet.draw(screen)\n\nclass Enemy:\n   ",
+          "output_sha256": "67cdc5cef69783695fc4013420decae9f18f79c7323559a32dd0a3eea8b0003f",
+          "prompt_tokens": 40,
+          "request": 5,
+          "started": 260578.873938875,
+          "token_tps": 34.380180256511885,
+          "ttft_s": 7.732624790980481
+        },
+        {
+          "chunks": 29,
+          "completion_tokens": 512,
+          "decode_s": 5.562114792002831,
+          "finish_reason": "length",
+          "finished": 260608.387974958,
+          "first_token": 260586.606777041,
+          "last_token": 260592.168891833,
+          "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n  8b9a8f7b0f2a4f7e8b9a8f7b0f2a4f7e\n",
+          "output_sha256": "7620c36be1c4609fd1b0dfc1686b754a01c4eec81bf7d979ed49b6ec1c04b112",
+          "prompt_tokens": 40,
+          "request": 6,
+          "started": 260578.873996625,
+          "token_tps": 92.05131845465505,
+          "ttft_s": 7.732780415972229
+        },
+        {
+          "chunks": 101,
+          "completion_tokens": 512,
+          "decode_s": 15.221290499990573,
+          "finish_reason": "length",
+          "finished": 260601.828309666,
+          "first_token": 260586.606516166,
+          "last_token": 260601.827806666,
+          "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n```bash\n# Create project directory\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\nNow let me create the game files:\n\n```python\n# main.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nWHITE = (255, 255, 255)\nBLACK = (0, 0, 0)\nRED = (255, 0, 0)\nGREEN = (0, 255, 0)\nBLUE = (0, 0, 255)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 30\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x = max(0, self.x - self.speed)\n        \n    def move_right(self):\n        self.x = min(SCREEN_WIDTH - self.width, self.x + self.speed)\n        \n    def shoot(self):\n        if self.shoot_cooldown == 0:\n            bullet = Bullet(self.x + self.width // 2 - 2, self.y)\n            self.bullets.append(bullet)\n            self.shoot_cooldown = 10\n            \n    def update(self):\n        if self.shoot_cooldown > 0:\n            self.shoot_cooldown -= 1\n            \n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        pygame.draw.rect(screen, GREEN, (self.x, self.y, self.width, self.height))\n        pygame.draw.polygon(screen, GREEN, [\n            (self.x + 5, self.y),\n            (self.x + self.width - 5, self.y),\n            (self.x + self.width // 2, self.y - 15)\n        ])\n        for bullet in self.bullets:\n            bullet",
+          "output_sha256": "1b284cabab0d7128b1a6efdbf7e4ea258f5e0d0f6033e0df273b45a5f19f111b",
+          "prompt_tokens": 40,
+          "request": 7,
+          "started": 260578.873488333,
+          "token_tps": 33.63709535668589,
+          "ttft_s": 7.73302783301915
+        }
+      ],
+      "total_tokens": 4096,
+      "wall_s": 29.515605041990057
+    }
+  ],
+  "completed_at": "2026-07-20T20:09:15.365623+00:00",
+  "concurrencies": [
+    1,
+    4,
+    8
+  ],
+  "created_at": "2026-07-20T20:08:25.858989+00:00",
+  "max_tokens": 512,
+  "mode": "dspark_on_mode_a",
+  "model": "deepseek-v4-flash-dspark-abliterated",
+  "ok": true,
+  "prompt_order": [
+    "tool_agentic"
+  ],
+  "schema_version": 1,
+  "temperature": 0
+}
