@@ -5,6 +5,9 @@
 !overlay/vllm/models/deepseek_v4/
 !overlay/vllm/models/deepseek_v4/nvidia/
 !overlay/vllm/models/deepseek_v4/nvidia/dspark.py
+!overlay/vllm/entrypoints/
+!overlay/vllm/entrypoints/cli/
+!overlay/vllm/entrypoints/cli/main.py
 !overlay/vllm/v1/
 !overlay/vllm/v1/worker/
 !overlay/vllm/v1/worker/gpu/

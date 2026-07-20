@@ -158,6 +158,15 @@ class CrossProcessProbeContractTests(unittest.TestCase):
             "!scripts/probe_dspark_confidence_multiprocess_metrics.py",
             CONFIDENCE_DOCKERIGNORE.read_text(),
         )
+        confidence_image = CONFIDENCE_DOCKERFILE.read_text()
+        self.assertIn(
+            "COPY overlay/vllm/entrypoints/cli/main.py ", confidence_image
+        )
+        self.assertIn("BASE_CLI_MAIN_SHA256", confidence_image)
+        self.assertIn(
+            "!overlay/vllm/entrypoints/cli/main.py",
+            CONFIDENCE_DOCKERIGNORE.read_text(),
+        )
 
 
 if __name__ == "__main__":
