@@ -41,6 +41,10 @@ class _PromptLogprobs:
 
 class _KVConnector:
     @staticmethod
+    def pre_forward(_scheduler_output):
+        return None
+
+    @staticmethod
     def post_forward(_finished_req_ids):
         return None
 
