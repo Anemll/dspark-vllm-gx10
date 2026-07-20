@@ -24,6 +24,7 @@ RUN echo "${BASE_DSPARK_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/mo
 COPY overlay/vllm/models/deepseek_v4/nvidia/dspark.py /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/dspark.py
 COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py
 COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/confidence.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/confidence.py
+COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/overlap_trace.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/overlap_trace.py
 COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/variable_verifier.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/variable_verifier.py
 COPY overlay/vllm/v1/worker/gpu/spec_decode/utils.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/utils.py
 COPY overlay/vllm/entrypoints/cli/main.py /usr/local/lib/python3.12/dist-packages/vllm/entrypoints/cli/main.py
@@ -40,6 +41,7 @@ RUN python3 -m py_compile \
       /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/dspark.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/speculator.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/confidence.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/overlap_trace.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/variable_verifier.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/utils.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py \
@@ -54,4 +56,4 @@ RUN python3 -m py_compile \
       /usr/local/bin/dspark-probe-variable-verifier-hw
 
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
-LABEL org.opencontainers.image.dspark-confidence-scheduler="sigmoid-prefix-v4-exact-c1-verifier-graphs"
+LABEL org.opencontainers.image.dspark-confidence-scheduler="sigmoid-prefix-v5-overlap-trace"

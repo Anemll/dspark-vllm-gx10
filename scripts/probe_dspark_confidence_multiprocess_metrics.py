@@ -26,6 +26,7 @@ from pathlib import Path
 
 
 METRIC_PREFIX = "vllm:dspark_confidence_"
+OVERLAP_PREFIX = "vllm:dspark_overlap_"
 
 
 def _free_port() -> int:
@@ -95,6 +96,9 @@ def _run_worker(threshold: float) -> None:
     from vllm.v1.worker.gpu.spec_decode.dspark.confidence import (
         get_confidence_metrics,
         observe_engine_compaction_telemetry,
+    )
+    from vllm.v1.worker.gpu.spec_decode.dspark.overlap_trace import (
+        observe_engine_overlap_trace,
     )
     from vllm.v1.worker.gpu.spec_decode.utils import DraftTokensHandler
 
@@ -166,6 +170,31 @@ def _run_worker(threshold: float) -> None:
     if fallback_result != ({"c": 3}, [3], True):
         raise RuntimeError(f"bad fallback compaction evidence: {fallback_result}")
     metrics.observe_dropped_batch()
+    traces = (
+        (
+            (10.0, 20.0, 3.0, 1.0, 5.0, 39.0),
+            (11.0, 21.0, 4.0, 2.0, 6.0, 44.0),
+        ),
+        (
+            (12.0, 22.0, 5.0, 1.5, 7.0, 47.5),
+            (13.0, 23.0, 6.0, 2.5, 8.0, 52.5),
+        ),
+    )
+    phase_names = ("draft", "verify", "commit", "nccl_wait", "overhead", "total")
+    for block in traces:
+        observe_engine_overlap_trace(
+            {
+                "schema_version": 1,
+                "world_size": 2,
+                "rank_traces": [
+                    {
+                        "rank": rank,
+                        **dict(zip(phase_names, values, strict=True)),
+                    }
+                    for rank, values in enumerate(block)
+                ],
+            }
+        )
 
 
 def _metric_lines(exposition: str, name: str) -> list[str]:
@@ -242,12 +271,50 @@ def _assert_fixed_exposition(exposition: str) -> dict[str, object]:
         if len(matches) != 1 or _numeric_value(matches[0]) != 1.0:
             raise AssertionError(f"bad D2H {result} series: {matches}")
 
+    overlap_phases = (
+        "draft",
+        "verify",
+        "commit",
+        "nccl_wait",
+        "overhead",
+        "total",
+    )
+    overlap_counts: dict[str, float] = {}
+    block_counts: dict[str, float] = {}
+    for rank in (0, 1):
+        rank_label = f'rank="{rank}"'
+        blocks = [
+            line
+            for line in _metric_lines(exposition, OVERLAP_PREFIX + "blocks_total")
+            if rank_label in line
+        ]
+        if len(blocks) != 1 or _numeric_value(blocks[0]) != 2.0:
+            raise AssertionError(
+                f"overlap block count drift for rank {rank}: {blocks}"
+            )
+        block_counts[str(rank)] = _numeric_value(blocks[0])
+        for phase in overlap_phases:
+            counts = [
+                line
+                for line in _metric_lines(
+                    exposition, OVERLAP_PREFIX + "phase_ms_count"
+                )
+                if rank_label in line and f'phase="{phase}"' in line
+            ]
+            if len(counts) != 1 or _numeric_value(counts[0]) != 2.0:
+                raise AssertionError(
+                    f"overlap {phase} count drift for rank {rank}: {counts}"
+                )
+            overlap_counts[f"rank{rank}:{phase}"] = _numeric_value(counts[0])
+
     return {
         "probability_count_by_position": probability_counts,
         "probability_bucket_series_by_position": probability_buckets,
         "physical_target_rows_count": _numeric_value(physical_count[0]),
         "physical_target_rows_sum": _numeric_value(physical_sum[0]),
         "families": {key: len(lines) for key, lines in lines_by_family.items()},
+        "overlap_blocks_by_rank": block_counts,
+        "overlap_phase_counts": overlap_counts,
     }
 
 
@@ -304,8 +371,8 @@ def _run_controller(output: Path) -> None:
         env=control_env,
         threshold=0.4,
     )
-    if METRIC_PREFIX in control:
-        raise AssertionError("control unexpectedly exposed worker confidence metrics")
+    if METRIC_PREFIX in control or OVERLAP_PREFIX in control:
+        raise AssertionError("control unexpectedly exposed worker DSpark metrics")
 
     from vllm.entrypoints.cli.main import (
         _cleanup_owned_prometheus_multiprocess_dir,

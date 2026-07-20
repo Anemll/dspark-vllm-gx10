@@ -124,7 +124,7 @@ class CrossProcessProbeContractTests(unittest.TestCase):
         )
         self.assertIn("urllib.request.urlopen", source)
         self.assertIn("subprocess.Popen", source)
-        self.assertIn("control unexpectedly exposed worker confidence metrics", source)
+        self.assertIn("control unexpectedly exposed worker DSpark metrics", source)
         self.assertIn("probability_bucket", source)
         self.assertIn("physical_target_rows", source)
         self.assertIn("d2h_copy_completion", source)
@@ -132,6 +132,10 @@ class CrossProcessProbeContractTests(unittest.TestCase):
         self.assertIn("handler.compact_scheduler_output(output)", source)
         self.assertIn("handler.get_last_compaction_telemetry()", source)
         self.assertIn("observe_engine_compaction_telemetry(rows, fallback)", source)
+        self.assertIn("observe_engine_overlap_trace(", source)
+        self.assertIn('OVERLAP_PREFIX + "phase_ms_count"', source)
+        self.assertIn("overlap block count drift", source)
+        self.assertIn("overlap {phase} count drift", source)
 
     def test_probe_compiles_and_help_parses_without_vllm_dependencies(self):
         with mock.patch.object(sys, "argv", [str(PROBE), "--help"]):

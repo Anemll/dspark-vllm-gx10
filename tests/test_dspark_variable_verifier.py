@@ -166,6 +166,17 @@ class PinnedIntegrationPatchTests(unittest.TestCase):
             )
             self.assertIn("confidence_physical_target_rows", model_runner)
             self.assertIn("confidence_d2h_copy_fallback", model_runner)
+            self.assertIn("maybe_begin_overlap_trace", model_runner)
+            self.assertIn("dspark_overlap_trace.begin_verify()", model_runner)
+            self.assertIn(
+                "dspark_overlap_trace.end_verify_and_measure_rank_wait()",
+                model_runner,
+            )
+            self.assertIn("dspark_overlap_trace.begin_commit()", model_runner)
+            self.assertIn("dspark_overlap_trace.begin_draft()", model_runner)
+            self.assertIn(
+                "dspark_overlap_trace.end_draft_and_gather()", model_runner
+            )
             compact_pos = model_runner.index("compact_scheduler_output(")
             save_pos = model_runner.index(
                 "confidence_invalid_spec_tokens=confidence_invalid_spec_tokens,"
@@ -192,8 +203,10 @@ class PinnedIntegrationPatchTests(unittest.TestCase):
             self.assertIn(
                 "confidence_d2h_copy_fallback: bool | None", outputs
             )
+            self.assertIn("dspark_overlap_trace: dict[str, Any] | None", outputs)
             self.assertIn("physical_invalid = (", scheduler)
             self.assertIn("observe_engine_compaction_telemetry", scheduler)
+            self.assertIn("observe_engine_overlap_trace", scheduler)
             self.assertIn(
                 "total = max(merged.get(req_id, 0), count)", scheduler
             )

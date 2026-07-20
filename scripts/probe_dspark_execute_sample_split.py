@@ -72,6 +72,23 @@ class _DraftTokensHandler:
     def get_last_compaction_telemetry(self):
         return ([3], False)
 
+    @staticmethod
+    def set_draft_tokens(*_args, **_kwargs):
+        return None
+
+
+class _Speculator:
+    supports_mm_inputs = False
+
+    @staticmethod
+    def propose(input_batch, *_args, **_kwargs):
+        return torch.full(
+            (len(input_batch.req_ids), 5),
+            17,
+            dtype=torch.int32,
+            device=input_batch.input_ids.device,
+        )
+
 
 class _ModelState:
     @staticmethod
@@ -110,6 +127,7 @@ def _scheduler_output():
     return SimpleNamespace(
         num_scheduled_tokens={"probe": 1},
         total_num_scheduled_tokens=1,
+        scheduled_spec_decode_tokens={"probe": [11, 12, 13, 14, 15]},
         scheduled_encoder_inputs={},
         finished_req_ids=set(),
     )
@@ -152,11 +170,20 @@ def _make_runner(model_runner_module, *, device: torch.device, trim: dict[str, i
             all_token_ids=_nested(None),
             num_computed_tokens=_nested(None),
             prompt_len=SimpleNamespace(np=None),
+            last_sampled_tokens=None,
+            next_prefill_tokens=None,
+            draft_tokens=torch.zeros((1, 5), dtype=torch.int32, device=device),
         ),
         main_stream=None,
         output_copy_stream=None,
-        speculator=None,
-        num_speculative_steps=0,
+        speculator=_Speculator(),
+        sampler=SimpleNamespace(
+            sampling_states=SimpleNamespace(
+                temperature=_nested(None),
+                seeds=_nested(None),
+            )
+        ),
+        num_speculative_steps=5,
         kv_connector=_KVConnector(),
         eplb=_EPLB(),
     )
@@ -188,6 +215,7 @@ def _make_runner(model_runner_module, *, device: torch.device, trim: dict[str, i
 
 def run_case(*, device: torch.device, trim: dict[str, int], dummy_run: bool):
     from vllm.v1.worker.gpu import model_runner as model_runner_module
+    from vllm.distributed import parallel_state
 
     runner = _make_runner(model_runner_module, device=device, trim=trim)
     scheduler_output = _scheduler_output()
@@ -196,6 +224,13 @@ def run_case(*, device: torch.device, trim: dict[str, int], dummy_run: bool):
     original_build_slots = model_runner_module.build_slot_mappings_by_layer
     original_forward_context = model_runner_module.set_forward_context
     original_make_dummy = model_runner_module.InputBatch.make_dummy
+    original_get_tp_group = parallel_state.get_tp_group
+    parallel_state.get_tp_group = lambda: SimpleNamespace(
+        rank_in_group=0,
+        world_size=1,
+        all_reduce=lambda value: value,
+        all_gather=lambda value, dim=0: value,
+    )
     model_runner_module.AsyncOutput = _CapturedAsyncOutput
     model_runner_module.dispatch_cg_and_sync_dp = lambda *_args, **_kwargs: (
         SimpleNamespace(
@@ -228,6 +263,7 @@ def run_case(*, device: torch.device, trim: dict[str, int], dummy_run: bool):
         model_runner_module.build_slot_mappings_by_layer = original_build_slots
         model_runner_module.set_forward_context = original_forward_context
         model_runner_module.InputBatch.make_dummy = original_make_dummy
+        parallel_state.get_tp_group = original_get_tp_group
     return output, fields, runner.draft_tokens_handler.calls
 
 
@@ -240,9 +276,21 @@ def verify_source_contract() -> dict[str, object]:
     read = "self.execute_model_state.confidence_invalid_spec_tokens"
     if save not in execute_source or read not in sample_source:
         raise RuntimeError("execute/sample physical-trim state handoff is absent")
+    overlap_save = "dspark_overlap_trace=dspark_overlap_trace"
+    overlap_read = "self.execute_model_state.dspark_overlap_trace"
+    overlap_finish = "dspark_overlap_trace.end_draft_and_gather()"
+    if (
+        overlap_save not in execute_source
+        or overlap_read not in sample_source
+        or overlap_finish not in sample_source
+    ):
+        raise RuntimeError("execute/sample overlap-trace handoff is absent")
     return {
         "execute_state_write": True,
         "sample_state_read": True,
+        "overlap_state_write": True,
+        "overlap_state_read": True,
+        "overlap_finalize": True,
     }
 
 
@@ -253,10 +301,14 @@ def main() -> None:
         "--expect", choices=("old-nameerror", "pass"), required=True
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--overlap-trace", action="store_true")
     args = parser.parse_args()
 
     os.environ["VLLM_DSPARK_CONFIDENCE_SCHEDULER"] = "on"
     os.environ["VLLM_DSPARK_CONFIDENCE_THRESHOLD"] = "0.5"
+    os.environ["VLLM_DSPARK_OVERLAP_TRACE"] = (
+        "1" if args.overlap_trace else "0"
+    )
     device = torch.device(args.device)
     if device.type == "cuda":
         if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
@@ -291,6 +343,8 @@ def main() -> None:
         trimmed_d2h = (
             trimmed_output.model_runner_output.confidence_d2h_copy_fallback
         )
+        overlap_trace = trimmed_output.model_runner_output.dspark_overlap_trace
+        warmup_trace = warmup_output.model_runner_output.dspark_overlap_trace
         if trimmed != EXPECTED_TRIM or warmup is not None:
             raise RuntimeError(
                 f"split evidence drift: trimmed={trimmed}, warmup={warmup}"
@@ -300,6 +354,29 @@ def main() -> None:
                 "physical telemetry split drift: "
                 f"rows={trimmed_rows}, d2h_fallback={trimmed_d2h}"
             )
+        if args.overlap_trace:
+            if args.device != "cuda":
+                raise RuntimeError("--overlap-trace requires --device cuda")
+            if overlap_trace is None or overlap_trace["world_size"] != 1:
+                raise RuntimeError(f"overlap trace missing: {overlap_trace}")
+            rank_trace = overlap_trace["rank_traces"]
+            if len(rank_trace) != 1 or rank_trace[0]["rank"] != 0:
+                raise RuntimeError(f"overlap rank handoff drift: {rank_trace}")
+            for phase in (
+                "draft",
+                "verify",
+                "commit",
+                "nccl_wait",
+                "overhead",
+                "total",
+            ):
+                value = float(rank_trace[0][phase])
+                if value < 0.0:
+                    raise RuntimeError(f"invalid overlap {phase}: {value}")
+        elif overlap_trace is not None:
+            raise RuntimeError(f"overlap trace was not opt-in: {overlap_trace}")
+        if warmup_trace is not None:
+            raise RuntimeError(f"dummy run unexpectedly traced: {warmup_trace}")
         if compact_calls != 1 or warmup_compact_calls != 0:
             raise RuntimeError(
                 "execute path drift: "
@@ -316,6 +393,7 @@ def main() -> None:
             "trimmed_output": trimmed,
             "trimmed_physical_target_rows": trimmed_rows,
             "trimmed_d2h_copy_fallback": trimmed_d2h,
+            "overlap_trace": overlap_trace,
             "warmup_output": warmup,
             "execute_compaction_calls": compact_calls,
             "warmup_compaction_calls": warmup_compact_calls,

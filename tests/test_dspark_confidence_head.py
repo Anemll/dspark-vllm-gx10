@@ -22,6 +22,9 @@ PROBE_PATH = ROOT / "scripts/probe_dspark_confidence_head.py"
 SPLIT_PROBE_PATH = ROOT / "scripts/probe_dspark_execute_sample_split.py"
 DOCKERFILE_PATH = ROOT / "docker/Dockerfile.dspark-confidence-overlay"
 DOCKERIGNORE_PATH = ROOT / "docker/Dockerfile.dspark-confidence-overlay.dockerignore"
+OVERLAP_PATH = (
+    ROOT / "overlay/vllm/v1/worker/gpu/spec_decode/dspark/overlap_trace.py"
+)
 PATCHER_PATH = ROOT / "scripts/patch_dspark_variable_verifier.py"
 UPSTREAM_ROOT = Path(
     "/Users/anemll/SourceRelease/GITHUB/ML_playground/dspark-vllm-gx10/"
@@ -308,8 +311,25 @@ class OverlayContractTests(unittest.TestCase):
         self.assertIn("trim=EXPECTED_TRIM, dummy_run=False", source)
         self.assertIn("trim={}, dummy_run=True", source)
         self.assertIn("self.execute_model_state.confidence_invalid_spec_tokens", source)
+        self.assertIn("self.execute_model_state.dspark_overlap_trace", source)
+        self.assertIn('parser.add_argument("--overlap-trace"', source)
+        self.assertIn('"overlap_trace": overlap_trace', source)
         self.assertIn('"trimmed_output": trimmed', source)
         self.assertIn('"warmup_output": warmup', source)
+
+    def test_overlap_trace_is_baked_and_opt_in(self) -> None:
+        source = OVERLAP_PATH.read_text()
+        dockerfile = DOCKERFILE_PATH.read_text()
+        dockerignore = DOCKERIGNORE_PATH.read_text()
+        self.assertIn('TRACE_ENV = "VLLM_DSPARK_OVERLAP_TRACE"', source)
+        self.assertIn("end_verify_and_measure_rank_wait", source)
+        self.assertIn("end_draft_and_gather", source)
+        self.assertIn("overlap phase conservation drift", source)
+        self.assertIn("dspark/overlap_trace.py", dockerfile)
+        self.assertIn(
+            "!overlay/vllm/v1/worker/gpu/spec_decode/dspark/overlap_trace.py",
+            dockerignore,
+        )
 
     @unittest.skipUnless(UPSTREAM_ROOT.exists(), "pinned upstream checkout unavailable")
     def test_patch_installs_only_the_four_pinned_integration_seams(self) -> None:
