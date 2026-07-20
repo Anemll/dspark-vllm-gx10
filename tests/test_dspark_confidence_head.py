@@ -441,7 +441,7 @@ class OverlayContractTests(unittest.TestCase):
             "303d762141830cd8343976d5be14b34ef1666e7d1d459e089adfd4f5b8cd3ef6",
             source,
         )
-        self.assertIn("sigmoid-prefix-v4-exact-c1-verifier-graphs", source)
+        self.assertIn("sigmoid-prefix-v5-overlap-trace", source)
         self.assertIn("patch-dspark-variable-verifier", source)
         self.assertNotIn("COPY overlay/vllm/ ", source)
 
