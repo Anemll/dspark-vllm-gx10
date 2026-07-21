@@ -4,7 +4,7 @@ import re
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 from dashboard.server import HEAD_NODE_LABEL, WORKER_NODE_LABEL, LoadSampler
 
@@ -188,6 +188,44 @@ class LoadSamplerDiagnosticsTest(unittest.TestCase):
         self.assertIn("weightLoad", first[HEAD_NODE_LABEL])
         self.assertEqual(second[HEAD_NODE_LABEL]["state"], "unavailable")
         self.assertNotIn("weightLoad", second[HEAD_NODE_LABEL])
+
+    def test_log_helper_replaces_hardcoded_container_name(self) -> None:
+        sampler = LoadSampler()
+        completed = SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "Loading safetensors checkpoint shards: "
+                "42% Completed | 21/50\n"
+            ),
+            stderr="",
+        )
+
+        with (
+            patch(
+                "dashboard.server.CONTAINER_LOG_HELPER",
+                "/usr/local/libexec/dspark-dashboard-container-logs",
+            ),
+            patch("dashboard.server.WORKER_SSH", ""),
+            patch("dashboard.server.subprocess.run", return_value=completed) as run,
+        ):
+            snapshot = sampler.snapshot()
+
+        self.assertEqual(snapshot[HEAD_NODE_LABEL]["percent"], 42)
+        run.assert_has_calls(
+            [
+                call(
+                    [
+                        "sudo",
+                        "-n",
+                        "/usr/local/libexec/dspark-dashboard-container-logs",
+                        "160",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+            ]
+        )
 
     def test_cache_merge_keeps_target_when_only_drafter_remains_in_tail(self) -> None:
         target = LoadSampler._parse_weight_load(

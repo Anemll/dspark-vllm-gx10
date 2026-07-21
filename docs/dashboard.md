@@ -38,9 +38,13 @@ The worker SSH key should be restricted to telemetry access. Do not commit the
 key. If `DASHBOARD_WORKER_SSH` is empty, the dashboard still displays local GPU
 and vLLM metrics.
 
-The optional load-state and NVMe-temperature features use non-interactive
-`sudo docker logs` and `sudo nvme smart-log`. Configure narrowly scoped sudoers
-rules if those cards are required; otherwise they degrade to unavailable.
+The installer deploys a root-owned, read-only container-log helper and grants
+the dashboard user permission to invoke exactly that helper with the default
+160-line bound. The helper discovers the sole running
+`com.docker.compose.service=vllm-dspark` container, so Compose project and
+container renames do not break startup progress after a reboot. The optional
+NVMe-temperature feature still requires a narrowly scoped non-interactive
+`sudo nvme smart-log` rule; otherwise that card degrades to unavailable.
 
 ## Weight-load diagnostics
 
@@ -66,9 +70,9 @@ the worker first for each run. These identities are operator-enforced: the
 dashboard labels what it observed in this process but cannot prove that model,
 image, settings, or page-cache state matched between separate launches.
 
-`DASHBOARD_LOAD_LOG_TAIL` defaults to 160 lines. The value matches the narrow
-legacy sudoers rule used by this deployment; changing it may require a matching
-sudoers update.
+`DASHBOARD_LOAD_LOG_TAIL` defaults to 160 lines. The installed sudoers rule
+allows exactly that value; changing it requires rerunning the installer with a
+matching reviewed bound.
 
 Traffic counters have deliberately narrow meanings:
 

@@ -47,6 +47,7 @@ WORKER_IDENTITY_FILE = os.environ.get("DASHBOARD_WORKER_IDENTITY_FILE", "")
 CONTAINER_NAME = os.environ.get(
     "DASHBOARD_CONTAINER_NAME", "dspark-vllm-gx10-vllm-dspark-1"
 )
+CONTAINER_LOG_HELPER = os.environ.get("DASHBOARD_CONTAINER_LOG_HELPER", "")
 XFLASH_DEVICE = os.environ.get("DASHBOARD_NVME_DEVICE", "/dev/nvme0")
 
 METRIC_LINE = re.compile(
@@ -829,15 +830,29 @@ class LoadSampler:
                     node.get("state") == "ready" for node in self._latest.values()
                 ):
                     return self._latest
-            local = [
-                "sudo",
-                "-n",
-                "/usr/bin/docker",
-                "logs",
-                "--tail",
-                str(LOAD_LOG_TAIL),
-                CONTAINER_NAME,
-            ]
+            if CONTAINER_LOG_HELPER:
+                # The root-owned helper discovers the sole Compose service by
+                # label and exposes only a bounded log tail.  This survives
+                # project/container renames without granting the dashboard
+                # general Docker access.
+                local = [
+                    "sudo",
+                    "-n",
+                    CONTAINER_LOG_HELPER,
+                    str(LOAD_LOG_TAIL),
+                ]
+            else:
+                # Backward-compatible fallback for deployments that already
+                # have a narrowly scoped sudoers rule for one fixed name.
+                local = [
+                    "sudo",
+                    "-n",
+                    "/usr/bin/docker",
+                    "logs",
+                    "--tail",
+                    str(LOAD_LOG_TAIL),
+                    CONTAINER_NAME,
+                ]
             commands = {HEAD_NODE_LABEL: local}
             if WORKER_SSH:
                 commands[WORKER_NODE_LABEL] = [
