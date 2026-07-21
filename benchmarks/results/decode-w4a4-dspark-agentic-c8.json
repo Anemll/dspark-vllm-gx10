@@ -1,0 +1,233 @@
+{
+  "aggregate_decode_token_tps": 360.67629231178915,
+  "aggregate_wall_token_tps": 355.46581611166323,
+  "base_url": "http://192.168.1.68:8888",
+  "concurrency": 8,
+  "created_at": "2026-07-21T00:47:19.444973+00:00",
+  "max_tokens": 512,
+  "mean_stream_token_tps": 46.64447014793693,
+  "mean_ttft_s": 0.43854966674553,
+  "mode": "dspark_on_confidence_off",
+  "model": "deepseek-v4-flash-nvfp4-dspark",
+  "prompt": "tool_agentic",
+  "prompt_sha256": "6173a7ae0ea3c64b364d0c405be28808efb8486c68a7011e966d31ce222c1736",
+  "quality": {
+    "long_code_html_gate": false,
+    "passed": true,
+    "rows": [
+      {
+        "automated_no_collapse": true,
+        "characters": 1702,
+        "max_repeated_4gram_count": 1,
+        "unique_4gram_ratio": 1.0,
+        "words": 198
+      },
+      {
+        "automated_no_collapse": true,
+        "characters": 1702,
+        "max_repeated_4gram_count": 1,
+        "unique_4gram_ratio": 1.0,
+        "words": 198
+      },
+      {
+        "automated_no_collapse": true,
+        "characters": 1702,
+        "max_repeated_4gram_count": 1,
+        "unique_4gram_ratio": 1.0,
+        "words": 198
+      },
+      {
+        "automated_no_collapse": true,
+        "characters": 1801,
+        "max_repeated_4gram_count": 1,
+        "unique_4gram_ratio": 1.0,
+        "words": 211
+      },
+      {
+        "automated_no_collapse": true,
+        "characters": 1702,
+        "max_repeated_4gram_count": 1,
+        "unique_4gram_ratio": 1.0,
+        "words": 198
+      },
+      {
+        "automated_no_collapse": true,
+        "characters": 1702,
+        "max_repeated_4gram_count": 1,
+        "unique_4gram_ratio": 1.0,
+        "words": 198
+      },
+      {
+        "automated_no_collapse": true,
+        "characters": 1702,
+        "max_repeated_4gram_count": 1,
+        "unique_4gram_ratio": 1.0,
+        "words": 198
+      },
+      {
+        "automated_no_collapse": true,
+        "characters": 1702,
+        "max_repeated_4gram_count": 1,
+        "unique_4gram_ratio": 1.0,
+        "words": 198
+      }
+    ]
+  },
+  "schema_version": 1,
+  "spec_decode": {
+    "accepted": 3326,
+    "accepted_tokens_per_position": [
+      746,
+      699,
+      678,
+      624,
+      579
+    ],
+    "aggregate_acceptance_rate": 0.8539152759948652,
+    "draft_tokens": 3895,
+    "drafts": 779,
+    "mean_acceptance_length": 5.2695763799743265,
+    "mean_draft_length": 5.0,
+    "p_full": 0.7432605905006419,
+    "per_position_acceptance_rates": [
+      0.9576379974326059,
+      0.8973042362002568,
+      0.8703465982028241,
+      0.8010269576379975,
+      0.7432605905006419
+    ]
+  },
+  "streams": [
+    {
+      "chunks": 98,
+      "completion_tokens": 512,
+      "decode_s": 10.92766358301742,
+      "finish_reason": "length",
+      "finished": 277292.336224666,
+      "first_token": 277281.408056125,
+      "last_token": 277292.335719708,
+      "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n## Step 1: Create Project Directory and Files\n\n```bash\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\n## Step 2: Create the Game Files\n\nLet me create the main game file:\n\n```python\n# /tmp/si-agent-tp2/space_invaders.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nFPS = 60\n\n# Colors\nBLACK = (0, 0, 0)\nWHITE = (255, 255, 255)\nGREEN = (0, 255, 0)\nRED = (255, 0, 0)\nYELLOW = (255, 255, 0)\n\nclass Player(pygame.sprite.Sprite):\n    def __init__(self):\n        super().__init__()\n        self.image = pygame.Surface((50, 30))\n        self.image.fill(GREEN)\n        self.rect = self.image.get_rect()\n        self.rect.centerx = SCREEN_WIDTH // 2\n        self.rect.bottom = SCREEN_HEIGHT - 10\n        self.speed = 5\n        self.lives = 3\n\n    def update(self):\n        keys = pygame.key.get_pressed()\n        if keys[pygame.K_LEFT] and self.rect.left > 0:\n            self.rect.x -= self.speed\n        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:\n            self.rect.x += self.speed\n\n    def shoot(self):\n        bullet = Bullet(self.rect.centerx, self.rect.top)\n        return bullet\n\nclass Enemy(pygame.sprite.Sprite):\n    def __init__(self, x, y):\n        super().__init__()\n        self.image = pygame.Surface((40, 30))\n        self.image.fill(RED)\n        self.rect = self.image.get_rect()\n        self.rect.x = x\n        self.rect.y = y\n        self.direction = 1\n        self.speed = 2\n\n    def update(self):\n        self.rect.x += self.speed * self.direction\n\nclass Bul",
+      "output_sha256": "1ce0d5a9c59beeed821ac4201dddf98ba83403126c08b0e2267da3f9992349c2",
+      "prompt_tokens": 40,
+      "request": 0,
+      "started": 277280.933243458,
+      "token_tps": 46.85356536741252,
+      "ttft_s": 0.4748126670019701
+    },
+    {
+      "chunks": 98,
+      "completion_tokens": 512,
+      "decode_s": 10.927232875023037,
+      "finish_reason": "length",
+      "finished": 277292.336182458,
+      "first_token": 277281.408267791,
+      "last_token": 277292.335500666,
+      "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n## Step 1: Create Project Directory and Files\n\n```bash\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\n## Step 2: Create the Game Files\n\nLet me create the main game file:\n\n```python\n# /tmp/si-agent-tp2/space_invaders.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nFPS = 60\n\n# Colors\nBLACK = (0, 0, 0)\nWHITE = (255, 255, 255)\nGREEN = (0, 255, 0)\nRED = (255, 0, 0)\nYELLOW = (255, 255, 0)\n\nclass Player(pygame.sprite.Sprite):\n    def __init__(self):\n        super().__init__()\n        self.image = pygame.Surface((50, 30))\n        self.image.fill(GREEN)\n        self.rect = self.image.get_rect()\n        self.rect.centerx = SCREEN_WIDTH // 2\n        self.rect.bottom = SCREEN_HEIGHT - 10\n        self.speed = 5\n        self.lives = 3\n\n    def update(self):\n        keys = pygame.key.get_pressed()\n        if keys[pygame.K_LEFT] and self.rect.left > 0:\n            self.rect.x -= self.speed\n        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:\n            self.rect.x += self.speed\n\n    def shoot(self):\n        bullet = Bullet(self.rect.centerx, self.rect.top)\n        return bullet\n\nclass Enemy(pygame.sprite.Sprite):\n    def __init__(self, x, y):\n        super().__init__()\n        self.image = pygame.Surface((40, 30))\n        self.image.fill(RED)\n        self.rect = self.image.get_rect()\n        self.rect.x = x\n        self.rect.y = y\n        self.direction = 1\n        self.speed = 2\n\n    def update(self):\n        self.rect.x += self.speed * self.direction\n\nclass Bul",
+      "output_sha256": "1ce0d5a9c59beeed821ac4201dddf98ba83403126c08b0e2267da3f9992349c2",
+      "prompt_tokens": 40,
+      "request": 1,
+      "started": 277280.933311708,
+      "token_tps": 46.85541214833134,
+      "ttft_s": 0.47495608299504966
+    },
+    {
+      "chunks": 98,
+      "completion_tokens": 512,
+      "decode_s": 10.92718583298847,
+      "finish_reason": "length",
+      "finished": 277292.336078083,
+      "first_token": 277281.408164458,
+      "last_token": 277292.335350291,
+      "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n## Step 1: Create Project Directory and Files\n\n```bash\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\n## Step 2: Create the Game Files\n\nLet me create the main game file:\n\n```python\n# /tmp/si-agent-tp2/space_invaders.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nFPS = 60\n\n# Colors\nBLACK = (0, 0, 0)\nWHITE = (255, 255, 255)\nGREEN = (0, 255, 0)\nRED = (255, 0, 0)\nYELLOW = (255, 255, 0)\n\nclass Player(pygame.sprite.Sprite):\n    def __init__(self):\n        super().__init__()\n        self.image = pygame.Surface((50, 30))\n        self.image.fill(GREEN)\n        self.rect = self.image.get_rect()\n        self.rect.centerx = SCREEN_WIDTH // 2\n        self.rect.bottom = SCREEN_HEIGHT - 10\n        self.speed = 5\n        self.lives = 3\n\n    def update(self):\n        keys = pygame.key.get_pressed()\n        if keys[pygame.K_LEFT] and self.rect.left > 0:\n            self.rect.x -= self.speed\n        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:\n            self.rect.x += self.speed\n\n    def shoot(self):\n        bullet = Bullet(self.rect.centerx, self.rect.top)\n        return bullet\n\nclass Enemy(pygame.sprite.Sprite):\n    def __init__(self, x, y):\n        super().__init__()\n        self.image = pygame.Surface((40, 30))\n        self.image.fill(RED)\n        self.rect = self.image.get_rect()\n        self.rect.x = x\n        self.rect.y = y\n        self.direction = 1\n        self.speed = 2\n\n    def update(self):\n        self.rect.x += self.speed * self.direction\n\nclass Bul",
+      "output_sha256": "1ce0d5a9c59beeed821ac4201dddf98ba83403126c08b0e2267da3f9992349c2",
+      "prompt_tokens": 40,
+      "request": 2,
+      "started": 277280.933358333,
+      "token_tps": 46.85561386302271,
+      "ttft_s": 0.4748061249847524
+    },
+    {
+      "chunks": 100,
+      "completion_tokens": 512,
+      "decode_s": 11.334263124968857,
+      "finish_reason": "length",
+      "finished": 277292.453053583,
+      "first_token": 277281.118601166,
+      "last_token": 277292.452864291,
+      "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n<bash>\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n</bash>\n\nLet me create the main game file:\n\n<write_to_file>\n<path>/tmp/si-agent-tp2/space_invaders.py</path>\n<content>import pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nFPS = 60\n\n# Colors\nBLACK = (0, 0, 0)\nWHITE = (255, 255, 255)\nGREEN = (0, 255, 0)\nRED = (255, 0, 0)\nYELLOW = (255, 255, 0)\n\nclass Player:\n    def __init__(self, x, y):\n        self.x = x\n        self.y = y\n        self.width = 50\n        self.height = 40\n        self.speed = 5\n        self.bullets = []\n        self.shoot_cooldown = 0\n        \n    def move_left(self):\n        self.x -= self.speed\n        if self.x < 0:\n            self.x = 0\n            \n    def move_right(self):\n        self.x += self.speed\n        if self.x > SCREEN_WIDTH - self.width:\n            self.x = SCREEN_WIDTH - self.width\n            \n    def shoot(self):\n        if self.shoot_cooldown <= 0:\n            bullet = Bullet(self.x + self.width // 2 - 2, self.y)\n            self.bullets.append(bullet)\n            self.shoot_cooldown = 15\n            \n    def update(self):\n        self.shoot_cooldown -= 1\n        for bullet in self.bullets[:]:\n            bullet.update()\n            if bullet.y < 0:\n                self.bullets.remove(bullet)\n                \n    def draw(self, screen):\n        # Draw player ship (triangle)\n        points = [\n            (self.x + self.width // 2, self.y),\n            (self.x, self.y + self.height),\n            (self.x + self.width, self.y + self.height)\n        ]\n        pygame.draw.polygon(screen, GREEN, points)\n        \n        for bullet in self",
+      "output_sha256": "e3f82d1f6b1265c3323868c849b02949e1b352adbda68836ef7c36c94120b2b0",
+      "prompt_tokens": 40,
+      "request": 3,
+      "started": 277280.933396958,
+      "token_tps": 45.17276459482291,
+      "ttft_s": 0.1852042080136016
+    },
+    {
+      "chunks": 98,
+      "completion_tokens": 512,
+      "decode_s": 10.927020374976564,
+      "finish_reason": "length",
+      "finished": 277292.335217875,
+      "first_token": 277281.407829625,
+      "last_token": 277292.33485,
+      "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n## Step 1: Create Project Directory and Files\n\n```bash\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\n## Step 2: Create the Game Files\n\nLet me create the main game file:\n\n```python\n# /tmp/si-agent-tp2/space_invaders.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nFPS = 60\n\n# Colors\nBLACK = (0, 0, 0)\nWHITE = (255, 255, 255)\nGREEN = (0, 255, 0)\nRED = (255, 0, 0)\nYELLOW = (255, 255, 0)\n\nclass Player(pygame.sprite.Sprite):\n    def __init__(self):\n        super().__init__()\n        self.image = pygame.Surface((50, 30))\n        self.image.fill(GREEN)\n        self.rect = self.image.get_rect()\n        self.rect.centerx = SCREEN_WIDTH // 2\n        self.rect.bottom = SCREEN_HEIGHT - 10\n        self.speed = 5\n        self.lives = 3\n\n    def update(self):\n        keys = pygame.key.get_pressed()\n        if keys[pygame.K_LEFT] and self.rect.left > 0:\n            self.rect.x -= self.speed\n        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:\n            self.rect.x += self.speed\n\n    def shoot(self):\n        bullet = Bullet(self.rect.centerx, self.rect.top)\n        return bullet\n\nclass Enemy(pygame.sprite.Sprite):\n    def __init__(self, x, y):\n        super().__init__()\n        self.image = pygame.Surface((40, 30))\n        self.image.fill(RED)\n        self.rect = self.image.get_rect()\n        self.rect.x = x\n        self.rect.y = y\n        self.direction = 1\n        self.speed = 2\n\n    def update(self):\n        self.rect.x += self.speed * self.direction\n\nclass Bul",
+      "output_sha256": "1ce0d5a9c59beeed821ac4201dddf98ba83403126c08b0e2267da3f9992349c2",
+      "prompt_tokens": 40,
+      "request": 4,
+      "started": 277280.933447916,
+      "token_tps": 46.85632335531342,
+      "ttft_s": 0.47438170900568366
+    },
+    {
+      "chunks": 98,
+      "completion_tokens": 512,
+      "decode_s": 10.927122500026599,
+      "finish_reason": "length",
+      "finished": 277292.335891791,
+      "first_token": 277281.4080075,
+      "last_token": 277292.33513,
+      "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n## Step 1: Create Project Directory and Files\n\n```bash\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\n## Step 2: Create the Game Files\n\nLet me create the main game file:\n\n```python\n# /tmp/si-agent-tp2/space_invaders.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nFPS = 60\n\n# Colors\nBLACK = (0, 0, 0)\nWHITE = (255, 255, 255)\nGREEN = (0, 255, 0)\nRED = (255, 0, 0)\nYELLOW = (255, 255, 0)\n\nclass Player(pygame.sprite.Sprite):\n    def __init__(self):\n        super().__init__()\n        self.image = pygame.Surface((50, 30))\n        self.image.fill(GREEN)\n        self.rect = self.image.get_rect()\n        self.rect.centerx = SCREEN_WIDTH // 2\n        self.rect.bottom = SCREEN_HEIGHT - 10\n        self.speed = 5\n        self.lives = 3\n\n    def update(self):\n        keys = pygame.key.get_pressed()\n        if keys[pygame.K_LEFT] and self.rect.left > 0:\n            self.rect.x -= self.speed\n        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:\n            self.rect.x += self.speed\n\n    def shoot(self):\n        bullet = Bullet(self.rect.centerx, self.rect.top)\n        return bullet\n\nclass Enemy(pygame.sprite.Sprite):\n    def __init__(self, x, y):\n        super().__init__()\n        self.image = pygame.Surface((40, 30))\n        self.image.fill(RED)\n        self.rect = self.image.get_rect()\n        self.rect.x = x\n        self.rect.y = y\n        self.direction = 1\n        self.speed = 2\n\n    def update(self):\n        self.rect.x += self.speed * self.direction\n\nclass Bul",
+      "output_sha256": "1ce0d5a9c59beeed821ac4201dddf98ba83403126c08b0e2267da3f9992349c2",
+      "prompt_tokens": 40,
+      "request": 5,
+      "started": 277280.933487875,
+      "token_tps": 46.85588543541574,
+      "ttft_s": 0.47451962501509115
+    },
+    {
+      "chunks": 98,
+      "completion_tokens": 512,
+      "decode_s": 10.927620583039243,
+      "finish_reason": "length",
+      "finished": 277292.336359583,
+      "first_token": 277281.408208875,
+      "last_token": 277292.335829458,
+      "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n## Step 1: Create Project Directory and Files\n\n```bash\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\n## Step 2: Create the Game Files\n\nLet me create the main game file:\n\n```python\n# /tmp/si-agent-tp2/space_invaders.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nFPS = 60\n\n# Colors\nBLACK = (0, 0, 0)\nWHITE = (255, 255, 255)\nGREEN = (0, 255, 0)\nRED = (255, 0, 0)\nYELLOW = (255, 255, 0)\n\nclass Player(pygame.sprite.Sprite):\n    def __init__(self):\n        super().__init__()\n        self.image = pygame.Surface((50, 30))\n        self.image.fill(GREEN)\n        self.rect = self.image.get_rect()\n        self.rect.centerx = SCREEN_WIDTH // 2\n        self.rect.bottom = SCREEN_HEIGHT - 10\n        self.speed = 5\n        self.lives = 3\n\n    def update(self):\n        keys = pygame.key.get_pressed()\n        if keys[pygame.K_LEFT] and self.rect.left > 0:\n            self.rect.x -= self.speed\n        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:\n            self.rect.x += self.speed\n\n    def shoot(self):\n        bullet = Bullet(self.rect.centerx, self.rect.top)\n        return bullet\n\nclass Enemy(pygame.sprite.Sprite):\n    def __init__(self, x, y):\n        super().__init__()\n        self.image = pygame.Surface((40, 30))\n        self.image.fill(RED)\n        self.rect = self.image.get_rect()\n        self.rect.x = x\n        self.rect.y = y\n        self.direction = 1\n        self.speed = 2\n\n    def update(self):\n        self.rect.x += self.speed * self.direction\n\nclass Bul",
+      "output_sha256": "1ce0d5a9c59beeed821ac4201dddf98ba83403126c08b0e2267da3f9992349c2",
+      "prompt_tokens": 40,
+      "request": 6,
+      "started": 277280.933524458,
+      "token_tps": 46.85374973529691,
+      "ttft_s": 0.4746844169567339
+    },
+    {
+      "chunks": 98,
+      "completion_tokens": 512,
+      "decode_s": 10.92792449996341,
+      "finish_reason": "length",
+      "finished": 277292.336313708,
+      "first_token": 277281.4081025,
+      "last_token": 277292.336027,
+      "output": "I'll create a Space Invaders game project for you. Let me start by setting up the project structure and implementing the game.\n\n## Step 1: Create Project Directory and Files\n\n```bash\nmkdir -p /tmp/si-agent-tp2\ncd /tmp/si-agent-tp2\n```\n\n## Step 2: Create the Game Files\n\nLet me create the main game file:\n\n```python\n# /tmp/si-agent-tp2/space_invaders.py\nimport pygame\nimport random\nimport sys\n\n# Initialize Pygame\npygame.init()\n\n# Constants\nSCREEN_WIDTH = 800\nSCREEN_HEIGHT = 600\nFPS = 60\n\n# Colors\nBLACK = (0, 0, 0)\nWHITE = (255, 255, 255)\nGREEN = (0, 255, 0)\nRED = (255, 0, 0)\nYELLOW = (255, 255, 0)\n\nclass Player(pygame.sprite.Sprite):\n    def __init__(self):\n        super().__init__()\n        self.image = pygame.Surface((50, 30))\n        self.image.fill(GREEN)\n        self.rect = self.image.get_rect()\n        self.rect.centerx = SCREEN_WIDTH // 2\n        self.rect.bottom = SCREEN_HEIGHT - 10\n        self.speed = 5\n        self.lives = 3\n\n    def update(self):\n        keys = pygame.key.get_pressed()\n        if keys[pygame.K_LEFT] and self.rect.left > 0:\n            self.rect.x -= self.speed\n        if keys[pygame.K_RIGHT] and self.rect.right < SCREEN_WIDTH:\n            self.rect.x += self.speed\n\n    def shoot(self):\n        bullet = Bullet(self.rect.centerx, self.rect.top)\n        return bullet\n\nclass Enemy(pygame.sprite.Sprite):\n    def __init__(self, x, y):\n        super().__init__()\n        self.image = pygame.Surface((40, 30))\n        self.image.fill(RED)\n        self.rect = self.image.get_rect()\n        self.rect.x = x\n        self.rect.y = y\n        self.direction = 1\n        self.speed = 2\n\n    def update(self):\n        self.rect.x += self.speed * self.direction\n\nclass Bul",
+      "output_sha256": "1ce0d5a9c59beeed821ac4201dddf98ba83403126c08b0e2267da3f9992349c2",
+      "prompt_tokens": 40,
+      "request": 7,
+      "started": 277280.93307,
+      "token_tps": 46.85244668387985,
+      "ttft_s": 0.4750324999913573
+    }
+  ],
+  "temperature": 0,
+  "total_tokens": 4096,
+  "wall_s": 11.52290829201229
+}

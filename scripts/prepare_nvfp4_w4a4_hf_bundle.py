@@ -61,6 +61,7 @@ COPY_METADATA = (
     "tokenizer.json",
     "tokenizer_config.json",
 )
+INCIDENTAL_METADATA = frozenset({".DS_Store"})
 
 
 class BundleError(ValueError):
@@ -185,6 +186,13 @@ def replace_card_and_rebind_manifest(bundle: Path, card: Path) -> tuple[str, str
     manifest = read_json(manifest_path)
     rows = manifest.get("output", {}).get("copied_metadata_files")
     require(isinstance(rows, list), "prepared copied metadata list missing")
+    rows[:] = [
+        row
+        for row in rows
+        if not isinstance(row, dict) or row.get("path") not in INCIDENTAL_METADATA
+    ]
+    for name in INCIDENTAL_METADATA:
+        (bundle / name).unlink(missing_ok=True)
     matches = [row for row in rows if isinstance(row, dict) and row.get("path") == "README.md"]
     require(len(matches) == 1, "prepared README manifest row missing")
     readme = bundle / "README.md"
@@ -248,6 +256,73 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     return result
 
 
+def update_card(args: argparse.Namespace) -> dict[str, Any]:
+    """Replace the published card and rebind both small integrity manifests."""
+    bundle = args.bundle.resolve()
+    card = args.card.resolve()
+    require(bundle.is_dir(), "bundle root missing")
+    require(card.is_file(), "model card missing")
+
+    before = verify_bundle(bundle)
+    bundle_manifest_path = bundle / BUNDLE_MANIFEST
+    previous_bundle_manifest = read_json(bundle_manifest_path)
+    previous_prepared_sha = sha256(bundle / PREPARED_MANIFEST)
+    require(
+        before["target"]["manifest_sha256"] == previous_prepared_sha,
+        "prepared manifest identity changed during card preflight",
+    )
+    require(
+        previous_bundle_manifest.get("target", {}).get("manifest_sha256")
+        == previous_prepared_sha,
+        "bundle/prepared manifest identity drifted before card update",
+    )
+
+    readme = bundle / "README.md"
+    readme_partial = bundle / ".README.md.update"
+    require(not readme_partial.exists(), "stale README update partial exists")
+    shutil.copy2(card, readme_partial)
+    os.replace(readme_partial, readme)
+
+    manifest_path = bundle / PREPARED_MANIFEST
+    manifest = read_json(manifest_path)
+    copied = manifest.get("output", {}).get("copied_metadata_files")
+    require(isinstance(copied, list), "prepared copied metadata list missing")
+    copied[:] = [
+        row
+        for row in copied
+        if not isinstance(row, dict) or row.get("path") not in INCIDENTAL_METADATA
+    ]
+    for name in INCIDENTAL_METADATA:
+        (bundle / name).unlink(missing_ok=True)
+    matches = [
+        row
+        for row in copied
+        if isinstance(row, dict) and row.get("path") == "README.md"
+    ]
+    require(len(matches) == 1, "prepared README manifest row missing")
+    matches[0]["size"] = readme.stat().st_size
+    matches[0]["sha256"] = sha256(readme)
+    write_json_atomic(manifest_path, manifest)
+    prepared_sha = sha256(manifest_path)
+    (bundle / PREPARED_DIGEST).write_text(
+        f"{prepared_sha}  {PREPARED_MANIFEST}\n", encoding="ascii"
+    )
+
+    result = verify_bundle(bundle)
+    result["prepared_base_manifest_sha256"] = previous_bundle_manifest.get(
+        "prepared_base_manifest_sha256", PREPARED_BASE_SHA256
+    )
+    result["prepared_release_manifest_sha256"] = prepared_sha
+    write_json_atomic(bundle_manifest_path, result)
+    bundle_sha = sha256(bundle_manifest_path)
+    (bundle / BUNDLE_DIGEST).write_text(
+        f"{bundle_sha}  {BUNDLE_MANIFEST}\n", encoding="ascii"
+    )
+    result["bundle_manifest_sha256"] = bundle_sha
+    result["previous_prepared_manifest_sha256"] = previous_prepared_sha
+    return result
+
+
 def verify_bundle(bundle: Path) -> dict[str, Any]:
     bundle = bundle.resolve()
     draft = bundle / "dspark"
@@ -259,6 +334,11 @@ def verify_bundle(bundle: Path) -> dict[str, Any]:
     copied = manifest.get("output", {}).get("copied_metadata_files")
     require(isinstance(copied, list), "prepared metadata manifest missing")
     for row in copied:
+        if row.get("path") in INCIDENTAL_METADATA:
+            # Compatibility with the first published bundle, whose prepared
+            # manifest accidentally captured Finder's mutable .DS_Store.
+            # update-card removes the row and file from future revisions.
+            continue
         path = bundle / row["path"]
         require(path.stat().st_size == row["size"], f"prepared metadata size drifted: {path.name}")
         require(sha256(path) == row["sha256"], f"prepared metadata digest drifted: {path.name}")
@@ -321,7 +401,7 @@ def verify_bundle(bundle: Path) -> dict[str, Any]:
         "status": {
             "prepared_target_validated": True,
             "target_only_prefill_validated": True,
-            "combined_dspark_serving": "experimental_pending_final_validation",
+            "combined_dspark_serving": "validated_tp2_sm121",
         },
     }
 
@@ -333,12 +413,17 @@ def main() -> int:
     build_parser.add_argument("--bundle", type=Path, required=True)
     build_parser.add_argument("--draft-source", type=Path, required=True)
     build_parser.add_argument("--card", type=Path, required=True)
+    update_card_parser = subparsers.add_parser("update-card")
+    update_card_parser.add_argument("--bundle", type=Path, required=True)
+    update_card_parser.add_argument("--card", type=Path, required=True)
     verify_parser = subparsers.add_parser("verify")
     verify_parser.add_argument("--bundle", type=Path, required=True)
     args = parser.parse_args()
     try:
         if args.command == "build":
             result = build(args)
+        elif args.command == "update-card":
+            result = update_card(args)
         else:
             result = verify_bundle(args.bundle)
     except (BundleError, OSError, json.JSONDecodeError) as exc:

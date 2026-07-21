@@ -55,8 +55,10 @@ test/optimization plan are documented in
 The hybrid is an integration artifact using NVIDIA's target and the native
 DSpark draft; it is not the production abliterated checkpoint lineage.
 
-Model weights are **not** included. Set `DSPARK_MODEL_HOST` to a model directory
-you are licensed to use.
+Model weights are **not** included. The validated one-download prepared target
+and DSpark draft bundle is
+[anemll/DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1](https://huggingface.co/anemll/DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1).
+Set `DSPARK_MODEL_HOST` to a model directory you are licensed to use.
 
 ## Install
 
@@ -95,11 +97,12 @@ are set in `config/head.env`:
 
 ### Prepared W4A4 + DSpark profile
 
-The one-download `DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1` bundle uses two
-explicit runtime paths. Its repository root is the prepared W4A4 target and
-its `dspark/` subdirectory is the native three-stage speculative draft. Set
-the following values identically in the head and worker environment files,
-apart from the normal rank and address fields:
+The one-download
+[`DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1`](https://huggingface.co/anemll/DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1)
+bundle uses two explicit runtime paths. Its repository root is the prepared
+W4A4 target and its `dspark/` subdirectory is the native three-stage
+speculative draft. Set the following values identically in the head and worker
+environment files, apart from the normal rank and address fields:
 
 ```bash
 DSPARK_MODEL_HOST=/srv/dspark/models/DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1
@@ -202,6 +205,51 @@ already passed the two-node validation. It does not replace the reproducible
 source build above and does not change runtime code.
 
 ## Performance
+
+### Prepared W4A4 + DSpark
+
+The current model artifact is
+[anemll/DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1](https://huggingface.co/anemll/DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1).
+It combines an offline-prepared NVIDIA NVFP4 W4A4 target at the repository root
+with the native three-stage DSpark draft under `dspark/`. Measurements below
+use two GX10/GB10 nodes with TP=2. Prefill is target-only; decode uses MTP=5,
+probabilistic draft sampling, and confidence scheduling off.
+
+Warmed server-side prefill improved at all six tested sizes:
+
+| Input tokens | FP8/B12X production | NVFP4 W4A4 | Gain | Production TTFT | W4A4 TTFT |
+|---:|---:|---:|---:|---:|---:|
+| 1,024 | 2,033.0 tok/s | 2,242.5 tok/s | +10.3% | 0.512 s | 0.463 s |
+| 2,048 | 2,252.0 tok/s | 2,473.2 tok/s | +9.8% | 0.920 s | 0.835 s |
+| 4,096 | 2,320.7 tok/s | 2,659.3 tok/s | +14.6% | 1.776 s | 1.552 s |
+| 8,192 | 2,184.2 tok/s | 2,593.5 tok/s | +18.7% | 3.765 s | 3.173 s |
+| 16,384 | 2,203.8 tok/s | 2,501.7 tok/s | +13.5% | 7.455 s | 6.573 s |
+| 32,768 | 2,176.1 tok/s | 2,477.3 tok/s | +13.8% | 15.119 s | 13.264 s |
+
+Decode is prompt- and acceptance-dependent. These rows use confidence OFF and
+no draft/verify overlap optimization:
+
+| Workload | C | FP8/B12X + DSpark | W4A4 + DSpark | Comparison | W4A4 mean accepted length |
+|---|---:|---:|---:|---:|---:|
+| Canonical chat/tool, 512 tokens | 4 | **105.48 tok/s** | 96.02 tok/s | **-9.0%** | 3.127 |
+| `tool_agentic`, 512 tokens | 8 | not archived cleanly | **360.68 tok/s** | no matched control | 5.270 |
+
+The canonical production control is a three-trial median while its W4A4 row
+is one post-promotion run. The agentic row is a clean W4A4 production run; all
+eight streams passed the automated no-collapse diagnostic. The older
+instrumented concurrency/overlap study is deliberately not used as its
+control. These are not interchangeable decode numbers: the agentic prompt has
+substantially higher speculative acceptance.
+
+The bulk direct reader also reduced the slower rank's prepared target load from
+558.19 to **65.23 seconds** (8.56x) and full head model load from 595.90 to
+**108.54 seconds** (5.49x). The complete methodology, caveats, and raw-artifact
+links are in the
+[W4A4 serving comparison](benchmarks/results/w4a4-dspark-serving-comparison.md),
+[prefill comparison](benchmarks/results/prefill-v0251-vs-nvfp4-a4w4.md), and
+[direct-load result](benchmarks/results/nvfp4-prepared-direct-read-full-3689b1c.json).
+
+### Legacy FP8/B12X production reference
 
 Benchmark model:
 
