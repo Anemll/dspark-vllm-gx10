@@ -3,7 +3,7 @@ ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 ARG SOURCE_REVISION=unknown
-ARG BASE_PREPARED_LOADER_SHA256=ca0c264071bf36f22d0ed67dd4e902bd18c5f6c47f3efc296014c8205662d380
+ARG BASE_PREPARED_LOADER_SHA256=9db585642531c4eaa21a663fb1cfa2e932f8fff595685ba3e888332c9266ca05
 
 RUN echo "${BASE_PREPARED_LOADER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py" | sha256sum -c -
 
