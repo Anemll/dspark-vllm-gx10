@@ -1,0 +1,80 @@
+{
+  "cache_evict_advised": true,
+  "checkpoint": "/models/checkpoint",
+  "created_at": "2026-07-21T16:51:43.249728+00:00",
+  "elapsed_seconds": 3.0923889059995417,
+  "families": [
+    {
+      "bytes": 1073741824,
+      "copy_seconds": 0.21318053499999223,
+      "destination_sha256": "ab4a711d525e50c54081707e2ed3d5496457817de4baa4fe0a38c7603f44118b",
+      "family": "w13.weight"
+    },
+    {
+      "bytes": 536870912,
+      "copy_seconds": 0.8410713060002308,
+      "destination_sha256": "030a9345acdeafc77071834692cc82cd0a3048935a6e07d15cf574715b6328cb",
+      "family": "w2.weight"
+    },
+    {
+      "bytes": 134217728,
+      "copy_seconds": 0.521188856999288,
+      "destination_sha256": "931c335459a0c52299f493d3a029789c859344fd3bf2211d72b345879aedce51",
+      "family": "w13.weight_scale"
+    },
+    {
+      "bytes": 67108864,
+      "copy_seconds": 0.5611603130000731,
+      "destination_sha256": "4629e0957c13512c47ceaf5c3b3bad940bc915605f5c5e837b7b3473e3239adb",
+      "family": "w2.weight_scale"
+    },
+    {
+      "bytes": 1024,
+      "copy_seconds": 0.00044943899956706446,
+      "destination_sha256": "c41bd3221c66e0f2216c3f5e3379ad65cd1efa4021fb209056249a54ea9ef9bd",
+      "family": "a1_gscale"
+    },
+    {
+      "bytes": 1024,
+      "copy_seconds": 1.1616000847425312e-05,
+      "destination_sha256": "892959ae540c0aa7816780ceaca17116e9e5eb220b44e995b6f42371251fb5a3",
+      "family": "a2_gscale"
+    },
+    {
+      "bytes": 1024,
+      "copy_seconds": 8.064000212471001e-06,
+      "destination_sha256": "86aff732c92f1f7fc0f359296281fca497740164ed01a582584e02731476dd9a",
+      "family": "g1_alphas"
+    },
+    {
+      "bytes": 1024,
+      "copy_seconds": 7.56800000090152e-06,
+      "destination_sha256": "6cb2c531cf62514aacd3726ea48d0937fc1fe00f27cb23c9f00b63f1ac9e603c",
+      "family": "g2_alphas"
+    }
+  ],
+  "file_unchanged": true,
+  "gib_per_second": 0.5456958571489312,
+  "gpu_required": false,
+  "layer": 0,
+  "layer_file": "/models/checkpoint/model-layer-00000.safetensors",
+  "manifest_sha256": "b2b71f05392002f13109f8f6e04aa9d299035173eb2f9ff3ef32a5f757939e3d",
+  "memory": {
+    "after_available_bytes": 11005079552,
+    "before_available_bytes": 11536072704,
+    "minimum_available_bytes": 8589934592
+  },
+  "mode": "mmap",
+  "model_loaded": false,
+  "ok": true,
+  "probe": "deepseek_v4_nvfp4_prepared_rank_io",
+  "schema_version": 1,
+  "summary": {
+    "bytes": 1811943424,
+    "copy_seconds": 3.0923889059995417,
+    "ranges": 8,
+    "read_seconds": null,
+    "syscalls": null
+  },
+  "tp_rank": 0
+}

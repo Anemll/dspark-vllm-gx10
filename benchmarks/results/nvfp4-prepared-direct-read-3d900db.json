@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "decision": "microgate_pass",
+  "candidate_revision": "3d900dbc422cbe3e512946940a046705a57d5c84",
+  "loader_revision": "370e826b2a67f10ff4daa2c4f3af852bb0ee7c2d",
+  "scope": "production-live, HEAD-only, no model load, CPU rank-range I/O",
+  "checkpoint_manifest_sha256": "b2b71f05392002f13109f8f6e04aa9d299035173eb2f9ff3ef32a5f757939e3d",
+  "layer": 0,
+  "tp_rank": 0,
+  "rank_bytes": 1811943424,
+  "direct": {
+    "elapsed_seconds": 2.767938483000762,
+    "read_seconds": 1.0228847970010975,
+    "copy_seconds": 1.7450536859996646,
+    "read_syscalls": 8,
+    "gib_per_second": 0.6096608812157626,
+    "all_families_bitwise_match": true,
+    "file_unchanged": true
+  },
+  "mmap_control": {
+    "elapsed_seconds": 3.0923889059995417,
+    "gib_per_second": 0.5456958571489312,
+    "file_unchanged": true
+  },
+  "direct_speedup_over_mmap": 1.1172173532726197,
+  "projection": {
+    "routed_layers": 43,
+    "direct_seconds_43_layers": 119.02135476903277,
+    "current_serving_rank0_prepared_seconds": 558.194424,
+    "note": "Projection excludes non-routed/fixed loader overhead and requires an actual CUDA destination load gate."
+  },
+  "service_postflight": {
+    "health_http": 200,
+    "image": "sha256:35fc8ea5792efbc5716c7586590d85b75879b91879f8261727f29ce5221b2058",
+    "running": true,
+    "oom_killed": false,
+    "diagnostic_containers_remaining": 0,
+    "mem_available_kib": 12073776
+  },
+  "evidence": {
+    "directory": "benchmarks/results/evidence/nvfp4-direct-read-20260721-3d900db/head",
+    "direct_json_sha256": "b411024a38a05b3ae488ad12596ef1303a1bceb9548c75b6f3a4c83dae57cc90",
+    "direct_log_sha256": "84673e815941e98f59b51d502dbaa9746f0107b6a2ef72a82396e4247015b2d2",
+    "mmap_json_sha256": "3cd6f1dca8d6a7ad609323cc65dca460ee662b5eb0fa9fc7185a8ff9e389057e",
+    "mmap_log_sha256": "4de97d8551fa8c830841c79587ad389e1a8c827c1d0f85c20aed389bb6d1a384"
+  }
+}

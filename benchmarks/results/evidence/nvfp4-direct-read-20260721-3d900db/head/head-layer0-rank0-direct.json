@@ -1,0 +1,96 @@
+{
+  "cache_evict_advised": true,
+  "checkpoint": "/models/checkpoint",
+  "created_at": "2026-07-21T16:51:04.397059+00:00",
+  "elapsed_seconds": 2.767938483000762,
+  "families": [
+    {
+      "bitwise_match": true,
+      "bytes": 1073741824,
+      "cumulative_copy_seconds": 0.048047881999082165,
+      "cumulative_read_seconds": 0.6417275940002583,
+      "destination_sha256": "ab4a711d525e50c54081707e2ed3d5496457817de4baa4fe0a38c7603f44118b",
+      "family": "w13.weight"
+    },
+    {
+      "bitwise_match": true,
+      "bytes": 536870912,
+      "cumulative_copy_seconds": 0.9175239100004546,
+      "cumulative_read_seconds": 0.9284909130001324,
+      "destination_sha256": "030a9345acdeafc77071834692cc82cd0a3048935a6e07d15cf574715b6328cb",
+      "family": "w2.weight"
+    },
+    {
+      "bitwise_match": true,
+      "bytes": 134217728,
+      "cumulative_copy_seconds": 1.1857690820015705,
+      "cumulative_read_seconds": 0.9932190990002709,
+      "destination_sha256": "931c335459a0c52299f493d3a029789c859344fd3bf2211d72b345879aedce51",
+      "family": "w13.weight_scale"
+    },
+    {
+      "bitwise_match": true,
+      "bytes": 67108864,
+      "cumulative_copy_seconds": 1.7448988540018036,
+      "cumulative_read_seconds": 1.0225566860008257,
+      "destination_sha256": "4629e0957c13512c47ceaf5c3b3bad940bc915605f5c5e837b7b3473e3239adb",
+      "family": "w2.weight_scale"
+    },
+    {
+      "bitwise_match": true,
+      "bytes": 1024,
+      "cumulative_copy_seconds": 1.7449733660014317,
+      "cumulative_read_seconds": 1.0227707650010416,
+      "destination_sha256": "c41bd3221c66e0f2216c3f5e3379ad65cd1efa4021fb209056249a54ea9ef9bd",
+      "family": "a1_gscale"
+    },
+    {
+      "bitwise_match": true,
+      "bytes": 1024,
+      "cumulative_copy_seconds": 1.74500581400207,
+      "cumulative_read_seconds": 1.0228677409995726,
+      "destination_sha256": "892959ae540c0aa7816780ceaca17116e9e5eb220b44e995b6f42371251fb5a3",
+      "family": "a2_gscale"
+    },
+    {
+      "bitwise_match": true,
+      "bytes": 1024,
+      "cumulative_copy_seconds": 1.745030662001227,
+      "cumulative_read_seconds": 1.022876045000885,
+      "destination_sha256": "86aff732c92f1f7fc0f359296281fca497740164ed01a582584e02731476dd9a",
+      "family": "g1_alphas"
+    },
+    {
+      "bitwise_match": true,
+      "bytes": 1024,
+      "cumulative_copy_seconds": 1.7450536859996646,
+      "cumulative_read_seconds": 1.0228847970010975,
+      "destination_sha256": "6cb2c531cf62514aacd3726ea48d0937fc1fe00f27cb23c9f00b63f1ac9e603c",
+      "family": "g2_alphas"
+    }
+  ],
+  "file_unchanged": true,
+  "gib_per_second": 0.6096608812157626,
+  "gpu_required": false,
+  "layer": 0,
+  "layer_file": "/models/checkpoint/model-layer-00000.safetensors",
+  "manifest_sha256": "b2b71f05392002f13109f8f6e04aa9d299035173eb2f9ff3ef32a5f757939e3d",
+  "memory": {
+    "after_available_bytes": 11800211456,
+    "before_available_bytes": 11038810112,
+    "minimum_available_bytes": 8589934592
+  },
+  "mode": "direct",
+  "model_loaded": false,
+  "ok": true,
+  "probe": "deepseek_v4_nvfp4_prepared_rank_io",
+  "schema_version": 1,
+  "summary": {
+    "bytes": 1811943424,
+    "copy_seconds": 1.7450536859996646,
+    "ranges": 8,
+    "read_seconds": 1.0228847970010975,
+    "syscalls": 8
+  },
+  "tp_rank": 0
+}
