@@ -47,6 +47,7 @@ PREPARED_SCHEMA = "dspark.deepseek_v4.nvfp4.tp2_cutlass_prepared.v1"
 PREPARED_LOADER_CONTRACT = "deepseek_v4_nvfp4_tp2_cutlass_prepared_v1"
 PREPARED_PAYLOAD_STAGE = "flashinfer_cutlass_prepared_v1"
 PREPARED_BACKEND = "FLASHINFER_CUTLASS"
+PREPARED_B12X_BACKEND = "FLASHINFER_B12X"
 PREPARED_SCHEMA_VERSION = 1
 PREPARED_ENGINE = "cpu_numpy_exact_v1"
 VLLM_LAYOUT_PIN = "752a3a504485790a2e8491cacbb35c137339ad34"
@@ -69,6 +70,9 @@ PINNED_PREPARATION_SOURCE_SHA256 = {
     ),
     "flashinfer_experts": (
         "d90f5215a6972c742be60ff8e9786432ab544570273483daa8faf317ba2d3ab5"
+    ),
+    "flashinfer_b12x_experts": (
+        "4a6728752e7653a45c3afe65b88e9041e70cb95d1c44458b44b39d6e63231229"
     ),
     "nvfp4_utils": (
         "ed665537e42580e82ae71bb4f2ce8a699c0ffe8a042947c4eb600107c0b924ba"
@@ -1009,7 +1013,11 @@ def _finalize_prepared_cutlass(
         raise RuntimeError(
             "Prepared NVFP4 post-load state is not exactly loaded/unfinalized"
         )
-    if quant_config_factory is None or kernel_factory is None or expected_backend is None:
+    if (
+        quant_config_factory is None
+        or kernel_factory is None
+        or expected_backend is None
+    ):
         from vllm.model_executor.layers.fused_moe.config import (
             nvfp4_moe_quant_config,
         )
@@ -1056,6 +1064,95 @@ def _finalize_prepared_cutlass(
     )
 
 
+def _finalize_prepared_b12x(
+    quant_method: Any,
+    routed_layer: Any,
+    state: PreparedPostloadState,
+    *,
+    quant_config_factory: Callable[..., Any] | None = None,
+    kernel_factory: Callable[..., Any] | None = None,
+    expected_backend: Any | None = None,
+) -> None:
+    """Convert the prepared CUTLASS scale contract in place for B12X.
+
+    Packed weights and expert-major block-scale storage are shared by both
+    FlashInfer backends. The prepared artifact stores CUTLASS alphas as
+    ``weight_scale_2 * activation_global`` and the reciprocal activation
+    global separately. Recover ModelOpt's per-expert ``weight_scale_2`` in
+    FP32, then let the pinned B12X expert bake it into the block scales and
+    construct its MMA-layout views. No packed-weight copy or repack occurs.
+    """
+
+    if state.aborted or not state.loaded or state.finalized:
+        raise RuntimeError(
+            "Prepared NVFP4 post-load state is not exactly loaded/unfinalized"
+        )
+    if quant_config_factory is None or kernel_factory is None or expected_backend is None:
+        from vllm.model_executor.layers.fused_moe.config import (
+            nvfp4_moe_quant_config,
+        )
+        from vllm.model_executor.layers.fused_moe.oracle.nvfp4 import (
+            NvFp4MoeBackend,
+            make_nvfp4_moe_kernel,
+        )
+
+        quant_config_factory = nvfp4_moe_quant_config
+        kernel_factory = make_nvfp4_moe_kernel
+        expected_backend = NvFp4MoeBackend.FLASHINFER_B12X
+    if quant_method.nvfp4_backend != expected_backend:
+        raise RuntimeError("Prepared NVFP4 B12X conversion requires FLASHINFER_B12X")
+    if quant_method.moe_quant_config is not None or getattr(
+        quant_method, "moe_kernel", None
+    ) is not None:
+        raise RuntimeError("Prepared NVFP4 quant method was already initialized")
+
+    scalar_pairs = (
+        (routed_layer.w13_weight_scale_2, routed_layer.w13_input_scale),
+        (routed_layer.w2_weight_scale_2, routed_layer.w2_input_scale),
+    )
+    for alpha, reciprocal_activation_global in scalar_pairs:
+        if tuple(alpha.shape) != tuple(reciprocal_activation_global.shape):
+            raise RuntimeError("Prepared NVFP4 B12X scalar shape contract drifted")
+        # CUTLASS prepared: alpha = raw_weight_scale_2 * activation_global.
+        # Multiplication by reciprocal_activation_global recovers the scalar
+        # contract consumed by FlashInferB12xExperts' ordinary post-load.
+        alpha.data.mul_(reciprocal_activation_global)
+
+    quant_method.moe_quant_config = quant_config_factory(
+        g1_alphas=routed_layer.w13_weight_scale_2,
+        g2_alphas=routed_layer.w2_weight_scale_2,
+        a1_gscale=routed_layer.w13_input_scale,
+        a2_gscale=routed_layer.w2_input_scale,
+        w1_scale=routed_layer.w13_weight_scale,
+        w2_scale=routed_layer.w2_weight_scale,
+        is_scale_swizzled=True,
+        gemm1_clamp_limit=getattr(routed_layer, "swiglu_limit", None),
+    )
+    if quant_method.experts_cls is None:
+        raise RuntimeError("Prepared NVFP4 B12X experts class is missing")
+    quant_method.moe_kernel = kernel_factory(
+        moe_quant_config=quant_method.moe_quant_config,
+        moe_config=quant_method.moe,
+        experts_cls=quant_method.experts_cls,
+        backend=quant_method.nvfp4_backend,
+        routing_tables=routed_layer._expert_routing_tables(),
+        layer=routed_layer,
+    )
+    postload = getattr(
+        quant_method.moe_kernel, "process_weights_after_loading", None
+    )
+    if not callable(postload):
+        raise RuntimeError("Prepared NVFP4 B12X kernel lacks post-load conversion")
+    postload(routed_layer)
+    state.finalized = True
+    logger.info(
+        "NVFP4_PREPARED event=postload layer=%d transforms=scale_recover,bake,mma "
+        "backend=%s",
+        state.layer,
+        PREPARED_B12X_BACKEND,
+    )
+
+
 def _install_prepared_postload_hook(routed_layer: Any, state: PreparedPostloadState) -> None:
     quant_method = routed_layer.quant_method
     if hasattr(quant_method, "_dspark_prepared_original_postload"):
@@ -1066,17 +1163,27 @@ def _install_prepared_postload_hook(routed_layer: Any, state: PreparedPostloadSt
             f"{quant_method.__class__.__name__}"
         )
     backend = getattr(getattr(quant_method, "nvfp4_backend", None), "value", None)
-    if backend != PREPARED_BACKEND:
+    if backend not in (PREPARED_BACKEND, PREPARED_B12X_BACKEND):
         raise RuntimeError(
-            f"Prepared NVFP4 requires {PREPARED_BACKEND}; got {backend!r}"
+            "Prepared NVFP4 requires FLASHINFER_CUTLASS or "
+            f"FLASHINFER_B12X; got {backend!r}"
         )
     experts_cls = getattr(quant_method, "experts_cls", None)
+    expected_experts = {
+        PREPARED_BACKEND: (
+            "FlashInferExperts",
+            "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe",
+        ),
+        PREPARED_B12X_BACKEND: (
+            "FlashInferB12xExperts",
+            "vllm.model_executor.layers.fused_moe.experts.flashinfer_b12x_moe",
+        ),
+    }[backend]
     if (
-        getattr(experts_cls, "__name__", None) != "FlashInferExperts"
-        or getattr(experts_cls, "__module__", None)
-        != "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe"
-    ):
-        raise RuntimeError("Prepared NVFP4 FlashInferExperts identity drifted")
+        getattr(experts_cls, "__name__", None),
+        getattr(experts_cls, "__module__", None),
+    ) != expected_experts:
+        raise RuntimeError("Prepared NVFP4 FlashInfer experts identity drifted")
     original = quant_method.process_weights_after_loading
     original_function = getattr(original, "__func__", None)
     if (
@@ -1089,7 +1196,10 @@ def _install_prepared_postload_hook(routed_layer: Any, state: PreparedPostloadSt
     def prepared_postload(method_self: Any, candidate_layer: Any) -> None:
         if candidate_layer is not routed_layer:
             raise RuntimeError("Prepared NVFP4 post-load received the wrong layer")
-        _finalize_prepared_cutlass(method_self, candidate_layer, state)
+        if backend == PREPARED_BACKEND:
+            _finalize_prepared_cutlass(method_self, candidate_layer, state)
+        else:
+            _finalize_prepared_b12x(method_self, candidate_layer, state)
 
     quant_method._dspark_prepared_original_postload = original
     quant_method.process_weights_after_loading = types.MethodType(
@@ -1098,10 +1208,25 @@ def _install_prepared_postload_hook(routed_layer: Any, state: PreparedPostloadSt
 
 
 def _validate_runtime_transform_sources(routed_layer: Any) -> None:
-    """Pin the two implementations whose ordinary transforms are bypassed."""
+    """Pin the ModelOpt and selected expert implementations."""
 
     quant_method = routed_layer.quant_method
     experts_cls = getattr(quant_method, "experts_cls", None)
+    backend = getattr(getattr(quant_method, "nvfp4_backend", None), "value", None)
+    expert_contract = {
+        PREPARED_BACKEND: (
+            "FlashInferExperts",
+            "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe",
+            PINNED_PREPARATION_SOURCE_SHA256["flashinfer_experts"],
+        ),
+        PREPARED_B12X_BACKEND: (
+            "FlashInferB12xExperts",
+            "vllm.model_executor.layers.fused_moe.experts.flashinfer_b12x_moe",
+            PINNED_PREPARATION_SOURCE_SHA256["flashinfer_b12x_experts"],
+        ),
+    }.get(backend)
+    if expert_contract is None:
+        raise RuntimeError(f"Prepared NVFP4 runtime backend drifted: {backend!r}")
     source_contract = (
         (
             quant_method.__class__,
@@ -1109,15 +1234,7 @@ def _validate_runtime_transform_sources(routed_layer: Any) -> None:
             "vllm.model_executor.layers.quantization.modelopt",
             PINNED_PREPARATION_SOURCE_SHA256["modelopt"],
         ),
-        (
-            experts_cls,
-            "FlashInferExperts",
-            (
-                "vllm.model_executor.layers.fused_moe.experts."
-                "flashinfer_cutlass_moe"
-            ),
-            PINNED_PREPARATION_SOURCE_SHA256["flashinfer_experts"],
-        ),
+        (experts_cls, *expert_contract),
     )
     for candidate, expected_name, expected_module, expected_sha in source_contract:
         if (
@@ -1595,7 +1712,7 @@ def maybe_create_nvfp4_prepared_loader(
     if str(load_format).lower().rsplit(".", 1)[-1] == "roce_tp":
         raise RuntimeError("Prepared NVFP4 loading does not support roce_tp")
     if use_mega_moe or enable_expert_parallel or num_redundant_experts != 0:
-        raise RuntimeError("Prepared NVFP4 requires CUTLASS with EP/EPLB disabled")
+        raise RuntimeError("Prepared NVFP4 requires TP-only MoE with EP/EPLB disabled")
     if (
         num_hidden_layers != EXPECTED_LAYERS
         or start_layer != 0

@@ -727,6 +727,86 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
                 expected_backend=sentinel_backend,
             )
 
+    def test_prepared_b12x_recovers_raw_scalars_then_runs_kernel_postload(self):
+        helper = self.helper
+        sentinel_backend = object()
+
+        class ScalarTensor:
+            def __init__(self, values):
+                self.values = list(values)
+                self.shape = (len(self.values),)
+
+            @property
+            def data(self):
+                return self
+
+            def mul_(self, other):
+                self.values = [
+                    left * right
+                    for left, right in zip(self.values, other.values, strict=True)
+                ]
+                return self
+
+        g1 = ScalarTensor([8.0, 15.0])
+        g2 = ScalarTensor([12.0, 21.0])
+        a1 = ScalarTensor([0.25, 0.2])
+        a2 = ScalarTensor([0.5, 1.0 / 3.0])
+        tensors = {
+            "w13_weight_scale_2": g1,
+            "w2_weight_scale_2": g2,
+            "w13_input_scale": a1,
+            "w2_input_scale": a2,
+            "w13_weight_scale": object(),
+            "w2_weight_scale": object(),
+        }
+        routed = SimpleNamespace(
+            **tensors,
+            swiglu_limit=10.0,
+            _expert_routing_tables=lambda: ("r0", "r1", "r2"),
+        )
+        quant_method = SimpleNamespace(
+            nvfp4_backend=sentinel_backend,
+            moe_quant_config=None,
+            moe_kernel=None,
+            moe="moe-config",
+            experts_cls=object,
+        )
+        calls = []
+
+        def quant_factory(**kwargs):
+            self.assertIs(kwargs["g1_alphas"], g1)
+            self.assertIs(kwargs["g2_alphas"], g2)
+            self.assertTrue(kwargs["is_scale_swizzled"])
+            return "b12x-quant-config"
+
+        kernel = SimpleNamespace()
+
+        def postload(layer):
+            self.assertIs(layer, routed)
+            self.assertEqual(g1.values, [2.0, 3.0])
+            self.assertEqual(g2.values, [6.0, 7.0])
+            calls.append("postload")
+
+        kernel.process_weights_after_loading = postload
+
+        def kernel_factory(**kwargs):
+            self.assertEqual(kwargs["moe_quant_config"], "b12x-quant-config")
+            self.assertIs(kwargs["backend"], sentinel_backend)
+            return kernel
+
+        state = helper.PreparedPostloadState(0, loaded=True)
+        helper._finalize_prepared_b12x(
+            quant_method,
+            routed,
+            state,
+            quant_config_factory=quant_factory,
+            kernel_factory=kernel_factory,
+            expected_backend=sentinel_backend,
+        )
+        self.assertTrue(state.finalized)
+        self.assertEqual(calls, ["postload"])
+        self.assertIs(quant_method.moe_kernel, kernel)
+
     def test_installed_hook_is_per_method_and_calls_only_prepared_finalizer(self):
         helper = self.helper
 
@@ -778,12 +858,42 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
             "flashinfer_cutlass_moe"
         )
         method = method_cls()
+        method.nvfp4_backend = SimpleNamespace(value=helper.PREPARED_BACKEND)
         method.experts_cls = experts_cls
         routed = SimpleNamespace(quant_method=method)
         paths = ["/pinned/modelopt.py", "/pinned/flashinfer_cutlass_moe.py"]
         hashes = [
             helper.PINNED_PREPARATION_SOURCE_SHA256["modelopt"],
             helper.PINNED_PREPARATION_SOURCE_SHA256["flashinfer_experts"],
+        ]
+        with (
+            mock.patch.object(helper.inspect, "getsourcefile", side_effect=paths),
+            mock.patch.object(helper, "_sha256_file", side_effect=hashes),
+        ):
+            helper._validate_runtime_transform_sources(routed)
+
+    def test_b12x_runtime_transform_source_is_sha_pinned(self):
+        helper = self.helper
+        method_cls = type("ModelOptNvFp4FusedMoE", (), {})
+        method_cls.__module__ = (
+            "vllm.model_executor.layers.quantization.modelopt"
+        )
+        experts_cls = type("FlashInferB12xExperts", (), {})
+        experts_cls.__module__ = (
+            "vllm.model_executor.layers.fused_moe.experts.flashinfer_b12x_moe"
+        )
+        method = method_cls()
+        method.nvfp4_backend = SimpleNamespace(
+            value=helper.PREPARED_B12X_BACKEND
+        )
+        method.experts_cls = experts_cls
+        routed = SimpleNamespace(quant_method=method)
+        paths = ["/pinned/modelopt.py", "/pinned/flashinfer_b12x_moe.py"]
+        hashes = [
+            helper.PINNED_PREPARATION_SOURCE_SHA256["modelopt"],
+            helper.PINNED_PREPARATION_SOURCE_SHA256[
+                "flashinfer_b12x_experts"
+            ],
         ]
         with (
             mock.patch.object(helper.inspect, "getsourcefile", side_effect=paths),

@@ -226,10 +226,29 @@ Warmed server-side prefill improved at all six tested sizes:
 | 16,384 | 2,203.8 tok/s | 2,501.7 tok/s | +13.5% | 7.455 s | 6.573 s |
 | 32,768 | 2,176.1 tok/s | 2,477.3 tok/s | +13.8% | 15.119 s | 13.264 s |
 
-Decode is prompt- and acceptance-dependent. A same-prompt canonical check put
-W4A4 within about 3--4% of the preceding FP8/B12X v0.25 candidate:
+To isolate target-model decode from speculative acceptance, we first disabled
+DSpark completely and required the speculative counters to remain inactive.
+Both targets used the same canonical prompt, 512 output tokens, temperature 0,
+TP=2, and three trials. Values are best aggregate throughput, with the median in
+parentheses:
 
-| Canonical concurrency | FP8/B12X + DSpark | W4A4 + DSpark | W4A4 delta |
+| Target-only concurrency | FP8/B12X, no draft | W4A4, no draft | W4A4 delta (best / median) |
+|---:|---:|---:|---:|
+| 1 | **27.57** (27.45) tok/s | 27.03 (26.92) tok/s | -2.0% / -1.9% |
+| 4 | **78.74** (77.21) tok/s | 73.37 (72.55) tok/s | -6.8% / -6.0% |
+
+The widening deficit at concurrency 4 is therefore already present in the
+target-only small-M decode path; it is not primarily a DSpark acceptance
+difference. Prefill still favors W4A4, as shown above. The raw target-only
+comparison is documented in
+[decode-target-only-fp8-vs-w4a4.md](benchmarks/results/decode-target-only-fp8-vs-w4a4.md).
+
+Decode with speculation remains prompt- and acceptance-dependent. A same-prompt
+canonical check with **MTP=5 on both sides**, probabilistic draft sampling, and
+confidence scheduling off put W4A4 within about 3--4% of the preceding
+FP8/B12X v0.25 candidate:
+
+| Canonical concurrency | FP8/B12X + DSpark (MTP=5) | W4A4 + DSpark (MTP=5) | W4A4 delta |
 |---:|---:|---:|---:|
 | 1 | **48.49 tok/s** | 47.13 tok/s | -2.8% |
 | 4 | **103.48 tok/s** | 99.44 tok/s | -3.9% |

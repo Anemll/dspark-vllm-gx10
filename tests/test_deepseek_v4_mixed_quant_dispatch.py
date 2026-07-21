@@ -264,8 +264,20 @@ class DeepseekV4MixedQuantDispatchTest(unittest.TestCase):
         self.assertIsInstance(method, _ModelOptNvFp4FusedMoE)
         self.assertEqual(target.moe_config.moe_backend, "flashinfer_cutlass")
 
-    def test_prepared_target_rejects_other_runner_wide_backends(self) -> None:
+    def test_prepared_target_keeps_explicit_b12x_for_conversion(self) -> None:
         target = _RoutedExperts("flashinfer_b12x")
+        with patch.object(
+            self.module, "_prepared_nvfp4_load_requested", return_value=True
+        ):
+            method = self._new_config().get_quant_method(
+                target, "model.layers.0.ffn.experts"
+            )
+
+        self.assertIsInstance(method, _ModelOptNvFp4FusedMoE)
+        self.assertEqual(target.moe_config.moe_backend, "flashinfer_b12x")
+
+    def test_prepared_target_rejects_other_runner_wide_backends(self) -> None:
+        target = _RoutedExperts("marlin")
         with (
             patch.object(
                 self.module, "_prepared_nvfp4_load_requested", return_value=True

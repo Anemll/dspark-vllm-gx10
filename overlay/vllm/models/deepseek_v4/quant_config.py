@@ -19,7 +19,11 @@ from vllm.model_executor.layers.quantization.utils.quant_utils import (
 )
 
 _DEEPSEEK_V4_EXPERT_DTYPES = ("fp4", "fp8")
-_PREPARED_NVFP4_TARGET_BACKENDS = ("auto", "flashinfer_cutlass")
+_PREPARED_NVFP4_TARGET_BACKENDS = (
+    "auto",
+    "flashinfer_cutlass",
+    "flashinfer_b12x",
+)
 
 if TYPE_CHECKING:
     from vllm.model_executor.layers.quantization.modelopt import (
@@ -38,7 +42,7 @@ def _prepared_nvfp4_load_requested() -> bool:
 
 
 def _scope_prepared_nvfp4_target_backend(layer: RoutedExperts) -> str | None:
-    """Pin CUTLASS on a prepared target layer without touching draft layers.
+    """Scope a prepared target backend without touching draft layers.
 
     ``--moe-backend`` initializes every routed layer with the same runner-wide
     value.  A split prepared-target/native-draft process cannot use one global
@@ -47,9 +51,10 @@ def _scope_prepared_nvfp4_target_backend(layer: RoutedExperts) -> str | None:
     called only from the target-NVFP4 branch below, so a runner-wide ``auto``
     value remains unchanged on the separately constructed draft layers.
 
-    Explicit CUTLASS remains accepted for the already-proven target-only
-    serving configuration.  Any other explicit backend is incompatible with
-    the prepared artifact and fails before ModelOpt constructs its kernel.
+    Explicit CUTLASS remains the zero-transform production path. Explicit
+    B12X opts into the audited in-place conversion from the checkpoint's
+    CUTLASS-prepared scale contract to B12X's baked-scale contract. Any other
+    explicit backend fails before ModelOpt constructs its kernel.
     """
 
     if not _prepared_nvfp4_load_requested():
@@ -58,9 +63,11 @@ def _scope_prepared_nvfp4_target_backend(layer: RoutedExperts) -> str | None:
     if runner_backend not in _PREPARED_NVFP4_TARGET_BACKENDS:
         raise ValueError(
             "Prepared DeepSeek-V4 NVFP4 target requires runner moe_backend "
-            f"'auto' or 'flashinfer_cutlass'; got {runner_backend!r}"
+            "'auto', 'flashinfer_cutlass', or 'flashinfer_b12x'; "
+            f"got {runner_backend!r}"
         )
-    layer.moe_config.moe_backend = "flashinfer_cutlass"
+    if runner_backend == "auto":
+        layer.moe_config.moe_backend = "flashinfer_cutlass"
     return runner_backend
 
 
