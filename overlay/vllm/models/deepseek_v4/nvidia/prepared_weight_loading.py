@@ -6,10 +6,11 @@ The prepared checkpoint is deliberately incompatible with the ordinary
 per-expert ModelOpt loader.  Each target layer contains eight rank-major
 tensors already in the final FlashInfer CUTLASS layout.  This module validates
 the small immutable metadata contract before checkpoint payload iteration,
-then performs one blocking H2D copy for each family.  Its opt-in direct reader
+then performs one blocking H2D copy for each family.  Its default direct reader
 uses explicit rank-range ``preadv`` calls instead of faulting cold mmap pages
-inside those copies.  The post-load hook only constructs the quant config and
-kernel; it must not reorder, reduce, swizzle, or modify scale values.
+inside those copies; setting its dedicated environment flag to ``0`` restores
+the mmap path for diagnosis.  The post-load hook only constructs the quant
+config and kernel; it must not reorder, reduce, swizzle, or modify scale values.
 """
 
 from __future__ import annotations
@@ -189,9 +190,10 @@ def prepared_load_requested(
 def prepared_direct_read_requested(
     environ: Mapping[str, str] | None = None,
 ) -> bool:
-    return _strict_flag(
-        PREPARED_DIRECT_READ_ENV, os.environ if environ is None else environ
-    )
+    source = os.environ if environ is None else environ
+    if PREPARED_DIRECT_READ_ENV not in source:
+        return True
+    return _strict_flag(PREPARED_DIRECT_READ_ENV, source)
 
 
 def _sha256_file(path: Path) -> str:

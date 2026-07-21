@@ -52,7 +52,7 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
             )
         self.assertEqual(values, ["0", "0"])
 
-    def test_prepared_nvfp4_loader_and_manifest_pin_are_propagated_off(self) -> None:
+    def test_prepared_nvfp4_loader_and_direct_default_are_propagated(self) -> None:
         self.assertIn(
             'VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD: '
             '"${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD:-0}"',
@@ -65,7 +65,7 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
         )
         self.assertIn(
             'VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ: '
-            '"${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ:-0}"',
+            '"${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ:-1}"',
             self.compose,
         )
         for name, expected in (
@@ -74,7 +74,7 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
                 "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256",
                 ["", ""],
             ),
-            ("VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ", ["0", "0"]),
+            ("VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ", ["1", "1"]),
         ):
             values = []
             for relative_path in (

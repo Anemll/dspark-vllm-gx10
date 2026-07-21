@@ -73,10 +73,11 @@ services:
       VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD: "${VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD:-0}"
       # Offline-prepared CUTLASS checkpoint.  The checkpoint self-declares
       # this incompatible format and the loader additionally requires the
-      # exact immutable manifest digest; both gates default off/empty.
+      # exact immutable manifest digest. Prepared loading defaults off; once
+      # selected, bulk direct reads default on and can be disabled with 0.
       VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD:-0}"
       VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256:-}"
-      VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ:-0}"
+      VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ:-1}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE:-0}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT:-0}"
 

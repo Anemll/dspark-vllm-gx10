@@ -324,12 +324,17 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
                 helper.inspect_prepared_checkpoint(root, environ={})
             )
 
-    def test_direct_read_flag_is_strict_and_opt_in(self):
+    def test_direct_read_flag_defaults_on_and_has_strict_opt_out(self):
         helper = self.helper
-        self.assertFalse(helper.prepared_direct_read_requested({}))
+        self.assertTrue(helper.prepared_direct_read_requested({}))
         self.assertTrue(
             helper.prepared_direct_read_requested(
                 {helper.PREPARED_DIRECT_READ_ENV: "1"}
+            )
+        )
+        self.assertFalse(
+            helper.prepared_direct_read_requested(
+                {helper.PREPARED_DIRECT_READ_ENV: "0"}
             )
         )
         with self.assertRaisesRegex(ValueError, "must be exactly"):
@@ -875,6 +880,7 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
                 num_redundant_experts=0,
                 load_format="auto",
                 quant_config=quant_config,
+                environ={helper.PREPARED_DIRECT_READ_ENV: "0"},
                 replace_parameter_fn=replace_parameter,
             )
         self.assertIsNotNone(loader)
