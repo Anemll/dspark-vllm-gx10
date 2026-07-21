@@ -35,53 +35,60 @@ Source: [`prefill-v0251-vs-nvfp4-a4w4.md`](prefill-v0251-vs-nvfp4-a4w4.md).
 
 ## Canonical decode
 
-This is the 35-token canonical chat/tool prompt at concurrency 4, temperature
-zero, and 512 requested output tokens. The production row is the median of
-three trials; the W4A4 row is one post-promotion production run, so this is an
-exploratory comparison rather than a variance-bounded A/B.
+This is the same 35-token canonical chat/tool prompt at temperature zero and
+512 requested output tokens. Values are the best aggregate result from each
+report, matching the repository release-table convention.
 
-| Target path | Trials | Aggregate tok/s | Mean stream tok/s | TTFT | Mean accepted length |
-|---|---:|---:|---:|---:|---:|
-| FP8/B12X + DSpark | 3 | **105.48** | **28.66** | 0.383 s | 3.182 |
-| NVFP4 W4A4 + DSpark | 1 | 96.02 | 25.34 | 0.384 s | 3.127 |
-| W4A4 delta |  | **-9.0%** | **-11.6%** | +0.4% | -1.7% |
+| Concurrency | FP8/B12X + DSpark | NVFP4 W4A4 + DSpark | W4A4 delta |
+|---:|---:|---:|---:|
+| 1 | **48.49 tok/s** | 47.13 tok/s | -2.8% |
+| 4 | **103.48 tok/s** | 99.44 tok/s | -3.9% |
 
-The harder prompt's modest draft acceptance does not hide verifier cost; W4A4
-is slower in this single-run comparison. Raw sources:
-[`decode-v0251-production-mtp5-matched.json`](decode-v0251-production-mtp5-matched.json)
-and
-[`decode-w4a4-dspark-production-c4.json`](decode-w4a4-dspark-production-c4.json).
+This matched prompt removes the earlier mismatched 105.48-versus-96.02 row.
+The remaining difference is small enough that it should be treated as a
+prompt-specific modest regression rather than a universal decode result. Raw
+sources: [`v0251-candidate.json`](v0251-candidate.json),
+[`decode-w4a4-canonical-c1.json`](decode-w4a4-canonical-c1.json), and
+[`decode-w4a4-canonical-c4.json`](decode-w4a4-canonical-c4.json).
 
 ## Agentic decode
 
-This is the clean W4A4 production path on the exact `tool_agentic` prompt at
-concurrency 8, temperature zero, and 512 tokens per stream. Confidence is off
-and no draft/verify overlap optimization is enabled.
+This is the W4A4 path on the exact `tool_agentic` prompt at temperature zero
+and 512 tokens per stream. Confidence is off and no draft/verify overlap
+optimization is enabled. The prompt SHA-256 is
+`6173a7ae0ea3c64b364d0c405be28808efb8486c68a7011e966d31ce222c1736`.
+Each arm used one short shape warm-up followed by two measured trials per
+concurrency. Values are best aggregate throughput.
 
-| Aggregate decode tok/s | Mean stream tok/s | Mean TTFT | Mean accepted length | Aggregate acceptance | Full-draft acceptance |
-|---:|---:|---:|---:|---:|---:|
-| **360.68** | **46.64** | 0.439 s | 5.270 | 85.39% | 74.33% |
+| MTP draft tokens | C=1 | C=2 | C=4 | C=8 |
+|---:|---:|---:|---:|---:|
+| 1 | 39.7 | 66.5 | 96.0 | 146.7 |
+| 2 | 53.2 | 88.2 | 119.8 | 175.3 |
+| 3 | 62.5 | 94.6 | 148.3 | 224.7 |
+| 4 | 69.1 | **135.6** | **157.9** | 234.8 |
+| 5 | **76.4** | 111.9 | 156.6 | **244.2** |
 
-All eight W4A4 streams passed the automated no-collapse diagnostic. Higher
-agentic throughput is associated with strong draft acceptance. A clean,
-uninstrumented legacy agentic control using this exact prompt was not archived,
-so no cross-target speedup is claimed from this row. Raw source:
-[`decode-w4a4-dspark-agentic-c8.json`](decode-w4a4-dspark-agentic-c8.json).
+MTP=5 wins C=1 and C=8 and remains the recommended default. MTP=4 wins C=2;
+at C=4 it wins the best trial by 0.8%, while MTP=5 has the higher two-trial
+mean. The exact methodology, accepted-length table, MTP=1 context caveat, and
+raw JSON hashes are in
+[`decode-w4a4-agentic-mtp-grid.md`](decode-w4a4-agentic-mtp-grid.md).
 
 ## Prepared-load result
 
-The bulk direct reader reduced the slower rank's prepared target load from
-558.19 to 65.23 seconds (8.56x) and complete head model load from 595.90 to
-108.54 seconds (5.49x). The full TP=2 startup proved 43 layers, 344 reads, 344
-copies, zero transforms, `io_mode=preadv`, HTTP health 200, and a coherent
-smoke response. See
+The bulk direct reader loaded the prepared target on the slower rank in 65.23
+seconds and completed the full head model load in 108.54 seconds. The earlier
+558.19/595.90-second measurements were an intermediate non-direct prototype,
+not the release model, and are retained only as prototype history. The full
+TP=2 startup proved 43 layers, 344 reads, 344 copies, zero transforms,
+`io_mode=preadv`, HTTP health 200, and a coherent smoke response. See
 [`nvfp4-prepared-direct-read-full-3689b1c.json`](nvfp4-prepared-direct-read-full-3689b1c.json).
 
 ## Interpretation
 
 W4A4 consistently improves prefill in this dataset. Decode remains prompt- and
-acceptance-dependent: it lost about 9% in the exploratory canonical comparison,
-while the high-acceptance agentic path reached 360.68 aggregate tok/s without a
-clean legacy control. Report prompt identity, concurrency, acceptance, token
-limit, confidence state, overlap state, and timing convention with every decode
-number.
+acceptance-dependent: it is about 3--4% behind the preceding FP8/B12X path on
+the matched canonical checks, while the agentic prompt scales to 244.2
+aggregate tok/s at C=8 with MTP=5. Report prompt identity, concurrency,
+acceptance, token limit, confidence state, overlap state, and timing convention
+with every decode number.

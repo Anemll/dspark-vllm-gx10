@@ -226,26 +226,42 @@ Warmed server-side prefill improved at all six tested sizes:
 | 16,384 | 2,203.8 tok/s | 2,501.7 tok/s | +13.5% | 7.455 s | 6.573 s |
 | 32,768 | 2,176.1 tok/s | 2,477.3 tok/s | +13.8% | 15.119 s | 13.264 s |
 
-Decode is prompt- and acceptance-dependent. These rows use confidence OFF and
-no draft/verify overlap optimization:
+Decode is prompt- and acceptance-dependent. A same-prompt canonical check put
+W4A4 within about 3--4% of the preceding FP8/B12X v0.25 candidate:
 
-| Workload | C | FP8/B12X + DSpark | W4A4 + DSpark | Comparison | W4A4 mean accepted length |
-|---|---:|---:|---:|---:|---:|
-| Canonical chat/tool, 512 tokens | 4 | **105.48 tok/s** | 96.02 tok/s | **-9.0%** | 3.127 |
-| `tool_agentic`, 512 tokens | 8 | not archived cleanly | **360.68 tok/s** | no matched control | 5.270 |
+| Canonical concurrency | FP8/B12X + DSpark | W4A4 + DSpark | W4A4 delta |
+|---:|---:|---:|---:|
+| 1 | **48.49 tok/s** | 47.13 tok/s | -2.8% |
+| 4 | **103.48 tok/s** | 99.44 tok/s | -3.9% |
 
-The canonical production control is a three-trial median while its W4A4 row
-is one post-promotion run. The agentic row is a clean W4A4 production run; all
-eight streams passed the automated no-collapse diagnostic. The older
-instrumented concurrency/overlap study is deliberately not used as its
-control. These are not interchangeable decode numbers: the agentic prompt has
-substantially higher speculative acceptance.
+The high-acceptance `tool_agentic` prompt benefits from longer drafts. The
+following grid uses the exact prompt SHA-256
+`6173a7ae0ea3c64b364d0c405be28808efb8486c68a7011e966d31ce222c1736`,
+512 output tokens per stream, confidence OFF, no draft/verify overlap, one
+shape warm-up, and two measured trials per cell. Values are best aggregate
+throughput:
 
-The bulk direct reader also reduced the slower rank's prepared target load from
-558.19 to **65.23 seconds** (8.56x) and full head model load from 595.90 to
-**108.54 seconds** (5.49x). The complete methodology, caveats, and raw-artifact
-links are in the
+| MTP draft tokens | C=1 | C=2 | C=4 | C=8 |
+|---:|---:|---:|---:|---:|
+| 1 | 39.7 tok/s | 66.5 tok/s | 96.0 tok/s | 146.7 tok/s |
+| 2 | 53.2 tok/s | 88.2 tok/s | 119.8 tok/s | 175.3 tok/s |
+| 3 | 62.5 tok/s | 94.6 tok/s | 148.3 tok/s | 224.7 tok/s |
+| 4 | 69.1 tok/s | **135.6 tok/s** | **157.9 tok/s** | 234.8 tok/s |
+| 5 | **76.4 tok/s** | 111.9 tok/s | 156.6 tok/s | **244.2 tok/s** |
+
+MTP=5 remains the general-purpose default: it wins C=1 and C=8 and is
+effectively tied at C=4. MTP=4 is the specialized choice for C=2 and is the
+best single C=4 trial. Do not compare the canonical and agentic tables as if
+they used the same prompt.
+
+The bulk direct reader loaded the prepared target on the slower rank in
+**65.23 seconds** and completed the full head model load in **108.54 seconds**.
+The earlier 558.19/595.90-second measurements came from an intermediate
+non-direct prototype, not the release model, so they are not presented as a
+release speedup. The complete methodology, caveats, and raw-artifact links are
+in the
 [W4A4 serving comparison](benchmarks/results/w4a4-dspark-serving-comparison.md),
+[agentic MTP grid](benchmarks/results/decode-w4a4-agentic-mtp-grid.md),
 [prefill comparison](benchmarks/results/prefill-v0251-vs-nvfp4-a4w4.md), and
 [direct-load result](benchmarks/results/nvfp4-prepared-direct-read-full-3689b1c.json).
 

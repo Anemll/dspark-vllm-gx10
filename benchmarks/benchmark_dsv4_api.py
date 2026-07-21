@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 import hashlib
 import json
 import math
+from pathlib import Path
 import re
 import statistics
 import time
@@ -21,6 +22,15 @@ PROMPT = (
     "in an autoregressive language model. Continue until the token limit and "
     "do not use a conclusion or summary."
 )
+TOOL_AGENTIC_PROMPT = (
+    "Create a small Space Invaders game project, keep files in "
+    "/tmp/si-agent-tp2, run it, test it, fix any issues, and summarize what "
+    "changed.\n"
+)
+PROMPT_PRESETS = {
+    "canonical": PROMPT,
+    "tool_agentic": TOOL_AGENTIC_PROMPT,
+}
 
 SPEC_METRICS = {
     "num_drafts": "vllm:spec_decode_num_drafts_total",
@@ -198,10 +208,30 @@ def spec_metrics_delta(
     }
 
 
-def run_stream(base_url: str, model: str, max_tokens: int, request_id: int) -> StreamResult:
+def load_prompt(
+    prompt_file: str | None,
+    prompt_preset: str = "canonical",
+) -> tuple[str, str]:
+    prompt = (
+        PROMPT_PRESETS[prompt_preset]
+        if prompt_file is None
+        else Path(prompt_file).read_text(encoding="utf-8")
+    )
+    if not prompt.strip():
+        raise ValueError("benchmark prompt must not be empty")
+    return prompt, hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+
+
+def run_stream(
+    base_url: str,
+    model: str,
+    max_tokens: int,
+    request_id: int,
+    prompt: str = PROMPT,
+) -> StreamResult:
     body = {
         "model": model,
-        "messages": [{"role": "user", "content": PROMPT}],
+        "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": 0,
         "ignore_eos": True,
@@ -270,17 +300,30 @@ def main() -> None:
     parser.add_argument("--concurrency", default="1,2,4")
     parser.add_argument("--trials", type=int, default=2)
     parser.add_argument("--max-tokens", type=int, default=512)
+    prompt_group = parser.add_mutually_exclusive_group()
+    prompt_group.add_argument(
+        "--prompt-file",
+        help="UTF-8 file containing the exact user prompt; defaults to the canonical prompt",
+    )
+    prompt_group.add_argument(
+        "--prompt-preset",
+        choices=sorted(PROMPT_PRESETS),
+        default="canonical",
+        help="named prompt with a stable content hash",
+    )
     metric_group = parser.add_mutually_exclusive_group()
     metric_group.add_argument("--require-spec-metrics", action="store_true")
     metric_group.add_argument("--require-no-spec-metrics", action="store_true")
     parser.add_argument("--expected-spec-positions", type=int, default=5)
     parser.add_argument("--output")
     args = parser.parse_args()
+    prompt, prompt_sha256 = load_prompt(args.prompt_file, args.prompt_preset)
 
     report = {
         "base_url": args.base_url,
         "model": args.model,
         "max_tokens": args.max_tokens,
+        "prompt_sha256": prompt_sha256,
         "spec_decode_metric_source": (
             SPEC_METRICS
             if args.require_spec_metrics or args.require_no_spec_metrics
@@ -309,7 +352,11 @@ def main() -> None:
                 results = list(
                     executor.map(
                         lambda request_id: run_stream(
-                            args.base_url, args.model, args.max_tokens, request_id
+                            args.base_url,
+                            args.model,
+                            args.max_tokens,
+                            request_id,
+                            prompt,
                         ),
                         range(concurrency),
                     )

@@ -1,0 +1,155 @@
+{
+  "base_url": "http://127.0.0.1:8888",
+  "model": "deepseek-v4-flash-nvfp4-dspark",
+  "max_tokens": 512,
+  "spec_decode_metric_source": {
+    "num_drafts": "vllm:spec_decode_num_drafts_total",
+    "draft_tokens": "vllm:spec_decode_num_draft_tokens_total",
+    "accepted_tokens": "vllm:spec_decode_num_accepted_tokens_total",
+    "accepted_per_position": "vllm:spec_decode_num_accepted_tokens_per_pos_total"
+  },
+  "spec_decode_metric_mode": "required",
+  "trials": [
+    {
+      "concurrency": 1,
+      "trial": 1,
+      "wall_s": 11.304891208012123,
+      "total_tokens": 512,
+      "aggregate_token_tps": 45.29013066814211,
+      "mean_ttft_s": 0.15648429200518876,
+      "streams": [
+        {
+          "request": 0,
+          "prompt_tokens": 35,
+          "completion_tokens": 512,
+          "chunks": 172,
+          "ttft_s": 0.15648429200518876,
+          "decode_s": 11.147579916985705,
+          "elapsed_s": 11.304222500009928,
+          "token_tps": 45.92925135435533,
+          "chunk_tps": 15.429357876853745,
+          "finish_reason": "length",
+          "output_sha256": "3f0a8b4410808574c9e05f969d5c0871182913d6ace4df91c87f24db38280240"
+        }
+      ],
+      "spec_decode": {
+        "enabled": true,
+        "num_drafts": 171,
+        "draft_tokens": 855,
+        "accepted_tokens": 344,
+        "mean_draft_length": 5.0,
+        "accepted_excess_length": 2.0116959064327484,
+        "aggregate_acceptance_rate": 0.4023391812865497,
+        "mean_acceptance_length": 3.0116959064327484,
+        "accepted_tokens_per_position": [
+          128,
+          94,
+          58,
+          37,
+          27
+        ],
+        "per_position_acceptance_rates": [
+          0.7485380116959064,
+          0.5497076023391813,
+          0.3391812865497076,
+          0.21637426900584794,
+          0.15789473684210525
+        ]
+      }
+    },
+    {
+      "concurrency": 1,
+      "trial": 2,
+      "wall_s": 11.146935374999885,
+      "total_tokens": 512,
+      "aggregate_token_tps": 45.93190709154939,
+      "mean_ttft_s": 0.20696120901266113,
+      "streams": [
+        {
+          "request": 0,
+          "prompt_tokens": 35,
+          "completion_tokens": 512,
+          "chunks": 168,
+          "ttft_s": 0.20696120901266113,
+          "decode_s": 10.939408041012939,
+          "elapsed_s": 11.146478667040356,
+          "token_tps": 46.80326376714906,
+          "chunk_tps": 15.357320923595786,
+          "finish_reason": "length",
+          "output_sha256": "1df7de3cc43d057581f069b6f102a3ece69ea7b15214544f60e19c502d1176a0"
+        }
+      ],
+      "spec_decode": {
+        "enabled": true,
+        "num_drafts": 167,
+        "draft_tokens": 835,
+        "accepted_tokens": 349,
+        "mean_draft_length": 5.0,
+        "accepted_excess_length": 2.089820359281437,
+        "aggregate_acceptance_rate": 0.4179640718562874,
+        "mean_acceptance_length": 3.089820359281437,
+        "accepted_tokens_per_position": [
+          133,
+          91,
+          60,
+          40,
+          25
+        ],
+        "per_position_acceptance_rates": [
+          0.7964071856287425,
+          0.5449101796407185,
+          0.3592814371257485,
+          0.23952095808383234,
+          0.1497005988023952
+        ]
+      }
+    },
+    {
+      "concurrency": 1,
+      "trial": 3,
+      "wall_s": 10.864310417033266,
+      "total_tokens": 512,
+      "aggregate_token_tps": 47.12678304895237,
+      "mean_ttft_s": 0.15404029202181846,
+      "streams": [
+        {
+          "request": 0,
+          "prompt_tokens": 35,
+          "completion_tokens": 512,
+          "chunks": 165,
+          "ttft_s": 0.15404029202181846,
+          "decode_s": 10.709903665992897,
+          "elapsed_s": 10.864018167019822,
+          "token_tps": 47.806218988295015,
+          "chunk_tps": 15.40630104114976,
+          "finish_reason": "length",
+          "output_sha256": "e2e17e5047e1dbde94049e08a252be87d07512ceffea60761b1238d856d7f5ed"
+        }
+      ],
+      "spec_decode": {
+        "enabled": true,
+        "num_drafts": 164,
+        "draft_tokens": 820,
+        "accepted_tokens": 348,
+        "mean_draft_length": 5.0,
+        "accepted_excess_length": 2.1219512195121952,
+        "aggregate_acceptance_rate": 0.424390243902439,
+        "mean_acceptance_length": 3.1219512195121952,
+        "accepted_tokens_per_position": [
+          133,
+          98,
+          61,
+          37,
+          19
+        ],
+        "per_position_acceptance_rates": [
+          0.8109756097560976,
+          0.5975609756097561,
+          0.3719512195121951,
+          0.22560975609756098,
+          0.11585365853658537
+        ]
+      }
+    }
+  ]
+}

@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
@@ -31,6 +33,30 @@ def metrics(drafts: int, drafted: int, accepted: int, positions: list[int]) -> s
 
 
 class SpecMetricsTests(unittest.TestCase):
+    def test_load_prompt_defaults_to_canonical_prompt_and_records_hash(self) -> None:
+        prompt, digest = bench.load_prompt(None)
+        self.assertEqual(prompt, bench.PROMPT)
+        self.assertEqual(digest, hashlib.sha256(prompt.encode()).hexdigest())
+
+    def test_load_prompt_file_preserves_exact_text_and_rejects_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "prompt.txt"
+            path.write_text("exact agentic prompt\n", encoding="utf-8")
+            prompt, digest = bench.load_prompt(str(path))
+            self.assertEqual(prompt, "exact agentic prompt\n")
+            self.assertEqual(digest, hashlib.sha256(prompt.encode()).hexdigest())
+            path.write_text(" \n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "must not be empty"):
+                bench.load_prompt(str(path))
+
+    def test_tool_agentic_preset_has_the_archived_prompt_hash(self) -> None:
+        prompt, digest = bench.load_prompt(None, "tool_agentic")
+        self.assertEqual(prompt, bench.TOOL_AGENTIC_PROMPT)
+        self.assertEqual(
+            digest,
+            "6173a7ae0ea3c64b364d0c405be28808efb8486c68a7011e966d31ce222c1736",
+        )
+
     def test_parse_and_delta_per_position_acceptance(self) -> None:
         before = bench.parse_spec_metrics(metrics(10, 30, 18, [9, 6, 3]))
         after = bench.parse_spec_metrics(metrics(20, 60, 39, [19, 13, 7]))
