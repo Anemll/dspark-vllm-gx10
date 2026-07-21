@@ -8,6 +8,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PROBE_PATH = ROOT / "scripts/probe_deepseek_v4_mhc_warmup.py"
+DOCKERFILE_PATH = ROOT / "docker/Dockerfile.mhc-prewarm-overlay"
 
 
 class DeepseekV4MhcWarmupProbeTests(unittest.TestCase):
@@ -28,6 +29,20 @@ class DeepseekV4MhcWarmupProbeTests(unittest.TestCase):
     def test_probe_checks_finite_zero_output(self) -> None:
         self.assertIn("torch.isfinite(out).all()", self.source)
         self.assertIn("torch.count_nonzero(out)", self.source)
+
+    def test_overlay_image_installs_exact_warmup_and_probe(self) -> None:
+        dockerfile = DOCKERFILE_PATH.read_text()
+        self.assertIn("ARG BASE_IMAGE", dockerfile)
+        self.assertIn("FROM ${BASE_IMAGE}", dockerfile)
+        self.assertIn(
+            "overlay/vllm/model_executor/warmup/deepseek_v4_mhc_warmup.py",
+            dockerfile,
+        )
+        self.assertIn("scripts/probe_deepseek_v4_mhc_warmup.py", dockerfile)
+        self.assertIn(
+            'org.opencontainers.image.revision="${SOURCE_REVISION}"',
+            dockerfile,
+        )
 
 
 if __name__ == "__main__":
