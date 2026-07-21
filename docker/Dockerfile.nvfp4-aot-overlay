@@ -13,6 +13,7 @@ COPY .local/wheels/${FLASHINFER_CUBIN_WHEEL} /tmp/${FLASHINFER_CUBIN_WHEEL}
 COPY scripts/verify_flashinfer_runtime.py /usr/local/bin/dspark-verify-flashinfer-runtime
 COPY benchmarks/probe_nvfp4_staged_routed_loader.py /usr/local/bin/dspark-probe-nvfp4-staged-routed-loader
 COPY benchmarks/probe_nvfp4_prepared_layer.py /usr/local/bin/dspark-probe-nvfp4-prepared-layer
+COPY benchmarks/probe_nvfp4_prepared_direct_read.py /usr/local/bin/dspark-probe-nvfp4-prepared-direct-read
 COPY scripts/probe_dspark_confidence_multiprocess_metrics.py /usr/local/bin/dspark-probe-confidence-multiprocess-metrics
 
 RUN echo "${FLASHINFER_JIT_CACHE_SHA256}  /tmp/${FLASHINFER_JIT_CACHE_WHEEL}" | sha256sum -c - && \
