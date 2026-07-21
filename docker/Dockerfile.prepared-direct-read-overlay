@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_REVISION=unknown
+ARG BASE_PREPARED_LOADER_SHA256=ca0c264071bf36f22d0ed67dd4e902bd18c5f6c47f3efc296014c8205662d380
+
+RUN echo "${BASE_PREPARED_LOADER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py" | sha256sum -c -
+
+COPY overlay/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py
+COPY benchmarks/probe_nvfp4_prepared_direct_read.py \
+  /usr/local/bin/dspark-probe-nvfp4-prepared-direct-read
+
+RUN python3 -m py_compile \
+      /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py \
+      /usr/local/bin/dspark-probe-nvfp4-prepared-direct-read
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.prepared-direct-read="preadv-rank-ranges-v1"
