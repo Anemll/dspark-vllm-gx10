@@ -86,6 +86,64 @@ Start rank 1 first, then rank 0:
 The head API is available at `http://HEAD_HOST:8888`. A successful startup
 returns HTTP 200 from `/health` and the runtime string from `/version`.
 
+The head can also launch both ranks when `WORKER_SSH` and `WORKER_REPO_DIR`
+are set in `config/head.env`:
+
+```bash
+./scripts/start-cluster.sh config/head.env config/worker.env
+```
+
+### Prepared W4A4 + DSpark profile
+
+The one-download `DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1` bundle uses two
+explicit runtime paths. Its repository root is the prepared W4A4 target and
+its `dspark/` subdirectory is the native three-stage speculative draft. Set
+the following values identically in the head and worker environment files,
+apart from the normal rank and address fields:
+
+```bash
+DSPARK_MODEL_HOST=/srv/dspark/models/DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1
+DSPARK_DRAFT_MODEL_HOST=/srv/dspark/models/DeepSeek-V4-Flash-NVFP4-TP2-W4A4-v1/dspark
+SERVED_MODEL_NAME=deepseek-v4-flash-nvfp4-dspark
+
+DSPARK_MOE_BACKEND=auto
+DSPARK_SPECULATION_MODE=dspark
+MTP_NUM_TOKENS=5
+
+VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD=1
+VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256=REPLACE_WITH_MANIFEST_SHA256
+VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ=1
+```
+
+Use the first field of
+`dspark-nvfp4-tp2-repack.json.sha256` for the manifest value. Keep the global
+MoE backend at `auto`: the prepared target is scoped to FlashInfer CUTLASS by
+its loader, while the native DSpark draft requires its own backend selection.
+Bulk direct reads are the prepared-loader default; set
+`VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ=0` only to diagnose the older
+mmap path.
+
+This profile requires an image built from a revision that includes the
+prepared loader and bulk direct reader. Do not combine it with the legacy
+`0.1.1` image unless that image has been rebuilt and pinned to such a revision.
+
+For a reload, stop the existing head/rank 0 container first and then the
+worker/rank 1 container. Start in the opposite order: worker first, then head.
+Follow either rank's startup log with:
+
+```bash
+cid="$(sudo docker ps -q --filter label=com.docker.compose.service=vllm-dspark)"
+sudo docker logs -f "$cid"
+```
+
+A prepared direct-read launch must report `NVFP4_PREPARED event=enabled` with
+`io_mode=preadv`, followed by 43 `event=layer_load` records and one
+`event=complete` record with `reads=344`, `copies=344`. The validated TP=2 run
+loaded the target in 65.23 seconds on the slower rank, completed the head model
+load in 108.54 seconds, and made the API ready about four minutes after the
+head container started. See
+[the archived result](benchmarks/results/nvfp4-prepared-direct-read-full-3689b1c.json).
+
 ## Dashboard
 
 The dashboard is a dependency-free Python service. It displays decode/prefill
@@ -94,6 +152,22 @@ latency, load state for both TP ranks, vLLM version, temperature, power, GPU
 utilization, and optional NVMe temperature.
 
 See [docs/dashboard.md](docs/dashboard.md) for installation and configuration.
+
+On the head, the recommended persistent setup is:
+
+```bash
+./scripts/install-dashboard-service.sh
+# Edit dashboard/dashboard.env after the first run, then run the installer again.
+./scripts/install-dashboard-service.sh
+```
+
+Open `http://HEAD_HOST:11001`. Install the service before starting vLLM if the
+dashboard should show startup/load state. The systemd installer configures the
+restricted container-log helper used to discover the active Compose container;
+worker progress additionally requires `DASHBOARD_WORKER_SSH` and its identity
+file. `STALE` is expected while the vLLM metrics endpoint is unavailable during
+startup, but the two model-load cards should remain available and report
+log-derived startup state.
 
 ## Update
 

@@ -13,6 +13,18 @@ cp dashboard/dashboard.env.example dashboard/dashboard.env
 ./dashboard/run-dashboard.sh
 ```
 
+This foreground mode is useful for development. For a persistent monitor that
+can also read startup progress from the active Compose container, use the
+systemd installer instead:
+
+```bash
+./scripts/install-dashboard-service.sh
+# The first run creates dashboard/dashboard.env and exits.
+# Edit that file, then install and start the service:
+./scripts/install-dashboard-service.sh
+sudo systemctl --no-pager --full status dspark-live-dashboard.service
+```
+
 Required environment variables for LAN access:
 
 ```bash
@@ -21,17 +33,9 @@ export DASHBOARD_PORT=11001
 export VLLM_METRICS_URL=http://127.0.0.1:8888/metrics
 export DASHBOARD_HEAD_LABEL=SPARK-head
 export DASHBOARD_WORKER_LABEL=SPARK-worker
-export DASHBOARD_WORKER_SSH=user@10.200.0.2
+export DASHBOARD_WORKER_SSH=user@WORKER_FABRIC_IP
 export DASHBOARD_WORKER_IDENTITY_FILE=$HOME/.ssh/dashboard_telemetry
 ./dashboard/run-dashboard.sh
-```
-
-To start it automatically at boot on a systemd-based Spark/GX10 host:
-
-```bash
-./scripts/install-dashboard-service.sh
-# The first run creates dashboard/dashboard.env and asks you to edit it.
-# Run the installer a second time to enable and start the service.
 ```
 
 The worker SSH key should be restricted to telemetry access. Do not commit the
@@ -45,6 +49,44 @@ the dashboard user permission to invoke exactly that helper with the default
 container renames do not break startup progress after a reboot. The optional
 NVMe-temperature feature still requires a narrowly scoped non-interactive
 `sudo nvme smart-log` rule; otherwise that card degrades to unavailable.
+
+## Startup and prepared W4A4 load progress
+
+Start the dashboard service before starting the two vLLM ranks. Start the
+worker/rank 1 server first and the head/rank 0 server second. During startup the
+vLLM `/metrics` endpoint does not exist yet, so the dashboard's top-level
+scrape indicator may show `STALE`; that is not a load failure. The two model
+load cards are sourced independently from the bounded head and worker
+container logs.
+
+For the prepared W4A4 path, the rank logs provide one
+`NVFP4_PREPARED event=layer_load` record per target layer. A valid bulk-reader
+run begins with `event=enabled ... io_mode=preadv` and completes with
+`event=complete layers=43 reads=344 copies=344 ... io_mode=preadv`. The normal
+draft-load, graph-capture, and API-readiness phases follow. Once `/metrics`
+becomes available, the dashboard switches to live request, prefill, decode,
+KV-cache, and DSpark-acceptance data.
+
+If either model-load card says `unavailable`, check these separately from API
+health:
+
+```bash
+# HEAD: the restricted helper must find exactly one running Compose service.
+sudo -n /usr/local/libexec/dspark-dashboard-container-logs 160 >/dev/null
+
+# HEAD: the dashboard service must be able to use the configured worker key.
+ssh -o BatchMode=yes -i /path/to/dashboard_key user@WORKER_FABRIC_IP \
+  sudo -n /usr/local/libexec/dspark-dashboard-container-logs 160 >/dev/null
+
+sudo journalctl -u dspark-live-dashboard.service -n 100 --no-pager
+```
+
+The installer grants only the exact local helper invocation with the configured
+160-line bound. Install the same helper/sudoers rule on both nodes, and ensure
+the worker key is accepted non-interactively with strict host-key checking.
+Do not point `DASHBOARD_CONTAINER_NAME` at an ephemeral container name when the
+helper is enabled; label-based discovery deliberately survives Compose and
+container renames.
 
 ## Weight-load diagnostics
 
