@@ -4,6 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -55,6 +60,34 @@ class PreparedB12xBenchmarkTest(unittest.TestCase):
             "!benchmarks/benchmark_nvfp4_prepared_b12x_sm121.py",
             dockerignore,
         )
+
+    def test_baked_sibling_layout_imports_without_repo_package(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            install_dir = Path(directory) / "usr" / "local" / "bin"
+            install_dir.mkdir(parents=True)
+            prepared = install_dir / "dspark-benchmark-nvfp4-prepared-b12x-sm121"
+            kernel = install_dir / "dspark-benchmark-nvfp4-a4w4-sm121"
+            shutil.copy2(
+                root / "benchmarks" / "benchmark_nvfp4_prepared_b12x_sm121.py",
+                prepared,
+            )
+            shutil.copy2(
+                root / "benchmarks" / "benchmark_nvfp4_a4w4_sm121.py",
+                kernel,
+            )
+            environment = dict(os.environ)
+            environment.pop("PYTHONPATH", None)
+            completed = subprocess.run(
+                [sys.executable, str(prepared), "--help"],
+                cwd=directory,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("--layer-file", completed.stdout)
 
 
 if __name__ == "__main__":

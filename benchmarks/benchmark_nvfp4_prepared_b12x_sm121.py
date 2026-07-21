@@ -13,6 +13,8 @@ hardware gate for the serving optimization; it never constructs a full model.
 from __future__ import annotations
 
 import argparse
+import importlib.machinery
+import importlib.util
 import json
 import math
 import statistics
@@ -27,7 +29,29 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from benchmarks import benchmark_nvfp4_a4w4_sm121 as kernel_bench
+try:
+    from benchmarks import benchmark_nvfp4_a4w4_sm121 as kernel_bench
+except ImportError:
+    # The immutable diagnostic image installs both benchmark entry points as
+    # sibling files in /usr/local/bin rather than as an importable package.
+    # Load the pinned sibling explicitly so the baked-image gate exercises the
+    # exact same implementation as the source-tree test path.
+    _kernel_bench_path = Path(__file__).with_name(
+        "dspark-benchmark-nvfp4-a4w4-sm121"
+    )
+    _kernel_bench_loader = importlib.machinery.SourceFileLoader(
+        "dspark_benchmark_nvfp4_a4w4_sm121",
+        str(_kernel_bench_path),
+    )
+    _kernel_bench_spec = importlib.util.spec_from_loader(
+        _kernel_bench_loader.name,
+        _kernel_bench_loader,
+    )
+    if _kernel_bench_spec is None or _kernel_bench_spec.loader is None:
+        raise ImportError(f"cannot load benchmark dependency: {_kernel_bench_path}")
+    kernel_bench = importlib.util.module_from_spec(_kernel_bench_spec)
+    sys.modules[_kernel_bench_spec.name] = kernel_bench
+    _kernel_bench_spec.loader.exec_module(kernel_bench)
 
 
 SCHEMA_VERSION = 1
