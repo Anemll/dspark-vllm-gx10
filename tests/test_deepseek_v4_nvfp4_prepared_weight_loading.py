@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 import sys
 import tempfile
 import unittest
@@ -114,6 +115,41 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.helper = _load_helper()
+
+    def _write_tiny_prepared_layer(self, path: Path, *, layer: int = 0):
+        helper = self.helper
+        shapes = {
+            family: (2, 2) for family in helper.PREPARED_FAMILY_ORDER
+        }
+        header = {
+            "__metadata__": helper._expected_prepared_header_metadata(layer)
+        }
+        payload = bytearray()
+        expected_by_rank = {0: {}, 1: {}}
+        for family_index, family in enumerate(helper.PREPARED_FAMILY_ORDER):
+            dtype, element_size = helper._PREPARED_DTYPE_TOKENS[family]
+            rank_bytes = 2 * element_size
+            start = len(payload)
+            for rank in range(2):
+                value = 1 + family_index * 2 + rank
+                rank_payload = bytes([value]) * rank_bytes
+                expected_by_rank[rank][family] = rank_payload
+                payload.extend(rank_payload)
+            header[
+                f"{helper.PREPARED_NAMESPACE}.layers.{layer}.experts.{family}"
+            ] = {
+                "dtype": dtype,
+                "shape": [2, 2],
+                "data_offsets": [start, len(payload)],
+            }
+        raw_header = json.dumps(header, separators=(",", ":")).encode("utf-8")
+        raw_header += b" " * ((8 - len(raw_header) % 8) % 8)
+        path.write_bytes(
+            len(raw_header).to_bytes(8, byteorder="little")
+            + raw_header
+            + payload
+        )
+        return shapes, expected_by_rank
 
     def _write_checkpoint_contract(self, root: Path) -> str:
         helper = self.helper
@@ -287,6 +323,117 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
             self.assertIsNone(
                 helper.inspect_prepared_checkpoint(root, environ={})
             )
+
+    def test_direct_read_flag_is_strict_and_opt_in(self):
+        helper = self.helper
+        self.assertFalse(helper.prepared_direct_read_requested({}))
+        self.assertTrue(
+            helper.prepared_direct_read_requested(
+                {helper.PREPARED_DIRECT_READ_ENV: "1"}
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "must be exactly"):
+            helper.prepared_direct_read_requested(
+                {helper.PREPARED_DIRECT_READ_ENV: "true"}
+            )
+
+    def test_direct_reader_reads_only_selected_rank_ranges(self):
+        helper = self.helper
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            filename = "model-layer-00000.safetensors"
+            shapes, expected = self._write_tiny_prepared_layer(root / filename)
+            contract = helper.PreparedCheckpointContract(
+                checkpoint=root,
+                manifest_sha256="a" * 64,
+                output_index_sha256="b" * 64,
+                layer_files=(filename,),
+            )
+            copied = {}
+
+            def copy_bytes(destination, buffer, nbytes):
+                copied[destination] = bytes(memoryview(buffer)[:nbytes])
+
+            reader = helper.PreparedSafetensorsDirectReader(
+                torch_module=_FakeTorch,
+                contract=contract,
+                tp_rank=1,
+                source_shapes=shapes,
+                copy_bytes_fn=copy_bytes,
+            )
+            for family in helper.PREPARED_FAMILY_ORDER:
+                reader.copy_into(
+                    layer=0,
+                    family=family,
+                    destination=family,
+                )
+            stats = reader.layer_stats(0)
+            self.assertEqual(copied, expected[1])
+            self.assertEqual(stats["ranges"], len(helper.PREPARED_FAMILY_ORDER))
+            self.assertEqual(stats["syscalls"], len(helper.PREPARED_FAMILY_ORDER))
+            self.assertEqual(stats["bytes"], sum(map(len, expected[1].values())))
+            self.assertEqual(reader.summary()["ranges"], 8)
+            self.assertEqual(reader.summary()["bytes"], stats["bytes"])
+            reader.finish()
+
+    def test_direct_reader_header_and_short_read_fail_closed(self):
+        helper = self.helper
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "model-layer-00000.safetensors"
+            shapes, _ = self._write_tiny_prepared_layer(path)
+            fd = os.open(path, os.O_RDONLY)
+            try:
+                ranges = helper._parse_prepared_rank_ranges(
+                    fd,
+                    path=path,
+                    layer=0,
+                    tp_rank=0,
+                    source_shapes=shapes,
+                )
+            finally:
+                os.close(fd)
+            self.assertEqual(set(ranges), set(helper.PREPARED_FAMILY_ORDER))
+
+            data = bytearray(8)
+            calls = []
+
+            def partial(_fd, views, offset):
+                calls.append(offset)
+                if len(calls) == 1:
+                    views[0][:3] = b"abc"
+                    return 3
+                return 0
+
+            with self.assertRaisesRegex(RuntimeError, "ended before"):
+                helper._preadv_exact_into(
+                    1, memoryview(data), 11, preadv_fn=partial
+                )
+            self.assertEqual(calls, [11, 14])
+
+            raw = bytearray(path.read_bytes())
+            header_size = int.from_bytes(raw[:8], "little")
+            header = json.loads(raw[8 : 8 + header_size].decode("utf-8"))
+            first_name = next(
+                name for name in header if name != "__metadata__"
+            )
+            header[first_name]["dtype"] = "F16"
+            replacement = json.dumps(header, separators=(",", ":")).encode("utf-8")
+            replacement += b" " * (header_size - len(replacement))
+            self.assertEqual(len(replacement), header_size)
+            raw[8 : 8 + header_size] = replacement
+            path.write_bytes(raw)
+            fd = os.open(path, os.O_RDONLY)
+            try:
+                with self.assertRaisesRegex(RuntimeError, "metadata drifted"):
+                    helper._parse_prepared_rank_ranges(
+                        fd,
+                        path=path,
+                        layer=0,
+                        tp_rank=0,
+                        source_shapes=shapes,
+                    )
+            finally:
+                os.close(fd)
 
     def test_manifest_schema_provenance_integrity_and_output_sha_tamper_fail(self):
         helper = self.helper

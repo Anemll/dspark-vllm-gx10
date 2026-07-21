@@ -6,9 +6,10 @@ The prepared checkpoint is deliberately incompatible with the ordinary
 per-expert ModelOpt loader.  Each target layer contains eight rank-major
 tensors already in the final FlashInfer CUTLASS layout.  This module validates
 the small immutable metadata contract before checkpoint payload iteration,
-then performs one blocking H2D copy for each family.  The post-load hook only
-constructs the quant config and kernel; it must not reorder, reduce, swizzle,
-or modify scale values.
+then performs one blocking H2D copy for each family.  Its opt-in direct reader
+uses explicit rank-range ``preadv`` calls instead of faulting cold mmap pages
+inside those copies.  The post-load hook only constructs the quant config and
+kernel; it must not reorder, reduce, swizzle, or modify scale values.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ import hashlib
 import inspect
 import json
 import logging
+import math
 import os
 import re
 import stat
@@ -33,6 +35,7 @@ PREPARED_LOAD_ENV = "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD"
 PREPARED_MANIFEST_SHA256_ENV = (
     "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256"
 )
+PREPARED_DIRECT_READ_ENV = "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ"
 
 INDEX_NAME = "model.safetensors.index.json"
 MANIFEST_NAME = "dspark-nvfp4-tp2-repack.json"
@@ -183,6 +186,14 @@ def prepared_load_requested(
     )
 
 
+def prepared_direct_read_requested(
+    environ: Mapping[str, str] | None = None,
+) -> bool:
+    return _strict_flag(
+        PREPARED_DIRECT_READ_ENV, os.environ if environ is None else environ
+    )
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -313,6 +324,172 @@ class PreparedCheckpointContract:
     manifest_sha256: str
     output_index_sha256: str
     layer_files: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PreparedRankRange:
+    family: str
+    offset: int
+    nbytes: int
+
+
+_SAFETENSORS_HEADER_LIMIT = 1 << 20
+_PREPARED_DTYPE_TOKENS = {
+    "w13.weight": ("U8", 1),
+    "w2.weight": ("U8", 1),
+    "w13.weight_scale": ("F8_E4M3", 1),
+    "w2.weight_scale": ("F8_E4M3", 1),
+    "a1_gscale": ("F32", 4),
+    "a2_gscale": ("F32", 4),
+    "g1_alphas": ("F32", 4),
+    "g2_alphas": ("F32", 4),
+}
+
+
+def _pread_exact_bytes(fd: int, size: int, offset: int, *, label: str) -> bytes:
+    chunks: list[bytes] = []
+    remaining = size
+    cursor = offset
+    while remaining:
+        chunk = os.pread(fd, remaining, cursor)
+        if not chunk:
+            raise RuntimeError(f"Prepared NVFP4 {label} was truncated")
+        chunks.append(chunk)
+        cursor += len(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def _parse_prepared_rank_ranges(
+    fd: int,
+    *,
+    path: Path,
+    layer: int,
+    tp_rank: int,
+    source_shapes: Mapping[str, tuple[int, ...]] | None = None,
+) -> dict[str, PreparedRankRange]:
+    """Parse and validate the eight exact rank slices without touching payload."""
+
+    if tp_rank not in range(EXPECTED_TP_SIZE):
+        raise RuntimeError(f"Prepared NVFP4 TP rank must be 0 or 1; got {tp_rank}")
+    shapes = dict(_source_shapes() if source_shapes is None else source_shapes)
+    prefix = _pread_exact_bytes(fd, 8, 0, label=f"header prefix {path}")
+    header_size = int.from_bytes(prefix, byteorder="little", signed=False)
+    if not 2 <= header_size <= _SAFETENSORS_HEADER_LIMIT:
+        raise RuntimeError(
+            f"Prepared NVFP4 safetensors header length drifted for {path}: "
+            f"{header_size}"
+        )
+    raw_header = _pread_exact_bytes(
+        fd, header_size, 8, label=f"header JSON {path}"
+    )
+    try:
+        header = json.loads(raw_header.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeError(
+            f"Prepared NVFP4 safetensors header is invalid for {path}: {error}"
+        ) from error
+    if not isinstance(header, dict):
+        raise RuntimeError(f"Prepared NVFP4 safetensors header is not an object: {path}")
+    metadata = header.get("__metadata__")
+    if metadata != _expected_prepared_header_metadata(layer):
+        raise RuntimeError(f"Prepared NVFP4 safetensors metadata drifted: {path}")
+
+    prefix_name = f"{PREPARED_NAMESPACE}.layers.{layer}.experts."
+    expected_names = {f"{prefix_name}{family}" for family in PREPARED_FAMILY_ORDER}
+    observed_names = set(header) - {"__metadata__"}
+    if observed_names != expected_names:
+        raise RuntimeError(f"Prepared NVFP4 safetensors tensor set drifted: {path}")
+
+    payload_base = 8 + header_size
+    file_size = os.fstat(fd).st_size
+    ranges: dict[str, PreparedRankRange] = {}
+    all_offsets: list[tuple[int, int]] = []
+    for family in PREPARED_FAMILY_ORDER:
+        name = f"{prefix_name}{family}"
+        row = header.get(name)
+        expected_dtype, element_size = _PREPARED_DTYPE_TOKENS[family]
+        expected_shape = shapes[family]
+        expected_total_bytes = math.prod(expected_shape) * element_size
+        offsets = row.get("data_offsets") if isinstance(row, dict) else None
+        if (
+            not isinstance(row, dict)
+            or row.get("dtype") != expected_dtype
+            or row.get("shape") != list(expected_shape)
+            or not isinstance(offsets, list)
+            or len(offsets) != 2
+            or not all(isinstance(value, int) for value in offsets)
+            or offsets[0] < 0
+            or offsets[1] - offsets[0] != expected_total_bytes
+        ):
+            raise RuntimeError(
+                f"Prepared NVFP4 safetensors tensor metadata drifted: {name}"
+            )
+        rank_bytes, remainder = divmod(expected_total_bytes, EXPECTED_TP_SIZE)
+        if remainder:
+            raise RuntimeError(f"Prepared NVFP4 rank byte split drifted: {name}")
+        rank_offset = payload_base + offsets[0] + tp_rank * rank_bytes
+        if rank_offset < payload_base or rank_offset + rank_bytes > file_size:
+            raise RuntimeError(f"Prepared NVFP4 rank range exceeds file: {name}")
+        ranges[family] = PreparedRankRange(
+            family=family,
+            offset=rank_offset,
+            nbytes=rank_bytes,
+        )
+        all_offsets.append((offsets[0], offsets[1]))
+
+    ordered = sorted(all_offsets)
+    if ordered[0][0] != 0 or any(
+        previous[1] != current[0]
+        for previous, current in zip(ordered, ordered[1:])
+    ):
+        raise RuntimeError(f"Prepared NVFP4 payload ranges are not gapless: {path}")
+    if payload_base + ordered[-1][1] != file_size:
+        raise RuntimeError(f"Prepared NVFP4 payload/file size drifted: {path}")
+    return ranges
+
+
+def _preadv_exact_into(
+    fd: int,
+    target: memoryview,
+    offset: int,
+    *,
+    preadv_fn: Callable[[int, list[memoryview], int], int] | None = None,
+) -> int:
+    """Fill a writable byte view, tolerating EINTR/partial preadv results."""
+
+    if target.readonly:
+        raise RuntimeError("Prepared NVFP4 direct-read target must be writable")
+    preadv = os.preadv if preadv_fn is None else preadv_fn
+    total = 0
+    calls = 0
+    while total < len(target):
+        try:
+            observed = preadv(fd, [target[total:]], offset + total)
+        except InterruptedError:
+            continue
+        calls += 1
+        if observed <= 0:
+            raise RuntimeError(
+                "Prepared NVFP4 direct read ended before the rank range was full"
+            )
+        total += observed
+    return calls
+
+
+def _posix_fadvise_if_supported(
+    fd: int, offset: int, length: int, advice_name: str
+) -> None:
+    advise = getattr(os, "posix_fadvise", None)
+    advice = getattr(os, advice_name, None)
+    if advise is None or advice is None:
+        return
+    try:
+        advise(fd, offset, length, advice)
+    except OSError as error:
+        # Advisory cache policy is never part of the payload correctness
+        # contract.  The explicit preadv path remains valid without it.
+        logger.debug("Prepared NVFP4 %s was unavailable: %s", advice_name, error)
 
 
 def inspect_prepared_checkpoint(
@@ -956,6 +1133,188 @@ def _validate_runtime_transform_sources(routed_layer: Any) -> None:
             )
 
 
+class PreparedSafetensorsDirectReader:
+    """Read exact rank payload ranges with large preadv calls.
+
+    The ordinary safetensors iterator still supplies metadata-only tensor
+    views, preserving AutoWeightsLoader ordering and mapping.  Payload bytes
+    bypass the mmap view so a cold checkpoint does not devolve into one block
+    read per page fault while ``copy_`` is holding the CUDA destination.
+    """
+
+    def __init__(
+        self,
+        *,
+        torch_module: Any,
+        contract: PreparedCheckpointContract,
+        tp_rank: int,
+        source_shapes: Mapping[str, tuple[int, ...]] | None = None,
+        preadv_fn: Callable[[int, list[memoryview], int], int] | None = None,
+        copy_bytes_fn: Callable[[Any, bytearray, int], None] | None = None,
+    ) -> None:
+        self._torch = torch_module
+        self._contract = contract
+        self._tp_rank = tp_rank
+        self._source_shapes = dict(
+            _source_shapes() if source_shapes is None else source_shapes
+        )
+        self._preadv_fn = preadv_fn
+        self._copy_bytes_fn = copy_bytes_fn
+        self._buffer: bytearray | None = None
+        self._buffer_view: memoryview | None = None
+        self._active_layer: int | None = None
+        self._active_fd: int | None = None
+        self._active_ranges: dict[str, PreparedRankRange] = {}
+        self._seen: set[str] = set()
+        self._stats: dict[int, dict[str, float | int]] = {}
+        self._closed = False
+
+    def _close_active(self) -> None:
+        fd = self._active_fd
+        self._active_fd = None
+        self._active_layer = None
+        self._active_ranges = {}
+        self._seen = set()
+        if fd is not None:
+            os.close(fd)
+
+    def _open_layer(self, layer: int) -> None:
+        if self._closed:
+            raise RuntimeError("Prepared NVFP4 direct reader is closed")
+        if self._active_fd is not None:
+            raise RuntimeError("Prepared NVFP4 direct reader layer is interleaved")
+        try:
+            filename = self._contract.layer_files[layer]
+        except IndexError as error:
+            raise RuntimeError(
+                f"Prepared NVFP4 direct reader lacks layer file {layer}"
+            ) from error
+        path = self._contract.checkpoint / filename
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        fd = os.open(path, flags)
+        try:
+            ranges = _parse_prepared_rank_ranges(
+                fd,
+                path=path,
+                layer=layer,
+                tp_rank=self._tp_rank,
+                source_shapes=self._source_shapes,
+            )
+            _posix_fadvise_if_supported(
+                fd, 0, 0, "POSIX_FADV_SEQUENTIAL"
+            )
+        except BaseException:
+            os.close(fd)
+            raise
+        self._active_layer = layer
+        self._active_fd = fd
+        self._active_ranges = ranges
+        max_bytes = max(item.nbytes for item in ranges.values())
+        if self._buffer is None:
+            self._buffer = bytearray(max_bytes)
+            self._buffer_view = memoryview(self._buffer)
+        elif len(self._buffer) < max_bytes:
+            raise RuntimeError("Prepared NVFP4 direct-read buffer size drifted")
+        self._stats[layer] = {
+            "ranges": 0,
+            "syscalls": 0,
+            "bytes": 0,
+            "read_seconds": 0.0,
+            "copy_seconds": 0.0,
+        }
+
+    def _copy_bytes(self, destination: Any, nbytes: int) -> None:
+        if self._buffer is None:
+            raise RuntimeError("Prepared NVFP4 direct-read buffer is missing")
+        if self._copy_bytes_fn is not None:
+            self._copy_bytes_fn(destination, self._buffer, nbytes)
+            return
+        host = self._torch.frombuffer(
+            self._buffer, dtype=self._torch.uint8, count=nbytes
+        )
+        target = destination.data.view(self._torch.uint8).reshape(-1)
+        if int(target.numel()) != nbytes:
+            raise RuntimeError("Prepared NVFP4 raw destination byte size drifted")
+        target.copy_(host)
+
+    def copy_into(self, *, layer: int, family: str, destination: Any) -> None:
+        if self._active_layer is None:
+            self._open_layer(layer)
+        elif self._active_layer != layer:
+            raise RuntimeError(
+                "Prepared NVFP4 direct reader layers are interleaved: "
+                f"active={self._active_layer}, observed={layer}"
+            )
+        if family in self._seen:
+            raise RuntimeError(
+                f"Prepared NVFP4 direct reader saw duplicate family {family!r}"
+            )
+        rank_range = self._active_ranges.get(family)
+        if rank_range is None or self._active_fd is None or self._buffer_view is None:
+            raise RuntimeError(
+                f"Prepared NVFP4 direct reader lacks range for {family!r}"
+            )
+        view = self._buffer_view[: rank_range.nbytes]
+        read_started = time.perf_counter()
+        calls = _preadv_exact_into(
+            self._active_fd,
+            view,
+            rank_range.offset,
+            preadv_fn=self._preadv_fn,
+        )
+        read_seconds = time.perf_counter() - read_started
+        copy_started = time.perf_counter()
+        self._copy_bytes(destination, rank_range.nbytes)
+        copy_seconds = time.perf_counter() - copy_started
+
+        _posix_fadvise_if_supported(
+            self._active_fd,
+            rank_range.offset,
+            rank_range.nbytes,
+            "POSIX_FADV_DONTNEED",
+        )
+        row = self._stats[layer]
+        row["ranges"] = int(row["ranges"]) + 1
+        row["syscalls"] = int(row["syscalls"]) + calls
+        row["bytes"] = int(row["bytes"]) + rank_range.nbytes
+        row["read_seconds"] = float(row["read_seconds"]) + read_seconds
+        row["copy_seconds"] = float(row["copy_seconds"]) + copy_seconds
+        self._seen.add(family)
+        if len(self._seen) == len(PREPARED_FAMILY_ORDER):
+            self._close_active()
+
+    def layer_stats(self, layer: int) -> Mapping[str, float | int]:
+        return dict(self._stats.get(layer, {}))
+
+    def summary(self) -> Mapping[str, float | int]:
+        return {
+            "ranges": sum(int(row["ranges"]) for row in self._stats.values()),
+            "syscalls": sum(
+                int(row["syscalls"]) for row in self._stats.values()
+            ),
+            "bytes": sum(int(row["bytes"]) for row in self._stats.values()),
+            "read_seconds": sum(
+                float(row["read_seconds"]) for row in self._stats.values()
+            ),
+            "copy_seconds": sum(
+                float(row["copy_seconds"]) for row in self._stats.values()
+            ),
+        }
+
+    def finish(self) -> None:
+        if self._active_fd is not None:
+            raise RuntimeError("Prepared NVFP4 direct reader ended mid-layer")
+        self.close()
+
+    def close(self) -> None:
+        self._close_active()
+        if self._buffer_view is not None:
+            self._buffer_view.release()
+        self._buffer_view = None
+        self._buffer = None
+        self._closed = True
+
+
 class Nvfp4PreparedLayerLoader:
     """Consume exactly eight final tensors for each target layer."""
 
@@ -968,6 +1327,7 @@ class Nvfp4PreparedLayerLoader:
         states: dict[int, PreparedPostloadState],
         expected_source_shapes: dict[str, tuple[int, ...]] | None = None,
         expected_rank_bytes: int = EXPECTED_RANK_BYTES,
+        direct_reader: PreparedSafetensorsDirectReader | None = None,
     ) -> None:
         self._torch = torch_module
         self._tp_rank = tp_rank
@@ -976,6 +1336,7 @@ class Nvfp4PreparedLayerLoader:
         self._source_shapes = expected_source_shapes or _source_shapes()
         self._dtypes = _family_dtypes(torch_module)
         self._expected_rank_bytes = expected_rank_bytes
+        self._direct_reader = direct_reader
         self._seen: dict[int, set[str]] = {layer: set() for layer in parameters}
         self._completed: set[int] = set()
         self._copies = 0
@@ -1036,7 +1397,14 @@ class Nvfp4PreparedLayerLoader:
             or parameter.dtype != rank_source.dtype
         ):
             raise RuntimeError(f"Prepared NVFP4 destination contract drifted for {name!r}")
-        parameter.data.copy_(rank_source)
+        if self._direct_reader is None:
+            parameter.data.copy_(rank_source)
+        else:
+            self._direct_reader.copy_into(
+                layer=layer,
+                family=family,
+                destination=parameter,
+            )
         self._copies += 1
         self._seen[layer].add(family)
         if len(self._seen[layer]) == len(PREPARED_FAMILY_ORDER):
@@ -1052,14 +1420,24 @@ class Nvfp4PreparedLayerLoader:
             self._states[layer].loaded = True
             self._completed.add(layer)
             self._active_layer = None
+            direct = (
+                self._direct_reader.layer_stats(layer)
+                if self._direct_reader is not None
+                else {}
+            )
             logger.info(
                 "NVFP4_PREPARED event=layer_load layer=%d reads=%d copies=%d "
-                "bytes=%d seconds=%.6f",
+                "bytes=%d seconds=%.6f io_mode=%s read_syscalls=%d "
+                "read_seconds=%.6f copy_seconds=%.6f",
                 layer,
                 EXPECTED_H2D_CALLS_PER_LAYER,
                 EXPECTED_H2D_CALLS_PER_LAYER,
                 observed_bytes,
                 time.perf_counter() - self._active_started,
+                "preadv" if direct else "mmap",
+                int(direct.get("syscalls", 0)),
+                float(direct.get("read_seconds", 0.0)),
+                float(direct.get("copy_seconds", 0.0)),
             )
         basename = _FAMILY_TO_PARAMETER[family]
         return f"layers.{layer}.ffn.experts.routed_experts.{basename}"
@@ -1082,16 +1460,30 @@ class Nvfp4PreparedLayerLoader:
             raise RuntimeError(
                 f"Prepared NVFP4 H2D count drifted: {self._copies} vs {expected_copies}"
             )
+        direct = (
+            self._direct_reader.summary()
+            if self._direct_reader is not None
+            else {}
+        )
+        if self._direct_reader is not None:
+            self._direct_reader.finish()
         logger.info(
             "NVFP4_PREPARED event=complete layers=%d reads=%d copies=%d "
-            "elapsed_seconds=%.6f",
+            "elapsed_seconds=%.6f io_mode=%s read_syscalls=%d "
+            "read_seconds=%.6f copy_seconds=%.6f",
             len(expected),
             expected_copies,
             expected_copies,
             time.perf_counter() - self._started,
+            "preadv" if direct else "mmap",
+            int(direct.get("syscalls", 0)),
+            float(direct.get("read_seconds", 0.0)),
+            float(direct.get("copy_seconds", 0.0)),
         )
 
     def abort(self) -> None:
+        if self._direct_reader is not None:
+            self._direct_reader.close()
         for state in self._states.values():
             if not state.finalized:
                 state.aborted = True
@@ -1197,6 +1589,7 @@ def maybe_create_nvfp4_prepared_loader(
     contract = inspect_prepared_checkpoint(checkpoint, environ=source)
     if contract is None:
         return None
+    direct_read = prepared_direct_read_requested(source)
     if str(load_format).lower().rsplit(".", 1)[-1] == "roce_tp":
         raise RuntimeError("Prepared NVFP4 loading does not support roce_tp")
     if use_mega_moe or enable_expert_parallel or num_redundant_experts != 0:
@@ -1266,16 +1659,27 @@ def maybe_create_nvfp4_prepared_loader(
         parameters[layer] = layer_parameters
     logger.info(
         "NVFP4_PREPARED event=enabled layers=%d reads_per_layer=%d "
-        "copies_per_layer=%d rank_bytes=%d manifest_sha256=%s",
+        "copies_per_layer=%d rank_bytes=%d manifest_sha256=%s io_mode=%s",
         len(parameters),
         EXPECTED_H2D_CALLS_PER_LAYER,
         EXPECTED_H2D_CALLS_PER_LAYER,
         EXPECTED_RANK_BYTES,
         contract.manifest_sha256,
+        "preadv" if direct_read else "mmap",
+    )
+    direct_reader = (
+        PreparedSafetensorsDirectReader(
+            torch_module=torch_module,
+            contract=contract,
+            tp_rank=tp_rank,
+        )
+        if direct_read
+        else None
     )
     return Nvfp4PreparedLayerLoader(
         torch_module=torch_module,
         tp_rank=tp_rank,
         parameters=parameters,
         states=states,
+        direct_reader=direct_reader,
     )

@@ -63,12 +63,18 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
             '"${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256:-}"',
             self.compose,
         )
+        self.assertIn(
+            'VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ: '
+            '"${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ:-0}"',
+            self.compose,
+        )
         for name, expected in (
             ("VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD", ["0", "0"]),
             (
                 "VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256",
                 ["", ""],
             ),
+            ("VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ", ["0", "0"]),
         ):
             values = []
             for relative_path in (
