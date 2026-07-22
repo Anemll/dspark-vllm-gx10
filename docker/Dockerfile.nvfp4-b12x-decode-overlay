@@ -29,8 +29,9 @@ RUN python3 -m py_compile \
       /usr/local/lib/python3.12/dist-packages/b12x/integration/tp_moe.py \
       /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/b12x_moe.py \
       /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_dispatch.py \
+      /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_micro_kernel.py \
       /usr/local/bin/dspark-benchmark-nvfp4-a4w4-sm121 \
       /usr/local/bin/dspark-benchmark-nvfp4-prepared-b12x-sm121
 
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
-LABEL org.opencontainers.image.nvfp4-b12x-decode="native-clamped-decode-v1"
+LABEL org.opencontainers.image.nvfp4-b12x-decode="pairwise-tiny-decode-v2"

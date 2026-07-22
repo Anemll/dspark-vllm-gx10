@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Anemll contributors
-"""Enable the pinned SM121 B12X single-token shared-input fast path.
+"""Enable pinned SM121 B12X tiny-decode fast paths.
 
 Prepared DeepSeek V4 B12X layers bake their expert-global scales into the
 block scales, leaving the two activation global-scale vectors uniformly 1.0.
@@ -18,7 +18,13 @@ This image-time patch is deliberately narrow and source-pinned:
 * the dispatcher permits its existing shared-input implementation for any
   single-token activation when those call arguments are scalar.
 
-Multi-token decode and prefill are unchanged.
+For one-to-four decode tokens, every routed pair is also treated as an
+independent one-row work item.  TP=2 stores a full expert set on each rank, so
+the microkernel can read each physical expert id directly from ``topk_ids``.
+This removes the Triton expert-compaction launch plus row-count atomics and
+token-map traffic while preserving the same FP4 MMA and reduction arithmetic.
+
+Prefill and decode batches above four tokens are unchanged.
 """
 
 from __future__ import annotations
@@ -34,6 +40,9 @@ PINNED_WRAPPER_SHA256 = (
 PINNED_DISPATCH_SHA256 = (
     "cba2d0966631a47a576747e8322b57116122f2c8e5e868f8efb3f5ea692391a4"
 )
+PINNED_MICRO_KERNEL_SHA256 = (
+    "9ef89f9f9d806e8e2904e3bd345b69c9c8a0e1d0643d21d8975e6e3ae8c8a6ed"
+)
 DEFAULT_WRAPPER_TARGET = Path(
     "/usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/"
     "cute_dsl/b12x_moe.py"
@@ -41,6 +50,10 @@ DEFAULT_WRAPPER_TARGET = Path(
 DEFAULT_DISPATCH_TARGET = Path(
     "/usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/"
     "cute_dsl/blackwell_sm12x/moe_dispatch.py"
+)
+DEFAULT_MICRO_KERNEL_TARGET = Path(
+    "/usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/"
+    "cute_dsl/blackwell_sm12x/moe_micro_kernel.py"
 )
 
 _WRAPPER_RETURN_ANCHOR = """\
@@ -91,24 +104,119 @@ _DISPATCH_SHARE_SCALE_ANCHOR = """\
 _DISPATCH_SHARE_SCALE_REPLACEMENT = """\
     share_expert_scales = input_gs_is_shared and down_input_scale_is_shared
 """
-_DISPATCH_DSV4_M4_MAC_ANCHOR = """\
-        micro_mac = min(tuned_mac or base_mac, micro_work_tiles, base_mac)
+
+_DISPATCH_PAIRWISE_DECL_ANCHOR = """\
+    if use_micro:
+        assert flat_ids.numel() <= workspace.compact_topk_ids.numel(), (
 """
-_DISPATCH_DSV4_M4_MAC_REPLACEMENT = """\
-        micro_mac = min(tuned_mac or base_mac, micro_work_tiles, base_mac)
-        # GB10/SM121 decode: DeepSeek-V4 TP=2 at M=4 routes 24 pairs.
-        # Keeping all 48 SMs resident increases grid-barrier contention and
-        # repeated real-layer measurements show lower latency at 28 CTAs.
-        # Gate this narrowly so other models, M values, and prefill keep the
-        # upstream occupancy policy.
-        if (
-            num_tokens == 4
-            and top_k == 6
-            and k == 4096
-            and n == 1024
-            and num_experts == 256
-        ):
-            micro_mac = min(micro_mac, 28)
+_DISPATCH_PAIRWISE_DECL_REPLACEMENT = """\
+    if use_micro:
+        # TP tiny decode owns the full expert set on each rank. Treat every
+        # routed pair as a one-row work item and address weights directly.
+        pairwise_routes = num_tokens <= 4
+        assert flat_ids.numel() <= workspace.compact_topk_ids.numel(), (
+"""
+_DISPATCH_ROUTING_ANCHOR = """\
+        # Single-token ReLU2 is non-gated, so the micro kernel can launch on
+        # the routed expert ids directly. Gated SiLU still goes through the
+        # compact id buffer so the kernel can map compact launch ids back to
+        # the physical gate/up weight experts.
+        if num_tokens == 1 and activation == "relu2":
+            launch_ids = flat_ids
+        elif num_tokens == 1:
+            compact_ids = workspace.compact_topk_ids[: flat_ids.numel()]
+            compact_ids.copy_(
+                torch.arange(
+                    flat_ids.numel(),
+                    device=flat_ids.device,
+                    dtype=torch.int32,
+                )
+            )
+            workspace.weight_expert_ids[: flat_ids.numel()].copy_(
+                flat_ids.to(torch.int32)
+            )
+            workspace.active_expert_count.fill_(flat_ids.numel())
+            launch_ids = compact_ids
+        else:
+"""
+_DISPATCH_ROUTING_REPLACEMENT = """\
+        if pairwise_routes:
+            launch_ids = flat_ids
+        else:
+"""
+_DISPATCH_SINGLE_TOKEN_ANCHOR = """\
+            single_token=num_tokens == 1,
+"""
+_DISPATCH_SINGLE_TOKEN_REPLACEMENT = """\
+            single_token=pairwise_routes,
+"""
+
+_MICRO_TOKEN_ANCHOR = """\
+            token_idx = Int32(0)
+            weight = cutlass.Float32(0.0)
+            if cutlass.const_expr(not self.single_token):
+                token_idx = pair_idx // num_topk
+                weight = topk_weights[pair_idx].to(cutlass.Float32)
+"""
+_MICRO_TOKEN_REPLACEMENT = """\
+            token_idx = Int32(0)
+            weight = cutlass.Float32(0.0)
+            if cutlass.const_expr(self.single_token):
+                token_idx = pair_idx // num_topk
+                weight = topk_weights[pair_idx].to(cutlass.Float32)
+            else:
+                token_idx = pair_idx // num_topk
+                weight = topk_weights[pair_idx].to(cutlass.Float32)
+"""
+_MICRO_EXPERT_ANCHOR = """\
+            if cutlass.const_expr(self.single_token):
+                local_expert_id = pair_idx
+                if cutlass.const_expr(self.is_gated):
+                    expert_id = weight_expert_ids[local_expert_id].to(Int32)
+                else:
+                    expert_id = topk_ids[local_expert_id].to(Int32)
+"""
+_MICRO_EXPERT_REPLACEMENT = """\
+            if cutlass.const_expr(self.single_token):
+                local_expert_id = pair_idx
+                expert_id = topk_ids[local_expert_id].to(Int32)
+"""
+_MICRO_QUANT_EXPERT_ANCHOR = """\
+                    if cutlass.const_expr(not self.is_gated):
+                        quant_expert_id = topk_ids[Int32(0)].to(Int32)
+                    else:
+                        quant_expert_id = weight_expert_ids[Int32(0)]
+"""
+_MICRO_QUANT_EXPERT_REPLACEMENT = """\
+                    quant_expert_id = topk_ids[Int32(0)].to(Int32)
+"""
+_MICRO_WEIGHT_EXPERT_ANCHOR = """\
+                if cutlass.const_expr(self.single_token):
+                    if cutlass.const_expr(not self.is_gated):
+                        weight_expert_idx = topk_ids[local_expert_idx].to(Int32)
+                    else:
+                        weight_expert_idx = weight_expert_ids[local_expert_idx]
+                else:
+"""
+_MICRO_WEIGHT_EXPERT_REPLACEMENT = """\
+                if cutlass.const_expr(self.single_token):
+                    weight_expert_idx = topk_ids[local_expert_idx].to(Int32)
+                else:
+"""
+_MICRO_MMA_WEIGHT_EXPERT_ANCHOR = """\
+                if cutlass.const_expr(self.single_token):
+                    if cutlass.const_expr(not self.is_gated):
+                        weight_expert_idx = topk_ids[local_expert_idx].to(Int32)
+                    else:
+                        weight_expert_idx = weight_expert_ids[local_expert_idx]
+                    valid_rows = Int32(1)
+                else:
+"""
+_MICRO_MMA_WEIGHT_EXPERT_REPLACEMENT = """\
+                if cutlass.const_expr(self.single_token):
+                    weight_expert_idx = topk_ids[local_expert_idx].to(Int32)
+                    valid_rows = Int32(1)
+                else:
 """
 
 
@@ -151,11 +259,56 @@ def patch_dispatch_source(source: str) -> str:
         _DISPATCH_SHARE_SCALE_REPLACEMENT,
         "dispatcher shared scales",
     )
+    source = _replace_once(
+        source,
+        _DISPATCH_PAIRWISE_DECL_ANCHOR,
+        _DISPATCH_PAIRWISE_DECL_REPLACEMENT,
+        "dispatcher pairwise declaration",
+    )
+    source = _replace_once(
+        source,
+        _DISPATCH_ROUTING_ANCHOR,
+        _DISPATCH_ROUTING_REPLACEMENT,
+        "dispatcher pairwise routing",
+    )
     return _replace_once(
         source,
-        _DISPATCH_DSV4_M4_MAC_ANCHOR,
-        _DISPATCH_DSV4_M4_MAC_REPLACEMENT,
-        "dispatcher DeepSeek-V4 M4 MAC",
+        _DISPATCH_SINGLE_TOKEN_ANCHOR,
+        _DISPATCH_SINGLE_TOKEN_REPLACEMENT,
+        "dispatcher pairwise specialization",
+    )
+
+
+def patch_micro_kernel_source(source: str) -> str:
+    source = _replace_once(
+        source,
+        _MICRO_TOKEN_ANCHOR,
+        _MICRO_TOKEN_REPLACEMENT,
+        "microkernel pair token metadata",
+    )
+    source = _replace_once(
+        source,
+        _MICRO_EXPERT_ANCHOR,
+        _MICRO_EXPERT_REPLACEMENT,
+        "microkernel direct expert id",
+    )
+    source = _replace_once(
+        source,
+        _MICRO_QUANT_EXPERT_ANCHOR,
+        _MICRO_QUANT_EXPERT_REPLACEMENT,
+        "microkernel direct quant expert id",
+    )
+    source = _replace_once(
+        source,
+        _MICRO_MMA_WEIGHT_EXPERT_ANCHOR,
+        _MICRO_MMA_WEIGHT_EXPERT_REPLACEMENT,
+        "microkernel MMA expert id",
+    )
+    return _replace_once(
+        source,
+        _MICRO_WEIGHT_EXPERT_ANCHOR,
+        _MICRO_WEIGHT_EXPERT_REPLACEMENT,
+        "microkernel DMA expert id",
     )
 
 
@@ -175,6 +328,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wrapper-target", type=Path, default=DEFAULT_WRAPPER_TARGET)
     parser.add_argument("--dispatch-target", type=Path, default=DEFAULT_DISPATCH_TARGET)
+    parser.add_argument(
+        "--micro-kernel-target", type=Path, default=DEFAULT_MICRO_KERNEL_TARGET
+    )
     args = parser.parse_args()
 
     wrapper_result = _patch_file(
@@ -189,9 +345,16 @@ def main() -> int:
         patch_dispatch_source,
         "FlashInfer B12X dispatcher",
     )
+    micro_kernel_result = _patch_file(
+        args.micro_kernel_target,
+        PINNED_MICRO_KERNEL_SHA256,
+        patch_micro_kernel_source,
+        "FlashInfer B12X microkernel",
+    )
     print(
         "patched FlashInfer B12X unit-scale shared input: "
-        f"wrapper_result={wrapper_result} dispatch_result={dispatch_result}"
+        f"wrapper_result={wrapper_result} dispatch_result={dispatch_result} "
+        f"micro_kernel_result={micro_kernel_result}"
     )
     return 0
 
