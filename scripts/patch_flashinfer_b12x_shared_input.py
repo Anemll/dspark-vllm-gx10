@@ -18,13 +18,17 @@ This image-time patch is deliberately narrow and source-pinned:
 * the dispatcher permits its existing shared-input implementation for any
   single-token activation when those call arguments are scalar.
 
-For one-to-four decode tokens, every routed pair is also treated as an
-independent one-row work item.  TP=2 stores a full expert set on each rank, so
-the microkernel can read each physical expert id directly from ``topk_ids``.
-This removes the Triton expert-compaction launch plus row-count atomics and
-token-map traffic while preserving the same FP4 MMA and reduction arithmetic.
+For one decode token, every routed pair is also treated as an independent
+one-row work item.  Top-k guarantees that the token's expert ids are unique,
+so the microkernel can read each physical expert id directly from
+``topk_ids``.  This removes the Triton expert-compaction launch plus row-count
+atomics and token-map traffic while preserving the same FP4 MMA and reduction
+arithmetic.
 
-Prefill and decode batches above four tokens are unchanged.
+Multi-token decode keeps expert compaction.  Real routes can select the same
+expert for several tokens; bypassing compaction in that case repeats the
+expert's FC1/FC2 work and regresses concurrent serving even though a synthetic
+all-distinct M=4 route gets slightly faster.  Prefill is unchanged.
 """
 
 from __future__ import annotations
@@ -111,9 +115,11 @@ _DISPATCH_PAIRWISE_DECL_ANCHOR = """\
 """
 _DISPATCH_PAIRWISE_DECL_REPLACEMENT = """\
     if use_micro:
-        # TP tiny decode owns the full expert set on each rank. Treat every
-        # routed pair as a one-row work item and address weights directly.
-        pairwise_routes = num_tokens <= 4
+        # A token's top-k expert ids are unique, so M=1 may treat every route
+        # as a one-row work item and address weights directly.  Keep compact
+        # grouping for M>1 because different tokens can route to the same
+        # expert; expanding those duplicates repeats full expert work.
+        pairwise_routes = num_tokens == 1
         assert flat_ids.numel() <= workspace.compact_topk_ids.numel(), (
 """
 _DISPATCH_ROUTING_ANCHOR = """\
