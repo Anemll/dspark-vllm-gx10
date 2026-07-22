@@ -228,19 +228,20 @@ Warmed server-side prefill improved at all six tested sizes:
 
 To isolate target-model decode from speculative acceptance, we first disabled
 DSpark completely and required the speculative counters to remain inactive.
-Both targets used the same canonical prompt, 512 output tokens, temperature 0,
+All targets used the same canonical prompt, 512 output tokens, temperature 0,
 TP=2, and three trials. Values are best aggregate throughput, with the median in
 parentheses:
 
-| Target-only concurrency | FP8/B12X, no draft | W4A4, no draft | W4A4 delta (best / median) |
-|---:|---:|---:|---:|
-| 1 | **27.57** (27.45) tok/s | 27.03 (26.92) tok/s | -2.0% / -1.9% |
-| 4 | **78.74** (77.21) tok/s | 73.37 (72.55) tok/s | -6.8% / -6.0% |
+| Target-only concurrency | FP8/B12X, no draft | W4A4/CUTLASS, no draft | W4A4/B12X, no draft | W4A4/B12X vs FP8 | W4A4/B12X vs CUTLASS |
+|---:|---:|---:|---:|---:|---:|
+| 1 | **27.57** (27.45) tok/s | 27.03 (26.92) tok/s | 27.14 (27.05) tok/s | -1.6% / -1.5% | +0.4% / +0.5% |
+| 4 | **78.74** (77.21) tok/s | 73.37 (72.55) tok/s | 71.64 (71.44) tok/s | -9.0% / -7.5% | -2.4% / -1.5% |
 
-The widening deficit at concurrency 4 is therefore already present in the
-target-only small-M decode path; it is not primarily a DSpark acceptance
-difference. Prefill still favors W4A4, as shown above. The raw target-only
-comparison is documented in
+The prepared B12X W4A4 path is effectively tied with CUTLASS at concurrency 1
+and slower at concurrency 4. It therefore does not recover the FP8/B12X decode
+advantage. The widening deficit is already present with the target alone and is
+not primarily a DSpark acceptance difference. Prefill still favors W4A4, as
+shown above. The raw target-only comparison is documented in
 [decode-target-only-fp8-vs-w4a4.md](benchmarks/results/decode-target-only-fp8-vs-w4a4.md).
 
 Decode with speculation remains prompt- and acceptance-dependent. A same-prompt
