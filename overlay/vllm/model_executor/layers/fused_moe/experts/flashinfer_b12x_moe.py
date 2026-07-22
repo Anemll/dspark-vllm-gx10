@@ -299,14 +299,26 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
         # from pre-quantizing activations.
         return True
 
+    @property
+    def supports_output_alias(self) -> bool:
+        """Allow the modular kernel to pass its final output buffer directly.
+
+        ``B12xMoEWrapper`` already emits the routed, weighted, reduced
+        ``(M, K)`` result.  Writing into the modular kernel's caller-owned
+        output therefore removes both the adapter copy and the downstream
+        ``TopKWeightAndReduceNoOP`` copy.  The exact pointer contract is
+        checked again in :meth:`apply` before the output is accepted.
+        """
+        return True
+
     def _ensure_wrapper(self) -> Any:
         """Acquire one graph workspace per model/rank/device/shape.
 
         The wrapper is deliberately shared across sequential target layers:
-        weights and scales are call arguments, and each layer copies the
-        wrapper output before the next layer reuses the arena. The cache is
-        model-scoped rather than shape-global so independent replicas cannot
-        race on mutable barriers/output. DBO is rejected in ``__init__``.
+        weights, scales, and the caller-owned output are call arguments. The
+        cache is model-scoped rather than shape-global so independent replicas
+        cannot race on mutable barriers/output. DBO is rejected in
+        ``__init__``.
         """
 
         # Shape and device are immutable after this expert is constructed.
@@ -393,6 +405,39 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
 
         wrapper = self._ensure_wrapper()
 
+        if not getattr(wrapper, "use_cuda_graph", False):
+            raise RuntimeError(
+                "FlashInfer B12X output alias requires a graph-enabled wrapper"
+            )
+        if not hasattr(wrapper, "_moe_output"):
+            raise RuntimeError(
+                "FlashInfer B12X wrapper no longer exposes its output arena"
+            )
+        if (
+            output.shape != hidden_states.shape
+            or output.dtype != self.out_dtype
+            or output.device != hidden_states.device
+            or not output.is_contiguous()
+        ):
+            raise RuntimeError(
+                "FlashInfer B12X output alias contract mismatch: "
+                f"output={tuple(output.shape)}/{output.dtype}/{output.device}/"
+                f"contiguous={output.is_contiguous()}, "
+                f"hidden={tuple(hidden_states.shape)}/{hidden_states.dtype}/"
+                f"{hidden_states.device}"
+            )
+
+        # The pinned FlashInfer wrapper slices ``_moe_output`` to the current
+        # token count and passes that tensor as the kernel's scatter_output.
+        # Redirect it to vLLM's final buffer immediately before every launch;
+        # the wrapper is shared across layers but execution is explicitly
+        # non-reentrant (DBO is rejected in __init__).
+        wrapper._moe_output = output
+        selected_experts = (
+            topk_ids
+            if topk_ids.dtype == torch.int32
+            else topk_ids.to(torch.int32)
+        )
         wrapper_output = wrapper.run(
             x=hidden_states,
             w1_weight=w1,
@@ -402,7 +447,15 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             w2_weight=w2,
             w2_weight_sf=self.w2_sf_mma,
             w2_alpha=self.g2_alphas,
-            token_selected_experts=topk_ids.to(torch.int32),
+            token_selected_experts=selected_experts,
             token_final_scales=topk_weights,
         )
-        output.copy_(wrapper_output)
+        if (
+            wrapper_output.shape != output.shape
+            or wrapper_output.dtype != output.dtype
+            or wrapper_output.device != output.device
+            or wrapper_output.data_ptr() != output.data_ptr()
+        ):
+            raise RuntimeError(
+                "FlashInfer B12X did not write into the aliased output buffer"
+            )

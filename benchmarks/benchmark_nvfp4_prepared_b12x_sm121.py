@@ -170,14 +170,19 @@ def _prepare_weights(
 def _b12x_launch(
     torch: Any,
     wrapper: Any,
+    wrapper_arena: Any,
     weights: kernel_bench.PreparedWeights,
     x: Any,
     topk_ids: Any,
     topk_weights: Any,
+    *,
+    direct_output: bool,
 ) -> tuple[Any, Any]:
     output = torch.empty_like(x)
+    adapter_output = None if direct_output else torch.empty_like(x)
 
     def launch() -> Any:
+        wrapper._moe_output = output if direct_output else wrapper_arena
         wrapper_output = wrapper.run(
             x=x,
             w1_weight=weights.w13,
@@ -190,7 +195,15 @@ def _b12x_launch(
             token_selected_experts=topk_ids,
             token_final_scales=topk_weights,
         )
-        output.copy_(wrapper_output)
+        if direct_output:
+            if wrapper_output.data_ptr() != output.data_ptr():
+                raise RuntimeError("B12X direct-output pointer contract failed")
+        else:
+            # Model the exact legacy full-serving chain: wrapper arena ->
+            # expert adapter output -> modular kernel final output.
+            assert adapter_output is not None
+            adapter_output.copy_(wrapper_output)
+            output.copy_(adapter_output)
         return output
 
     return launch, output
@@ -203,13 +216,14 @@ def _time_orders(
     warmup: int,
     iters: int,
     repeats: int,
+    pair: tuple[str, str] = ("b12x", "cutlass"),
 ) -> dict[str, Any]:
     rounds: dict[str, Any] = {}
-    orders = (("b12x", "cutlass"), ("cutlass", "b12x"))
-    for order in orders:
-        label = f"{order[0]}_first"
+    orders = (pair, tuple(reversed(pair)))
+    for execution_order in orders:
+        label = f"{execution_order[0]}_first"
         rounds[label] = {}
-        for backend in order:
+        for backend in execution_order:
             rounds[label][backend] = kernel_bench.measure_cuda_events(
                 torch,
                 launches[backend],
@@ -219,7 +233,7 @@ def _time_orders(
                 flush_l2=None,
             )
     combined: dict[str, Any] = {}
-    for backend in ("b12x", "cutlass"):
+    for backend in pair:
         medians = [
             float(rounds[label][backend]["median_ms"]) for label in rounds
         ]
@@ -227,8 +241,8 @@ def _time_orders(
             "order_medians_ms": medians,
             "median_ms": statistics.median(medians),
         }
-    combined["speedup_b12x_over_cutlass"] = (
-        combined["cutlass"]["median_ms"] / combined["b12x"]["median_ms"]
+    combined[f"speedup_{pair[0]}_over_{pair[1]}"] = (
+        combined[pair[1]]["median_ms"] / combined[pair[0]]["median_ms"]
     )
     return {"rounds": rounds, "combined": combined}
 
@@ -271,6 +285,9 @@ def run(args: argparse.Namespace) -> int:
     b12x_wrapper, b12x_proof = kernel_bench._make_w4a4_runner(
         torch, weights, shape, runner_args
     )
+    b12x_wrapper_arena = b12x_wrapper._moe_output
+    if b12x_wrapper_arena is None:
+        raise RuntimeError("graph-enabled B12X wrapper has no output arena")
     cutlass_runner, cutlass_proof = kernel_bench._make_flashinfer_cutlass_runner(
         torch, weights, shape, runner_args
     )
@@ -289,7 +306,24 @@ def run(args: argparse.Namespace) -> int:
             input_rms=1.0,
         )
         b12x_launch, b12x_output = _b12x_launch(
-            torch, b12x_wrapper, weights, x, topk_ids, topk_weights
+            torch,
+            b12x_wrapper,
+            b12x_wrapper_arena,
+            weights,
+            x,
+            topk_ids,
+            topk_weights,
+            direct_output=True,
+        )
+        legacy_b12x_launch, legacy_b12x_output = _b12x_launch(
+            torch,
+            b12x_wrapper,
+            b12x_wrapper_arena,
+            weights,
+            x,
+            topk_ids,
+            topk_weights,
+            direct_output=False,
         )
         cutlass_launch, cutlass_output = kernel_bench._make_flashinfer_cutlass_launch(
             torch,
@@ -315,6 +349,17 @@ def run(args: argparse.Namespace) -> int:
         numeric = kernel_bench.compare_tensors(
             torch, eager["b12x"], eager["cutlass"]
         )
+        legacy_output = legacy_b12x_launch()
+        torch.cuda.synchronize()
+        legacy_numeric = kernel_bench.compare_tensors(
+            torch, legacy_output, eager["b12x"]
+        )
+        if not (
+            bool(legacy_numeric["finite"])
+            and bool(legacy_numeric["nonzero_activity"])
+            and float(legacy_numeric["max_abs"]) == 0.0
+        ):
+            failures.append({"kind": "legacy_copy_parity", "m": m})
         numeric_passed = kernel_bench.numeric_metrics_pass(
             numeric,
             min_cosine=args.numeric_min_cosine,
@@ -330,9 +375,23 @@ def run(args: argparse.Namespace) -> int:
             iters=args.iters,
             repeats=args.repeats,
         )
+        eager_copy_timing = _time_orders(
+            torch,
+            {
+                "direct_output": b12x_launch,
+                "legacy_two_copy": legacy_b12x_launch,
+            },
+            warmup=args.warmup,
+            iters=args.iters,
+            repeats=args.repeats,
+            pair=("direct_output", "legacy_two_copy"),
+        )
         graph_launches = {}
         graph_status = {}
-        for backend, launch in launches.items():
+        for backend, launch in {
+            **launches,
+            "legacy_two_copy": legacy_b12x_launch,
+        }.items():
             replay, graph_output, graph = kernel_bench.capture_graph(torch, launch)
             graph_launches[backend] = replay
             keepalive.extend((graph_output, graph))
@@ -361,6 +420,17 @@ def run(args: argparse.Namespace) -> int:
             iters=args.iters,
             repeats=args.repeats,
         )
+        graph_copy_timing = _time_orders(
+            torch,
+            {
+                "direct_output": graph_launches["b12x"],
+                "legacy_two_copy": graph_launches["legacy_two_copy"],
+            },
+            warmup=args.warmup,
+            iters=args.iters,
+            repeats=args.repeats,
+            pair=("direct_output", "legacy_two_copy"),
+        )
         cutlass_speedup = float(
             graph_timing["combined"]["speedup_b12x_over_cutlass"]
         )
@@ -375,6 +445,20 @@ def run(args: argparse.Namespace) -> int:
                 "eager": eager_timing,
                 "cuda_graph": graph_timing,
                 "cuda_graph_status": graph_status,
+                "copy_elimination": {
+                    "legacy_vs_direct_numeric": legacy_numeric,
+                    "eager": eager_copy_timing,
+                    "cuda_graph": graph_copy_timing,
+                    "graph_saved_us": 1000.0
+                    * (
+                        graph_copy_timing["combined"]["legacy_two_copy"][
+                            "median_ms"
+                        ]
+                        - graph_copy_timing["combined"]["direct_output"][
+                            "median_ms"
+                        ]
+                    ),
+                },
             }
         )
 
@@ -423,7 +507,11 @@ def run(args: argparse.Namespace) -> int:
             "seed": args.seed,
         },
         "backend_proof": {
-            "b12x": b12x_proof,
+            "b12x": {
+                **b12x_proof,
+                "direct_output_alias": True,
+                "legacy_full_serving_copy_count": 2,
+            },
             "cutlass": cutlass_proof,
         },
         "performance_gate": performance_gate,

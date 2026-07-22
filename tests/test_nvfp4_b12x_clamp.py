@@ -56,6 +56,39 @@ class _Tensor:
     pass
 
 
+class _RuntimeTensor:
+    def __init__(
+        self,
+        *,
+        shape=(4, 7168),
+        dtype=None,
+        device="cuda:0",
+        data_ptr=1000,
+        contiguous=True,
+    ) -> None:
+        self.shape = shape
+        self.dtype = _TORCH.bfloat16 if dtype is None else dtype
+        self.device = device
+        self._data_ptr = data_ptr
+        self._contiguous = contiguous
+        self.to_calls = []
+
+    def is_contiguous(self) -> bool:
+        return self._contiguous
+
+    def data_ptr(self) -> int:
+        return self._data_ptr
+
+    def to(self, dtype):
+        self.to_calls.append(dtype)
+        return _RuntimeTensor(
+            shape=self.shape,
+            dtype=dtype,
+            device=self.device,
+            data_ptr=self._data_ptr + 1,
+        )
+
+
 _TORCH = ModuleType("torch")
 _TORCH.Tensor = _Tensor
 _TORCH.dtype = type("dtype", (), {})
@@ -321,6 +354,124 @@ class B12xClampAdapterTest(unittest.TestCase):
             self.module.FlashInferB12xExperts(
                 config,
                 _quant_config(limit=10.0),
+            )
+
+    def _runtime_experts(self):
+        experts = self.module.FlashInferB12xExperts(
+            _moe_config(limit=None),
+            _quant_config(limit=10.0),
+        )
+        experts.w1_scale = object()
+        experts.w2_scale = object()
+        experts.g1_alphas = object()
+        experts.g2_alphas = object()
+        experts._fc2_input_scale = object()
+        experts.w1_sf_mma = object()
+        experts.w2_sf_mma = object()
+        return experts
+
+    def test_direct_output_alias_is_explicit_and_avoids_both_copies(self) -> None:
+        experts = self._runtime_experts()
+        output = _RuntimeTensor(data_ptr=4104)
+        hidden = _RuntimeTensor(data_ptr=4200)
+        topk_ids = _RuntimeTensor(
+            shape=(4, 8), dtype=_TORCH.int32, data_ptr=4300
+        )
+        observed = {}
+
+        class _Wrapper:
+            use_cuda_graph = True
+            _moe_output = _RuntimeTensor(data_ptr=9999)
+
+            def run(self, **kwargs):
+                observed.update(kwargs)
+                return _RuntimeTensor(
+                    shape=self._moe_output.shape,
+                    dtype=self._moe_output.dtype,
+                    device=self._moe_output.device,
+                    data_ptr=self._moe_output.data_ptr(),
+                )
+
+        wrapper = _Wrapper()
+        experts._ensure_wrapper = lambda: wrapper
+        self.assertTrue(experts.supports_output_alias)
+
+        experts.apply(
+            output,
+            hidden,
+            object(),
+            object(),
+            _RuntimeTensor(shape=(4, 8)),
+            topk_ids,
+            _MoEActivation.SILU,
+            256,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
+        self.assertIs(wrapper._moe_output, output)
+        self.assertIs(observed["token_selected_experts"], topk_ids)
+        self.assertEqual(topk_ids.to_calls, [])
+
+    def test_direct_output_alias_rejects_pointer_drift(self) -> None:
+        experts = self._runtime_experts()
+        output = _RuntimeTensor(data_ptr=4104)
+        hidden = _RuntimeTensor(data_ptr=4200)
+
+        class _Wrapper:
+            use_cuda_graph = True
+            _moe_output = _RuntimeTensor(data_ptr=9999)
+
+            def run(self, **kwargs):
+                return _RuntimeTensor(data_ptr=12345)
+
+        experts._ensure_wrapper = lambda: _Wrapper()
+        with self.assertRaisesRegex(RuntimeError, "aliased output buffer"):
+            experts.apply(
+                output,
+                hidden,
+                object(),
+                object(),
+                _RuntimeTensor(shape=(4, 8)),
+                _RuntimeTensor(shape=(4, 8), dtype=_TORCH.int32),
+                _MoEActivation.SILU,
+                256,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+
+    def test_direct_output_alias_rejects_noncontiguous_output(self) -> None:
+        experts = self._runtime_experts()
+        experts._ensure_wrapper = lambda: SimpleNamespace(
+            use_cuda_graph=True, _moe_output=object()
+        )
+        with self.assertRaisesRegex(RuntimeError, "contract mismatch"):
+            experts.apply(
+                _RuntimeTensor(contiguous=False),
+                _RuntimeTensor(),
+                object(),
+                object(),
+                _RuntimeTensor(shape=(4, 8)),
+                _RuntimeTensor(shape=(4, 8), dtype=_TORCH.int32),
+                _MoEActivation.SILU,
+                256,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             )
 
     def test_unclamped_silu_retains_plain_mapping(self) -> None:
