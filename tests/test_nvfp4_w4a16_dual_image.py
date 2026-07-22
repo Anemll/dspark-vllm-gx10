@@ -12,11 +12,14 @@ from scripts import patch_b12x_w4a16_e8m0_scale_fast as scale_fast
 from scripts import patch_b12x_w4a16_modelopt_tc_decode as tc_decode
 from scripts import patch_b12x_w4a16_modelopt_tc_planner as tc_planner
 from scripts import patch_b12x_w4a16_modelopt_vector_load as vector_load
+from scripts import patch_nvfp4_dual_uniform_decode as uniform_decode
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DOCKERFILE = ROOT / "docker/Dockerfile.nvfp4-w4a16-dual-decode-overlay"
 DOCKERIGNORE = pathlib.Path(f"{DOCKERFILE}.dockerignore")
+HOTFIX_DOCKERFILE = ROOT / "docker/Dockerfile.nvfp4-dual-dispatch-hotfix"
+HOTFIX_DOCKERIGNORE = pathlib.Path(f"{HOTFIX_DOCKERFILE}.dockerignore")
 
 PATCH_SOURCES = (
     "scripts/patch_b12x_w4a16_modelopt_tc_decode.py",
@@ -24,6 +27,7 @@ PATCH_SOURCES = (
     "scripts/patch_b12x_w4a16_e8m0_k32_scale_reuse.py",
     "scripts/patch_b12x_w4a16_modelopt_vector_load.py",
     "scripts/patch_b12x_w4a16_modelopt_tc_planner.py",
+    "scripts/patch_nvfp4_dual_uniform_decode.py",
 )
 OVERLAY_SOURCES = (
     "overlay/vllm/envs.py",
@@ -109,6 +113,14 @@ class NvFp4W4A16DualImageTests(unittest.TestCase):
             tc_planner.PATCHED_SOURCE_SHA256,
             "ba980ff1df1df0b9959c274fa255c2fcb538671f0cdd068b0ec7cdf4f434933d",
         )
+        self.assertEqual(
+            uniform_decode.MODEL_RUNNER_PATCHED_SHA256,
+            "61befb32cdc06e1c58383f9481e805d3b86637c84736f79b904c04a474df34e4",
+        )
+        self.assertEqual(
+            uniform_decode.CUDAGRAPH_UTILS_PATCHED_SHA256,
+            "56031f4d39147bc4cb8ee9cf7d1914d6811c677d15b8735a7d292862cba5da4c",
+        )
 
     def test_dockerfile_applies_exact_chain_before_overlay(self) -> None:
         text = DOCKERFILE.read_text(encoding="utf-8")
@@ -118,6 +130,7 @@ class NvFp4W4A16DualImageTests(unittest.TestCase):
             "python3 /usr/local/bin/dspark-patch-b12x-w4a16-e8m0-k32-scale-reuse",
             "python3 /usr/local/bin/dspark-patch-b12x-w4a16-modelopt-vector-load",
             "python3 /usr/local/bin/dspark-patch-b12x-w4a16-modelopt-tc-planner",
+            "python3 /usr/local/bin/dspark-patch-nvfp4-dual-uniform-decode",
         )
         offsets = []
         for command in commands:
@@ -133,6 +146,8 @@ class NvFp4W4A16DualImageTests(unittest.TestCase):
             self.assertIn(source, text)
         self.assertIn(vector_load.PATCHED_SOURCE_SHA256, text)
         self.assertIn(tc_planner.PATCHED_SOURCE_SHA256, text)
+        self.assertIn(uniform_decode.MODEL_RUNNER_PATCHED_SHA256, text)
+        self.assertIn(uniform_decode.CUDAGRAPH_UTILS_PATCHED_SHA256, text)
         self.assertIn("sha256sum -c -", text)
 
     def test_dockerfile_requires_immutable_base_and_revision_labels(self) -> None:
@@ -186,6 +201,44 @@ class NvFp4W4A16DualImageTests(unittest.TestCase):
                 self.assertIsNone(
                     pattern.search(text), f"{relative}: {pattern.pattern}"
                 )
+
+    def test_dispatch_hotfix_is_small_content_addressed_overlay(self) -> None:
+        text = HOTFIX_DOCKERFILE.read_text(encoding="utf-8")
+        lines = tuple(
+            line.strip()
+            for line in HOTFIX_DOCKERIGNORE.read_text(
+                encoding="utf-8"
+            ).splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+        self.assertEqual(lines[0], "**")
+        self.assertIn("!scripts/patch_nvfp4_dual_uniform_decode.py", lines)
+        self.assertIn(
+            "!overlay/vllm/model_executor/layers/fused_moe/experts/"
+            "nvfp4_dual_decode_moe.py",
+            lines,
+        )
+        self.assertIn(
+            "!overlay/vllm/models/deepseek_v4/nvidia/"
+            "prepared_weight_loading.py",
+            lines,
+        )
+        self.assertNotIn("patch_b12x_w4a16_modelopt_tc_decode", text)
+        self.assertEqual(
+            text.count("dspark-patch-nvfp4-dual-uniform-decode"), 2
+        )
+        for digest in (
+            "sha256:c018a6b967af6a6d6d2e415fc6fe54b9f4eecf4d72d95dc956bffbca7f88f848",
+            uniform_decode.MODEL_RUNNER_SOURCE_SHA256,
+            uniform_decode.CUDAGRAPH_UTILS_SOURCE_SHA256,
+            uniform_decode.MODEL_RUNNER_PATCHED_SHA256,
+            uniform_decode.CUDAGRAPH_UTILS_PATCHED_SHA256,
+            "7d3beacd52ae30978be04ed21a0a8cafdcc740f63026f60d4f573f76e9d6dcb8",
+            "60a56e0bdb7edcc9ebf6274e3f4de6e9af105dfffe9306258e6957989774e226",
+        ):
+            self.assertIn(digest, text)
+        self.assertNotIn("!config/", lines)
+        self.assertNotIn("!benchmarks/", lines)
 
 
 if __name__ == "__main__":

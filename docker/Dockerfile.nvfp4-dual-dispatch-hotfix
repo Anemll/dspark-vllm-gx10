@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG BASE_IMAGE_ID
+ARG SOURCE_REVISION
+
+RUN python3 -c 'import re, sys; assert re.fullmatch(r"[0-9a-f]{40}", sys.argv[1]); assert sys.argv[2] == "sha256:c018a6b967af6a6d6d2e415fc6fe54b9f4eecf4d72d95dc956bffbca7f88f848"' \
+      "${SOURCE_REVISION}" "${BASE_IMAGE_ID}"
+
+# This deliberately layers only the dispatch correction over the already
+# validated cdc6034 dual-decode image.  Reapplying the full B12X patch chain
+# would reject its own previously patched inputs and needlessly rebuild the
+# large immutable parent.
+RUN printf '%s  %s\n' \
+      'e23cccd7e135071f1393184132ec0ad7f277faf7851bfaba2b2a7b15e5a3a7dd' \
+      '/usr/local/lib/python3.12/dist-packages/b12x/moe/fused/w4a16/kernel.py' \
+      'ba980ff1df1df0b9959c274fa255c2fcb538671f0cdd068b0ec7cdf4f434933d' \
+      '/usr/local/lib/python3.12/dist-packages/b12x/integration/tp_moe.py' \
+      '58f45c58969cdd9cba707863e82fefda818002de45c621032b58b6eb364deedf' \
+      '/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py' \
+      '303d762141830cd8343976d5be14b34ef1666e7d1d459e089adfd4f5b8cd3ef6' \
+      '/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/cudagraph_utils.py' \
+      '8ca5cdbd0afc89d4effea446fef7ecbea8d37e9f863ff75f80bfac90cd74c6dd' \
+      '/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py' \
+      '1cea7ba49e2bcd47fb01b230134ba16b2257463681abdb357f6c5761587d383a' \
+      '/usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py' \
+    | sha256sum -c -
+
+COPY scripts/patch_nvfp4_dual_uniform_decode.py \
+  /usr/local/bin/dspark-patch-nvfp4-dual-uniform-decode
+RUN python3 /usr/local/bin/dspark-patch-nvfp4-dual-uniform-decode
+
+COPY overlay/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py
+COPY overlay/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py
+
+RUN printf '%s  %s\n' \
+      '61befb32cdc06e1c58383f9481e805d3b86637c84736f79b904c04a474df34e4' \
+      '/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py' \
+      '56031f4d39147bc4cb8ee9cf7d1914d6811c677d15b8735a7d292862cba5da4c' \
+      '/usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/cudagraph_utils.py' \
+      '7d3beacd52ae30978be04ed21a0a8cafdcc740f63026f60d4f573f76e9d6dcb8' \
+      '/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py' \
+      '60a56e0bdb7edcc9ebf6274e3f4de6e9af105dfffe9306258e6957989774e226' \
+      '/usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py' \
+    | sha256sum -c -
+
+RUN python3 -m py_compile \
+      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/cudagraph_utils.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.base.name="${BASE_IMAGE}" \
+      org.opencontainers.image.base.digest="${BASE_IMAGE_ID}" \
+      org.opencontainers.image.parent.revision="cdc6034e72ef9685dafa0a003cc1892d6036c618" \
+      org.opencontainers.image.nvfp4-dual-dispatch="uniform-runtime-and-full-cudagraph-v1" \
+      org.opencontainers.image.vllm-model-runner-sha256="61befb32cdc06e1c58383f9481e805d3b86637c84736f79b904c04a474df34e4" \
+      org.opencontainers.image.vllm-cudagraph-utils-sha256="56031f4d39147bc4cb8ee9cf7d1914d6811c677d15b8735a7d292862cba5da4c"

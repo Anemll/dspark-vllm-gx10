@@ -99,6 +99,8 @@ class Nvfp4DualDecodeTests(unittest.TestCase):
         self.assertIn('source_format="fp4_e8m0_k32"', source)
         self.assertIn('w13_layout="w13"', source)
         self.assertIn('w4a16_weight_layout="modelopt"', source)
+        self.assertIn("NVFP4_DUAL_DECODE event=selected", source)
+        self.assertIn("uniform_decode=true", source)
 
     def test_scratch_helper_preserves_default_and_forwards_explicit_layout(self) -> None:
         source = B12X_EXPERT.read_text()

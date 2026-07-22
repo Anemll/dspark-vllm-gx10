@@ -5,6 +5,7 @@
 !scripts/patch_b12x_w4a16_e8m0_k32_scale_reuse.py
 !scripts/patch_b12x_w4a16_modelopt_vector_load.py
 !scripts/patch_b12x_w4a16_modelopt_tc_planner.py
+!scripts/patch_nvfp4_dual_uniform_decode.py
 !overlay/
 !overlay/vllm/
 !overlay/vllm/envs.py

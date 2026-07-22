@@ -164,6 +164,7 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
         self._w4a16_unit_scale: torch.Tensor | None = None
         self._w4a16_additional_scale_bytes = 0
         self._w4a16_bounds = dual_decode_bounds()
+        self._w4a16_selection_logged = False
 
     @property
     def expects_unquantized_inputs(self) -> bool:
@@ -429,6 +430,14 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
             apply_router_weight_on_input=apply_weight_on_input,
         )
         scratch = _workspace2_as_b12x_scratch(workspace2, plan)
+        if not self._w4a16_selection_logged:
+            logger.info(
+                "NVFP4_DUAL_DECODE event=selected tokens=%d bounds=%s "
+                "uniform_decode=true",
+                tokens,
+                self._w4a16_bounds,
+            )
+            self._w4a16_selection_logged = True
         _run_b12x_moe_fp4(
             a=hidden_states,
             a1_gscale=unit_scale,
