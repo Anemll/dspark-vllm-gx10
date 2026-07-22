@@ -115,6 +115,13 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             moe_config.intermediate_size_per_partition
         )
         self.max_num_tokens = moe_config.max_num_tokens
+        self.max_capture_size = moe_config.max_capture_size
+        if not 0 < self.max_capture_size <= self.max_num_tokens:
+            raise ValueError(
+                "FlashInfer B12X decode capacity must be positive and no larger "
+                "than max_num_tokens: "
+                f"capture={self.max_capture_size}, max={self.max_num_tokens}"
+            )
         self.local_expert_offset = self.ep_rank * self.num_local_experts
         wrapper_scope = getattr(moe_config, "_b12x_wrapper_scope", None)
         self._b12x_wrapper_scope = (
@@ -157,8 +164,13 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             swiglu_limit,
         )
 
-        # Lazily acquired from the model-scoped cache on first apply() call.
-        self._wrapper: Any | None = None
+        # Decode and prefill use separate model-scoped arenas.  FlashInfer's
+        # B12X dispatch cost grows measurably with max_num_tokens even when the
+        # actual M is tiny, so decode should not pay for the 8192-token prefill
+        # capacity.  The large wrapper remains unchanged for M values beyond
+        # the CUDA-graph capture frontier.
+        self._decode_wrapper: Any | None = None
+        self._prefill_wrapper: Any | None = None
         self.w1_sf_mma: torch.Tensor | None = None
         self.w2_sf_mma: torch.Tensor | None = None
 
@@ -311,21 +323,33 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
         """
         return True
 
-    def _ensure_wrapper(self) -> Any:
-        """Acquire one graph workspace per model/rank/device/shape.
+    def _ensure_wrapper(self, num_tokens: int | None = None) -> Any:
+        """Acquire the decode- or prefill-sized graph workspace.
 
-        The wrapper is deliberately shared across sequential target layers:
+        Each wrapper is deliberately shared across sequential target layers:
         weights, scales, and the caller-owned output are call arguments. The
         cache is model-scoped rather than shape-global so independent replicas
         cannot race on mutable barriers/output. DBO is rejected in
         ``__init__``.
         """
 
+        if num_tokens is None:
+            num_tokens = self.max_num_tokens
+        if not 0 < num_tokens <= self.max_num_tokens:
+            raise ValueError(
+                f"B12X token count {num_tokens} exceeds configured capacity "
+                f"{self.max_num_tokens}"
+            )
+        decode = num_tokens <= self.max_capture_size
+        wrapper_attr = "_decode_wrapper" if decode else "_prefill_wrapper"
+        capacity = self.max_capture_size if decode else self.max_num_tokens
+
         # Shape and device are immutable after this expert is constructed.
-        # Keep the steady eager/capture path free of Python cache-key work and
-        # CUDA runtime device queries once this layer has acquired the arena.
-        if self._wrapper is not None:
-            return self._wrapper
+        # Keep the steady eager/capture path free of cache-key construction and
+        # CUDA device queries after the selected arena has been acquired.
+        bound_wrapper = getattr(self, wrapper_attr)
+        if bound_wrapper is not None:
+            return bound_wrapper
 
         from flashinfer.fused_moe import B12xMoEWrapper
 
@@ -344,6 +368,7 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             self._swiglu_alpha,
             self._swiglu_beta,
             self._swiglu_limit,
+            capacity,
             "nvfp4",
             "modelopt",
         )
@@ -356,7 +381,7 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
                     hidden_size=self.hidden_dim,
                     intermediate_size=self.intermediate_size_per_partition,
                     use_cuda_graph=True,
-                    max_num_tokens=self.max_num_tokens,
+                    max_num_tokens=capacity,
                     num_local_experts=self.num_local_experts,
                     output_dtype=self.out_dtype,
                     device=f"cuda:{device_index}",
@@ -369,7 +394,7 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
                 )
                 _B12X_WRAPPER_CACHE[cache_key] = wrapper
 
-        self._wrapper = wrapper
+        setattr(self, wrapper_attr, wrapper)
         return wrapper
 
     def apply(
@@ -403,7 +428,7 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             "process_weights_after_loading must run before FlashInferB12xExperts.apply"
         )
 
-        wrapper = self._ensure_wrapper()
+        wrapper = self._ensure_wrapper(int(hidden_states.shape[0]))
 
         if not getattr(wrapper, "use_cuda_graph", False):
             raise RuntimeError(

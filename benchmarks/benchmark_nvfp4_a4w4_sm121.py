@@ -3103,13 +3103,18 @@ def _make_w4a4_runner(
 ) -> tuple[Any, dict[str, Any]]:
     from flashinfer.fused_moe import B12xMoEWrapper
 
+    max_num_tokens = (
+        args.b12x_max_num_tokens
+        if args.b12x_max_num_tokens is not None
+        else max(args.m)
+    )
     wrapper = B12xMoEWrapper(
         num_experts=shape.num_experts,
         top_k=shape.top_k,
         hidden_size=shape.hidden_size,
         intermediate_size=shape.intermediate_size_per_rank,
         use_cuda_graph=True,
-        max_num_tokens=max(args.m),
+        max_num_tokens=max_num_tokens,
         num_local_experts=shape.num_experts,
         output_dtype=torch.bfloat16,
         device="cuda",
@@ -3136,7 +3141,7 @@ def _make_w4a4_runner(
             wrapper._moe_output,
         ),
     )
-    workspace_ceiling = b12x_workspace_ceiling_bytes(shape, max(args.m))
+    workspace_ceiling = b12x_workspace_ceiling_bytes(shape, max_num_tokens)
     contract_applies = workspace_ceiling is not None
     workspace_passed = None
     if workspace_ceiling is not None:
@@ -3160,6 +3165,7 @@ def _make_w4a4_runner(
         "swiglu_beta": wrapper.swiglu_beta,
         "swiglu_limit": wrapper.swiglu_limit,
         "source_format": wrapper.source_format,
+        "max_num_tokens": max_num_tokens,
         "static_workspace": type(wrapper._static_workspace).__name__,
         "dynamic_workspace": type(wrapper._dynamic_workspace).__name__,
         "workspace_memory": workspace_memory,
@@ -4479,6 +4485,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--b12x-max-num-tokens",
+        type=int,
+        default=None,
+        help=(
+            "Override B12X wrapper capacity. The serving adapter currently "
+            "uses max_num_batched_tokens; this option isolates capacity-driven "
+            "decode overhead without changing the measured M values."
+        ),
+    )
+    parser.add_argument(
         "--m",
         type=parse_positive_int_csv,
         default=DEFAULT_M_VALUES,
@@ -4544,6 +4560,11 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--legacy-degenerate-synthetic requires --synthetic")
     if args.synthetic_experts is not None and args.synthetic_experts < 1:
         raise ValueError("--synthetic-experts must be positive")
+    if args.b12x_max_num_tokens is not None:
+        if args.b12x_max_num_tokens < 1:
+            raise ValueError("--b12x-max-num-tokens must be positive")
+        if args.b12x_max_num_tokens < max(args.m):
+            raise ValueError("--b12x-max-num-tokens must cover every requested M")
     if args.layer_idx < 0:
         raise ValueError("--layer-idx must be non-negative")
     if args.steady_layer_idx is not None and args.steady_layer_idx < 0:

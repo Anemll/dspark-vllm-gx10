@@ -184,6 +184,7 @@ def _moe_config(*, limit: float | None) -> SimpleNamespace:
         hidden_dim=7168,
         intermediate_size_per_partition=2048,
         max_num_tokens=4096,
+        max_capture_size=64,
         activation=_MoEActivation.SILU,
         swiglu_limit=limit,
         swiglu_alpha=None,
@@ -279,6 +280,56 @@ class B12xClampAdapterTest(unittest.TestCase):
 
         self.assertEqual(len(constructed), 1)
         self.assertTrue(all(wrapper is wrappers[0] for wrapper in wrappers))
+
+    def test_decode_and_prefill_use_distinct_shared_capacities(self) -> None:
+        scope = object()
+        experts = []
+        for _ in range(43):
+            config = _moe_config(limit=None)
+            config._b12x_wrapper_scope = scope
+            config._b12x_wrapper_concurrent_execution = False
+            experts.append(
+                self.module.FlashInferB12xExperts(
+                    config,
+                    _quant_config(limit=10.0),
+                )
+            )
+        constructed = []
+
+        class _Wrapper:
+            def __init__(self, **kwargs) -> None:
+                self.kwargs = kwargs
+                constructed.append(self)
+
+        flashinfer = _package("flashinfer")
+        fused_moe = ModuleType("flashinfer.fused_moe")
+        fused_moe.B12xMoEWrapper = _Wrapper
+        flashinfer.fused_moe = fused_moe
+        with patch.dict(
+            sys.modules,
+            {"flashinfer": flashinfer, "flashinfer.fused_moe": fused_moe},
+        ):
+            decode = [expert._ensure_wrapper(4) for expert in experts]
+            prefill = [expert._ensure_wrapper(65) for expert in experts]
+
+        self.assertEqual(len(constructed), 2)
+        self.assertEqual(
+            sorted(wrapper.kwargs["max_num_tokens"] for wrapper in constructed),
+            [64, 4096],
+        )
+        self.assertTrue(all(wrapper is decode[0] for wrapper in decode))
+        self.assertTrue(all(wrapper is prefill[0] for wrapper in prefill))
+        self.assertIsNot(decode[0], prefill[0])
+
+    def test_wrapper_capacity_rejects_out_of_range_tokens(self) -> None:
+        experts = self.module.FlashInferB12xExperts(
+            _moe_config(limit=None),
+            _quant_config(limit=10.0),
+        )
+        with self.assertRaisesRegex(ValueError, "token count"):
+            experts._ensure_wrapper(0)
+        with self.assertRaisesRegex(ValueError, "exceeds configured capacity"):
+            experts._ensure_wrapper(4097)
 
     def test_independent_model_scopes_do_not_share_wrapper(self) -> None:
         experts = []
@@ -393,7 +444,7 @@ class B12xClampAdapterTest(unittest.TestCase):
                 )
 
         wrapper = _Wrapper()
-        experts._ensure_wrapper = lambda: wrapper
+        experts._ensure_wrapper = lambda *_: wrapper
         self.assertTrue(experts.supports_output_alias)
 
         experts.apply(
@@ -430,7 +481,7 @@ class B12xClampAdapterTest(unittest.TestCase):
             def run(self, **kwargs):
                 return _RuntimeTensor(data_ptr=12345)
 
-        experts._ensure_wrapper = lambda: _Wrapper()
+        experts._ensure_wrapper = lambda *_: _Wrapper()
         with self.assertRaisesRegex(RuntimeError, "aliased output buffer"):
             experts.apply(
                 output,
@@ -452,7 +503,7 @@ class B12xClampAdapterTest(unittest.TestCase):
 
     def test_direct_output_alias_rejects_noncontiguous_output(self) -> None:
         experts = self._runtime_experts()
-        experts._ensure_wrapper = lambda: SimpleNamespace(
+        experts._ensure_wrapper = lambda *_: SimpleNamespace(
             use_cuda_graph=True, _moe_output=object()
         )
         with self.assertRaisesRegex(RuntimeError, "contract mismatch"):

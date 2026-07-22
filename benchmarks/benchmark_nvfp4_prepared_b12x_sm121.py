@@ -354,11 +354,17 @@ def run(args: argparse.Namespace) -> int:
         legacy_numeric = kernel_bench.compare_tensors(
             torch, legacy_output, eager["b12x"]
         )
-        if not (
-            bool(legacy_numeric["finite"])
-            and bool(legacy_numeric["nonzero_activity"])
-            and float(legacy_numeric["max_abs"]) == 0.0
-        ):
+        eager["legacy_two_copy"] = legacy_output.clone()
+        # These are two independent B12X launches.  The routed FP4 reduction
+        # is not bit deterministic, so require the same numerical envelope as
+        # every other cross-launch comparison instead of exact equality.  The
+        # output-alias contract itself is proven separately by pointer identity.
+        legacy_numeric_passed = kernel_bench.numeric_metrics_pass(
+            legacy_numeric,
+            min_cosine=args.numeric_min_cosine,
+            max_normalized_rmse=args.numeric_max_nrmse,
+        )
+        if not legacy_numeric_passed:
             failures.append({"kind": "legacy_copy_parity", "m": m})
         numeric_passed = kernel_bench.numeric_metrics_pass(
             numeric,
@@ -447,6 +453,7 @@ def run(args: argparse.Namespace) -> int:
                 "cuda_graph_status": graph_status,
                 "copy_elimination": {
                     "legacy_vs_direct_numeric": legacy_numeric,
+                    "legacy_vs_direct_numeric_passed": legacy_numeric_passed,
                     "eager": eager_copy_timing,
                     "cuda_graph": graph_copy_timing,
                     "graph_saved_us": 1000.0
