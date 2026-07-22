@@ -10,3 +10,6 @@ df678b37988f4bf2362174c957f021728ded895c79d3ff0deac5cf981f1bc1dd  benchmarks/res
 8208f9a06dc250861f3038499fd42a851a3f86c68120cf674b632ebf666cfde6  benchmarks/results/w4a4-decode-port-20260722/packed-balanced.log
 4147d89bf1dd8b26fc61c388a1f2a9929c52dcf377a2b2224bafb78bc1cec080  benchmarks/results/w4a4-decode-port-20260722/packed-tc-model-routes.log
 65f4a2b7fff9e30bab70e5530c1240a4d81849eecedf46770302fba15cd94ae4  benchmarks/results/w4a4-decode-port-20260722/profile-w4a4-balanced.log
+dce6883139b4678f849d593a39650975cec3f9f570a9384759834e5bf2af961c  benchmarks/results/w4a4-decode-port-20260722/mxfp4-w4a4-component-rank0-isolation.json
+862bf820f1629096a635800d0739418dcb8b948f869b0bf33b20bbfbbf17ab5f  benchmarks/results/w4a4-decode-port-20260722/mxfp4-w4a4-component-rank0-isolation.log
+373184ecf32e47cd7f4da7cfe085640311c351ccfaf9d89fb76cad367a5d07d2  benchmarks/results/w4a4-decode-port-20260722/mxfp4-component-negative.md

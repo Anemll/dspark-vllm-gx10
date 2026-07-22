@@ -1,0 +1,2 @@
+{"ok": false, "performance": {"accepted_cutlass_w4a4_m4_ms": 0.782, "comparison": "mxfp4_w4a4_component_vs_accepted_cutlass_w4a4", "maximum_m4_ms": 0.7429, "observed_m4_ms": 0.7806879878044128, "observed_speedup": 1.001680584581911, "passed": false, "required_speedup": 1.0526315789473684}}
+Wrote /artifacts/mxfp4-w4a4-component-rank0-isolation.json
