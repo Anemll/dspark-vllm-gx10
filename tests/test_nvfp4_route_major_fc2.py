@@ -131,6 +131,7 @@ class RouteMajorFC2ContractTest(unittest.TestCase):
         self.assertIn("phase1.launch()", probe)
         self.assertIn("phase2_launch()", probe)
         self.assertIn("numeric_vs_accepted", probe)
+        self.assertIn("paired_execution_orders", probe)
         self.assertIn("m4_max_ms", probe)
         self.assertIn("m2_max_regression", probe)
 

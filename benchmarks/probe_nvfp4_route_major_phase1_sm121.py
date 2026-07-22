@@ -53,6 +53,56 @@ def _measure(torch, launch, *, warmup: int, iters: int, repeats: int) -> dict:
     }
 
 
+def _measure_pair(
+    torch,
+    launches: dict[str, object],
+    *,
+    warmup: int,
+    iters: int,
+    repeats: int,
+) -> dict:
+    """Measure a matched A/B in alternating execution order."""
+    names = tuple(launches)
+    if len(names) != 2:
+        raise ValueError("paired timing requires exactly two launchers")
+    samples = {name: [] for name in names}
+    repeat_medians = {name: [] for name in names}
+    execution_orders = []
+    for repeat in range(repeats):
+        order = names if repeat % 2 == 0 else tuple(reversed(names))
+        execution_orders.append(list(order))
+        for name in order:
+            launch = launches[name]
+            for _ in range(warmup):
+                launch()
+            torch.cuda.synchronize()
+            current = []
+            for _ in range(iters):
+                begin = torch.cuda.Event(enable_timing=True)
+                end = torch.cuda.Event(enable_timing=True)
+                begin.record()
+                launch()
+                end.record()
+                end.synchronize()
+                current.append(float(begin.elapsed_time(end)))
+            samples[name].extend(current)
+            repeat_medians[name].append(statistics.median(current))
+    return {
+        "execution_orders": execution_orders,
+        "results": {
+            name: {
+                "median_ms": statistics.median(repeat_medians[name]),
+                "mean_ms": statistics.mean(samples[name]),
+                "min_ms": min(samples[name]),
+                "max_ms": max(samples[name]),
+                "repeat_medians_ms": repeat_medians[name],
+                "samples": len(samples[name]),
+            }
+            for name in names
+        },
+    }
+
+
 def run(args: argparse.Namespace) -> int:
     import flashinfer
     import torch
@@ -154,12 +204,15 @@ def run(args: argparse.Namespace) -> int:
     phase2_timing = _measure(
         torch, phase2_launch, warmup=args.warmup, iters=args.iters, repeats=args.repeats
     )
-    route_timing = _measure(
-        torch, route_major_launch, warmup=args.warmup, iters=args.iters, repeats=args.repeats
+    paired = _measure_pair(
+        torch,
+        {"route_major": route_major_launch, "accepted_fused": accepted_launch},
+        warmup=args.warmup,
+        iters=args.iters,
+        repeats=args.repeats,
     )
-    accepted_timing = _measure(
-        torch, accepted_launch, warmup=args.warmup, iters=args.iters, repeats=args.repeats
-    )
+    route_timing = paired["results"]["route_major"]
+    accepted_timing = paired["results"]["accepted_fused"]
     speedup = accepted_timing["median_ms"] / route_timing["median_ms"]
     if args.m == 4:
         performance = {
@@ -227,6 +280,7 @@ def run(args: argparse.Namespace) -> int:
             "phase2": phase2_timing,
             "route_major_end_to_end": route_timing,
             "accepted_fused": accepted_timing,
+            "paired_execution_orders": paired["execution_orders"],
             "speedup_route_major_over_accepted": speedup,
             "component_sum_ms": phase1_timing["median_ms"] + phase2_timing["median_ms"],
         },
