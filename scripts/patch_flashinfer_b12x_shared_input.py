@@ -91,6 +91,25 @@ _DISPATCH_SHARE_SCALE_ANCHOR = """\
 _DISPATCH_SHARE_SCALE_REPLACEMENT = """\
     share_expert_scales = input_gs_is_shared and down_input_scale_is_shared
 """
+_DISPATCH_DSV4_M4_MAC_ANCHOR = """\
+        micro_mac = min(tuned_mac or base_mac, micro_work_tiles, base_mac)
+"""
+_DISPATCH_DSV4_M4_MAC_REPLACEMENT = """\
+        micro_mac = min(tuned_mac or base_mac, micro_work_tiles, base_mac)
+        # GB10/SM121 decode: DeepSeek-V4 TP=2 at M=4 routes 24 pairs.
+        # Keeping all 48 SMs resident increases grid-barrier contention and
+        # repeated real-layer measurements show lower latency at 28 CTAs.
+        # Gate this narrowly so other models, M values, and prefill keep the
+        # upstream occupancy policy.
+        if (
+            num_tokens == 4
+            and top_k == 6
+            and k == 4096
+            and n == 1024
+            and num_experts == 256
+        ):
+            micro_mac = min(micro_mac, 28)
+"""
 
 
 def _sha256(data: bytes) -> str:
@@ -126,11 +145,17 @@ def patch_dispatch_source(source: str) -> str:
         _DISPATCH_SHARE_INPUT_REPLACEMENT,
         "dispatcher shared input",
     )
-    return _replace_once(
+    source = _replace_once(
         source,
         _DISPATCH_SHARE_SCALE_ANCHOR,
         _DISPATCH_SHARE_SCALE_REPLACEMENT,
         "dispatcher shared scales",
+    )
+    return _replace_once(
+        source,
+        _DISPATCH_DSV4_M4_MAC_ANCHOR,
+        _DISPATCH_DSV4_M4_MAC_REPLACEMENT,
+        "dispatcher DeepSeek-V4 M4 MAC",
     )
 
 

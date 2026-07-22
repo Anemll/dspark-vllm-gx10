@@ -24,10 +24,13 @@ class FlashInferB12xSharedInputPatchTest(unittest.TestCase):
         dispatch = (
             shared_input_patch._DISPATCH_SHARE_INPUT_ANCHOR
             + shared_input_patch._DISPATCH_SHARE_SCALE_ANCHOR
+            + shared_input_patch._DISPATCH_DSV4_M4_MAC_ANCHOR
         )
         dispatch_patched = shared_input_patch.patch_dispatch_source(dispatch)
         self.assertIn("num_tokens == 1", dispatch_patched)
         self.assertNotIn('activation == "relu2"', dispatch_patched)
+        self.assertIn("num_tokens == 4", dispatch_patched)
+        self.assertIn("micro_mac = min(micro_mac, 28)", dispatch_patched)
 
     def test_patch_rejects_source_drift(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "wrapper launch"):
