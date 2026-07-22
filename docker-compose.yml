@@ -120,6 +120,10 @@ services:
       DSPARK_SPECULATION_MODE: "${DSPARK_SPECULATION_MODE:-dspark}"
       MTP_NUM_TOKENS: "${MTP_NUM_TOKENS:-3}"
       KV_CACHE_MEMORY_BYTES: "${KV_CACHE_MEMORY_BYTES:-}"
+      # Optional, diagnostic-only PyTorch profiler configuration.  The value
+      # is forwarded as vLLM's structured ProfilerConfig JSON.  Empty keeps
+      # the released runtime path byte-for-byte unchanged.
+      DSPARK_PROFILER_CONFIG: "${DSPARK_PROFILER_CONFIG:-}"
 
     command:
       - bash
@@ -141,6 +145,10 @@ services:
             exit 64;
           fi;
           KV_CACHE_ARGS=(--kv-cache-memory-bytes "$${KV_CACHE_MEMORY_BYTES}");
+        fi;
+        PROFILER_ARGS=();
+        if [[ -n "$${DSPARK_PROFILER_CONFIG:-}" ]]; then
+          PROFILER_ARGS=(--profiler-config "$${DSPARK_PROFILER_CONFIG}");
         fi;
         SPECULATIVE_ARGS=();
         case "$${DSPARK_SPECULATION_MODE:-dspark}" in
@@ -174,6 +182,7 @@ services:
         --max-cudagraph-capture-size "$${MAX_CUDAGRAPH_CAPTURE_SIZE}"
         --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.80}
         "$${KV_CACHE_ARGS[@]}"
+        "$${PROFILER_ARGS[@]}"
         --enable-prefix-caching
         --async-scheduling
         --enable-chunked-prefill

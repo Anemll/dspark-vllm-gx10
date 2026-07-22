@@ -274,6 +274,49 @@ done
         self.assertEqual(result.returncode, 64)
         self.assertIn("Invalid KV_CACHE_MEMORY_BYTES", result.stderr)
 
+    def _run_profiler_setup(
+        self, value: str | None
+    ) -> subprocess.CompletedProcess[str]:
+        start = self.compose.index("        PROFILER_ARGS=();")
+        end = self.compose.index("        SPECULATIVE_ARGS=();", start)
+        setup = self.compose[start:end].replace("$$", "$")
+        script = setup + "\nprintf 'argc=%s\\n' \"${#PROFILER_ARGS[@]}\"\n" + (
+            "for arg in \"${PROFILER_ARGS[@]}\"; do "
+            "printf 'arg=<%s>\\n' \"$arg\"; done\n"
+        )
+        env = {**os.environ}
+        if value is None:
+            env.pop("DSPARK_PROFILER_CONFIG", None)
+        else:
+            env["DSPARK_PROFILER_CONFIG"] = value
+        return subprocess.run(
+            ["bash", "-c", script],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+    def test_profiler_is_disabled_by_default(self) -> None:
+        result = self._run_profiler_setup(None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "argc=0\n")
+
+    def test_profiler_config_is_forwarded_as_one_structured_value(self) -> None:
+        value = (
+            '{"profiler":"torch","torch_profiler_dir":"/tmp/profile",'
+            '"ignore_frontend":true,"max_iterations":8}'
+        )
+        result = self._run_profiler_setup(value)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(
+            result.stdout,
+            "argc=2\narg=<--profiler-config>\narg=<" + value + ">\n",
+        )
+
+    def test_vllm_command_consumes_conditional_profiler_outputs(self) -> None:
+        self.assertIn('"$${PROFILER_ARGS[@]}"', self.compose)
+
 
 if __name__ == "__main__":
     unittest.main()
