@@ -232,7 +232,9 @@ def _make_native_b12x_runner(
             k=shape.hidden_size,
             n=shape.intermediate_size_per_rank,
             num_topk=shape.top_k,
-            device=torch.device("cuda"),
+            # Pin the indexed device so B12X's strict scratch-owner contract
+            # matches the actual ``cuda:0`` tensor device on single-GPU probes.
+            device=torch.device("cuda:0"),
             dtype=torch.bfloat16,
             core_token_counts=tuple(m_values),
             route_num_experts=0,

@@ -157,6 +157,7 @@ def run(args: argparse.Namespace) -> int:
         g1_alpha=tensors["g1_alphas"],
         a2_gscale=tensors["a2_gscale"],
         max_active_clusters=args.max_active_clusters,
+        mma_tile_n=args.mma_tile_n,
     )
     handoff = phase1.handoff
     phase2_workspace = RouteMajorFC2Workspace.allocate(torch, metadata)
@@ -305,6 +306,7 @@ def main() -> int:
     parser.add_argument("--repeats", type=int, default=2)
     parser.add_argument("--seed", type=int, default=4104)
     parser.add_argument("--max-active-clusters", type=int)
+    parser.add_argument("--mma-tile-n", type=int, choices=(64, 128, 256))
     parser.add_argument("--numeric-min-cosine", type=float, default=0.98)
     parser.add_argument("--numeric-max-nrmse", type=float, default=0.25)
     parser.add_argument("--m4-max-ms", type=float, default=0.682812)

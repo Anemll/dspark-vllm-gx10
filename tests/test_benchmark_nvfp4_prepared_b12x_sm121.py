@@ -84,7 +84,7 @@ class PreparedB12xBenchmarkTest(unittest.TestCase):
         )
         self.assertIn("dspark-patch-vllm-b12x-output-alias", dockerfile)
         self.assertIn("dspark-patch-b12x-nvfp4-swiglu-limit", dockerfile)
-        self.assertIn("native-clamped-decode-v1", dockerfile)
+        self.assertIn("pairwise-tiny-decode-v2", dockerfile)
         dockerignore = (
             root
             / "docker"

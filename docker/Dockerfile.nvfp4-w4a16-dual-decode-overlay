@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG BASE_IMAGE
+ARG BASE_IMAGE_ID
+ARG SOURCE_REVISION
+
+# Keep the immutable ancestry and source revision explicit.  The operational
+# build must pass the locally inspected image ID rather than a mutable tag.
+RUN python3 -c 'import re, sys; assert re.fullmatch(r"[0-9a-f]{40}", sys.argv[1]); assert re.fullmatch(r"sha256:[0-9a-f]{64}", sys.argv[2])' \
+      "${SOURCE_REVISION}" "${BASE_IMAGE_ID}"
+
+COPY scripts/patch_b12x_w4a16_modelopt_tc_decode.py \
+  /usr/local/bin/dspark-patch-b12x-w4a16-modelopt-tc-decode
+COPY scripts/patch_b12x_w4a16_e8m0_scale_fast.py \
+  /usr/local/bin/dspark-patch-b12x-w4a16-e8m0-scale-fast
+COPY scripts/patch_b12x_w4a16_e8m0_k32_scale_reuse.py \
+  /usr/local/bin/dspark-patch-b12x-w4a16-e8m0-k32-scale-reuse
+COPY scripts/patch_b12x_w4a16_modelopt_vector_load.py \
+  /usr/local/bin/dspark-patch-b12x-w4a16-modelopt-vector-load
+COPY scripts/patch_b12x_w4a16_modelopt_tc_planner.py \
+  /usr/local/bin/dspark-patch-b12x-w4a16-modelopt-tc-planner
+
+# These patches are a content-addressed chain.  Each script rejects an input
+# other than the exact output of its predecessor (the planner patches the
+# separately pinned TP-MoE source).
+RUN python3 /usr/local/bin/dspark-patch-b12x-w4a16-modelopt-tc-decode && \
+    python3 /usr/local/bin/dspark-patch-b12x-w4a16-e8m0-scale-fast && \
+    python3 /usr/local/bin/dspark-patch-b12x-w4a16-e8m0-k32-scale-reuse && \
+    python3 /usr/local/bin/dspark-patch-b12x-w4a16-modelopt-vector-load && \
+    python3 /usr/local/bin/dspark-patch-b12x-w4a16-modelopt-tc-planner
+
+RUN printf '%s  %s\n' \
+      'e23cccd7e135071f1393184132ec0ad7f277faf7851bfaba2b2a7b15e5a3a7dd' \
+      '/usr/local/lib/python3.12/dist-packages/b12x/moe/fused/w4a16/kernel.py' \
+      'ba980ff1df1df0b9959c274fa255c2fcb538671f0cdd068b0ec7cdf4f434933d' \
+      '/usr/local/lib/python3.12/dist-packages/b12x/integration/tp_moe.py' \
+    | sha256sum -c -
+
+# Copy only the six files that implement the default-off dual decode path.
+# The Dockerfile-specific ignore file prevents any other worktree material
+# (including configs, benchmark results, credentials, and local artifacts)
+# from entering the BuildKit context.
+COPY overlay/vllm/envs.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/envs.py
+COPY overlay/vllm/model_executor/layers/fused_moe/oracle/nvfp4.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/oracle/nvfp4.py
+COPY overlay/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py
+COPY overlay/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_policy.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_policy.py
+COPY overlay/vllm/model_executor/layers/fused_moe/experts/b12x_mxfp4_moe.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/b12x_mxfp4_moe.py
+COPY overlay/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py
+
+RUN python3 -m py_compile \
+      /usr/local/lib/python3.12/dist-packages/b12x/moe/fused/w4a16/kernel.py \
+      /usr/local/lib/python3.12/dist-packages/b12x/integration/tp_moe.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/envs.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/oracle/nvfp4.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_policy.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/b12x_mxfp4_moe.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.base.name="${BASE_IMAGE}" \
+      org.opencontainers.image.base.digest="${BASE_IMAGE_ID}" \
+      org.opencontainers.image.nvfp4-w4a16-dual-decode="modelopt-tc-e8m0-fast-k32-reuse-vector-v2" \
+      org.opencontainers.image.b12x-w4a16-kernel-sha256="e23cccd7e135071f1393184132ec0ad7f277faf7851bfaba2b2a7b15e5a3a7dd" \
+      org.opencontainers.image.b12x-tp-moe-sha256="ba980ff1df1df0b9959c274fa255c2fcb538671f0cdd068b0ec7cdf4f434933d"

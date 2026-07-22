@@ -1,0 +1,13 @@
+ccd56f4ccc7a558c2207a3449cb756342ab6a213eff497545843239cd201b332  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/results/cpu-unit-after-constexpr-fix.log
+0ab568c6c137d659de66e9b33204e1ee48f510c8dc5ae641452ddab8af07442b  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/results/cpu-unit-after-global-capture-fix.log
+3a65f694f9b18b775f156942c68e1d7ff5395f9055643e5a3a6be3ef5a7e5034  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/results/cpu-unit.log
+d83ed3a06c517569b276d10321b03d90f0adf79fd630807c6d56bdbbe3a9ccd6  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/results/packed-canonical-m4-rank0.compile-failure.log
+d83ed3a06c517569b276d10321b03d90f0adf79fd630807c6d56bdbbe3a9ccd6  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/results/packed-canonical-m4-rank0.log
+f4fe9d5df5f5cdfb0be3651967d0e5f11757db1fb056e43dce96fcb680fc3329  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/results/packed-canonical-m4-rank0.retry1.log
+d8559356aef169e55cfdda3192ed58607504488321fa8a103c9c33eceb377705  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/results/packed-canonical-m4-rank0.retry2.json
+90d59596acce3f17e3526a5184ab41369aad370926d6c3fc34fa3527efddca89  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/results/packed-canonical-m4-rank0.retry2.log
+988f9ee53049a05626e6bc9e523385097649173f80c2392dc3e10ec81ddb4b15  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/source/benchmarks/benchmark_nvfp4_a4w4_sm121.py
+ee10ff7920570953f1ba1f31699c0cd2e9630b2d3791b141fb1df5bf1734b715  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/source/benchmarks/benchmark_nvfp4_packed_canonical_w4a4_sm121.py
+49caf4ecd323213e946b67aab2fdff29b12d767b87871150c36a153d0ac5c7e1  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/source/benchmarks/benchmark_nvfp4_prepared_b12x_sm121.py
+12f620c73e14d2727fd19966546c9c3c43ff11a20e3eb435ad97daedc53e52d3  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/source/benchmarks/nvfp4_packed_inverse_ops.py
+a2ec5bdd87381667f5d02750e042e13fe2179201fd8aee260e207e2af0ba47ef  /home/anemll/nvfp4-artifacts/20260722-packed-canonical-m4-5f62607/source/tests/test_nvfp4_packed_inverse_ops.py

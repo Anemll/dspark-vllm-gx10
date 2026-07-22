@@ -78,6 +78,7 @@ def build_phase1_runner(
     g1_alpha: Any,
     a2_gscale: Any,
     max_active_clusters: int | None = None,
+    mma_tile_n: int | None = None,
 ) -> Phase1Runner:
     """Compile the isolated CuTeDSL phase 1 and bind persistent buffers."""
     import cutlass
@@ -184,6 +185,10 @@ def build_phase1_runner(
 
     sf_vec_size = 16
     mma_tiler = moe_dispatch._select_moe_mma_tiler_mn(m * metadata.top_k, i)
+    if mma_tile_n is not None:
+        if int(mma_tile_n) not in (64, 128, 256):
+            raise ValueError("phase-1 MMA N tile must be one of 64, 128, 256")
+        mma_tiler = (mma_tiler[0], int(mma_tile_n))
     phase1 = MoEPhase1Kernel(
         sf_vec_size=sf_vec_size,
         mma_tiler_mn=mma_tiler,

@@ -28,9 +28,84 @@ class PreparedPackedW4A16ComparatorTests(unittest.TestCase):
         self.assertAlmostEqual(args.min_m4_speedup, 1.1307124069289936)
         self.assertEqual(args.max_m4_latency_ms, 0.682812)
         self.assertEqual(args.m, (1, 4))
+        self.assertEqual(args.w4a16_weight_layout, "packed")
         self.assertEqual(
             args.min_m4_speedup,
             bench.REFERENCE_W4A4_M4_MS / bench.GAP_CLOSING_M4_MAX_MS,
+        )
+
+    def test_comparator_accepts_single_copy_modelopt_layout(self) -> None:
+        args = bench.build_parser().parse_args(
+            [
+                "--layer-file",
+                "layer.safetensors",
+                "--output",
+                "result.json",
+                "--w4a16-weight-layout",
+                "modelopt",
+            ]
+        )
+
+        self.assertEqual(args.w4a16_weight_layout, "modelopt")
+        self.assertEqual(bench.candidate_label("modelopt"), "modelopt_tc_w4a16")
+        self.assertEqual(bench.candidate_label("packed"), "packed_w4a16")
+        with self.assertRaisesRegex(ValueError, "unsupported W4A16"):
+            bench.candidate_label("other")
+
+    def test_modelopt_environment_fails_closed(self) -> None:
+        bench.require_modelopt_tc_environment(
+            {
+                "B12X_W4A16_TC_DECODE": "1",
+                "B12X_W4A16_SMALL_M_DIRECT": "0",
+            }
+        )
+        with self.assertRaisesRegex(RuntimeError, "TC_DECODE=1"):
+            bench.require_modelopt_tc_environment(
+                {"B12X_W4A16_SMALL_M_DIRECT": "0"}
+            )
+        with self.assertRaisesRegex(RuntimeError, "SMALL_M_DIRECT=0"):
+            bench.require_modelopt_tc_environment(
+                {"B12X_W4A16_TC_DECODE": "1"}
+            )
+
+    def test_compile_trace_records_actual_result_contract(self) -> None:
+        result = SimpleNamespace(
+            size_m=4,
+            weight_layout="modelopt",
+            direct_topk_routes=True,
+            tc_decode_fused_sum=True,
+            zero_fc2_output=False,
+            element_dtype="bf16",
+        )
+        module = SimpleNamespace(compile_w4a16_fused_moe=lambda **_: result)
+
+        events, original = bench.install_compile_trace(module)
+        self.assertIsNot(module.compile_w4a16_fused_moe, original)
+        self.assertIs(module.compile_w4a16_fused_moe(unused=True), result)
+        self.assertEqual(
+            events,
+            [
+                {
+                    "size_m": 4,
+                    "weight_layout": "modelopt",
+                    "direct_topk_routes": True,
+                    "tc_decode_fused_sum": True,
+                    "zero_fc2_output": False,
+                    "element_dtype": "bf16",
+                }
+            ],
+        )
+        self.assertTrue(bench.evaluate_modelopt_tc_contract(events, (4,))["passed"])
+        prewarmed_superset = events + [{**events[0], "size_m": 2}]
+        self.assertTrue(
+            bench.evaluate_modelopt_tc_contract(prewarmed_superset, (4,))["passed"]
+        )
+        self.assertFalse(
+            bench.evaluate_modelopt_tc_contract(events, (1, 4))["passed"]
+        )
+        wrong = [{**events[0], "tc_decode_fused_sum": False}]
+        self.assertFalse(
+            bench.evaluate_modelopt_tc_contract(wrong, (4,))["passed"]
         )
 
     def test_performance_gate_requires_speedup_and_absolute_latency(self) -> None:

@@ -53,6 +53,7 @@ def _plan_b12x_moe_fp4_scratch(
     quant_mode: str,
     source_format: str,
     w13_layout: str,
+    w4a16_weight_layout: str | None = None,
     apply_router_weight_on_input: bool = False,
     swiglu_limit: float | None = None,
 ):
@@ -75,6 +76,7 @@ def _plan_b12x_moe_fp4_scratch(
             swiglu_limit=swiglu_limit,
             source_format=source_format,
             w13_layout=w13_layout,
+            w4a16_weight_layout=w4a16_weight_layout,
             frozen=True,
         )
     )

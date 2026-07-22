@@ -83,6 +83,12 @@ PINNED_PREPARATION_SOURCE_SHA256 = {
 PINNED_B12X_EXPERTS_SHA256 = (
     "e87c3a6e3a40703a580ecc0b2771d8fd075c04c6da9acfba445fecf3ffd31407"
 )
+PINNED_DUAL_DECODE_EXPERTS_SHA256 = (
+    "8ca5cdbd0afc89d4effea446fef7ecbea8d37e9f863ff75f80bfac90cd74c6dd"
+)
+PINNED_DUAL_DECODE_POLICY_SHA256 = (
+    "9a1fbc2f61454e9d6779952d5de38dd373ddf1241508edda4b121f0cdf339c63"
+)
 LAYER0_RANK0_REFERENCE_JSON_SHA256 = (
     "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6"
 )
@@ -1061,12 +1067,43 @@ def _finalize_prepared_cutlass(
         routing_tables=routed_layer._expert_routing_tables(),
         layer=routed_layer,
     )
-    state.finalized = True
-    logger.info(
-        "NVFP4_PREPARED event=postload layer=%d transforms=0 backend=%s",
-        state.layer,
-        PREPARED_BACKEND,
+    dual_decode = getattr(quant_method.experts_cls, "__name__", None) == (
+        "NvFp4CutlassW4A16DualExperts"
     )
+    dual_scale_bytes = 0
+    if dual_decode:
+        fused_experts = getattr(quant_method.moe_kernel, "fused_experts", None)
+        initialize_dual = getattr(
+            fused_experts, "initialize_prepared_w4a16_decode", None
+        )
+        if not callable(initialize_dual):
+            raise RuntimeError(
+                "Prepared NVFP4 dual experts lack W4A16 sidecar initialization"
+            )
+        initialize_dual(routed_layer)
+        dual_scale_bytes = int(
+            getattr(fused_experts, "_w4a16_additional_scale_bytes", 0)
+        )
+        if dual_scale_bytes <= 0:
+            raise RuntimeError(
+                "Prepared NVFP4 dual experts reported no E8M0 scale sidecar"
+            )
+    state.finalized = True
+    if dual_decode:
+        logger.info(
+            "NVFP4_PREPARED event=postload layer=%d "
+            "transforms=e4m3_k16_to_e8m0_k32 backend=%s "
+            "scale_sidecar_bytes=%d duplicate_weight_bytes=0",
+            state.layer,
+            PREPARED_BACKEND,
+            dual_scale_bytes,
+        )
+    else:
+        logger.info(
+            "NVFP4_PREPARED event=postload layer=%d transforms=0 backend=%s",
+            state.layer,
+            PREPARED_BACKEND,
+        )
 
 
 def _finalize_prepared_b12x(
@@ -1179,19 +1216,27 @@ def _install_prepared_postload_hook(routed_layer: Any, state: PreparedPostloadSt
         )
     experts_cls = getattr(quant_method, "experts_cls", None)
     expected_experts = {
-        PREPARED_BACKEND: (
-            "FlashInferExperts",
-            "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe",
-        ),
-        PREPARED_B12X_BACKEND: (
-            "FlashInferB12xExperts",
-            "vllm.model_executor.layers.fused_moe.experts.flashinfer_b12x_moe",
-        ),
+        PREPARED_BACKEND: {
+            (
+                "FlashInferExperts",
+                "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe",
+            ),
+            (
+                "NvFp4CutlassW4A16DualExperts",
+                "vllm.model_executor.layers.fused_moe.experts.nvfp4_dual_decode_moe",
+            ),
+        },
+        PREPARED_B12X_BACKEND: {
+            (
+                "FlashInferB12xExperts",
+                "vllm.model_executor.layers.fused_moe.experts.flashinfer_b12x_moe",
+            )
+        },
     }[backend]
     if (
         getattr(experts_cls, "__name__", None),
         getattr(experts_cls, "__module__", None),
-    ) != expected_experts:
+    ) not in expected_experts:
         raise RuntimeError("Prepared NVFP4 FlashInfer experts identity drifted")
     original = quant_method.process_weights_after_loading
     original_function = getattr(original, "__func__", None)
@@ -1222,18 +1267,27 @@ def _validate_runtime_transform_sources(routed_layer: Any) -> None:
     quant_method = routed_layer.quant_method
     experts_cls = getattr(quant_method, "experts_cls", None)
     backend = getattr(getattr(quant_method, "nvfp4_backend", None), "value", None)
-    expert_contract = {
-        PREPARED_BACKEND: (
-            "FlashInferExperts",
-            "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe",
-            PINNED_PREPARATION_SOURCE_SHA256["flashinfer_experts"],
-        ),
-        PREPARED_B12X_BACKEND: (
-            "FlashInferB12xExperts",
-            "vllm.model_executor.layers.fused_moe.experts.flashinfer_b12x_moe",
-            PINNED_B12X_EXPERTS_SHA256,
-        ),
-    }.get(backend)
+    if backend == PREPARED_BACKEND and getattr(experts_cls, "__name__", None) == (
+        "NvFp4CutlassW4A16DualExperts"
+    ):
+        expert_contract = (
+            "NvFp4CutlassW4A16DualExperts",
+            "vllm.model_executor.layers.fused_moe.experts.nvfp4_dual_decode_moe",
+            PINNED_DUAL_DECODE_EXPERTS_SHA256,
+        )
+    else:
+        expert_contract = {
+            PREPARED_BACKEND: (
+                "FlashInferExperts",
+                "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe",
+                PINNED_PREPARATION_SOURCE_SHA256["flashinfer_experts"],
+            ),
+            PREPARED_B12X_BACKEND: (
+                "FlashInferB12xExperts",
+                "vllm.model_executor.layers.fused_moe.experts.flashinfer_b12x_moe",
+                PINNED_B12X_EXPERTS_SHA256,
+            ),
+        }.get(backend)
     if expert_contract is None:
         raise RuntimeError(f"Prepared NVFP4 runtime backend drifted: {backend!r}")
     source_contract = (
@@ -1245,6 +1299,28 @@ def _validate_runtime_transform_sources(routed_layer: Any) -> None:
         ),
         (experts_cls, *expert_contract),
     )
+    if getattr(experts_cls, "__name__", None) == "NvFp4CutlassW4A16DualExperts":
+        from vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe import (  # noqa: E501
+            FlashInferExperts,
+        )
+        from vllm.model_executor.layers.fused_moe.experts.nvfp4_dual_decode_policy import (  # noqa: E501
+            use_w4a16_decode,
+        )
+
+        source_contract += (
+            (
+                FlashInferExperts,
+                "FlashInferExperts",
+                "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe",
+                PINNED_PREPARATION_SOURCE_SHA256["flashinfer_experts"],
+            ),
+            (
+                use_w4a16_decode,
+                "use_w4a16_decode",
+                "vllm.model_executor.layers.fused_moe.experts.nvfp4_dual_decode_policy",
+                PINNED_DUAL_DECODE_POLICY_SHA256,
+            ),
+        )
     for candidate, expected_name, expected_module, expected_sha in source_contract:
         if (
             candidate is None

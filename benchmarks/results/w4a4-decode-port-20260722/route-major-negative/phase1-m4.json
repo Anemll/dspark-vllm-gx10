@@ -1,0 +1,301 @@
+{
+  "activity": {
+    "finite": true,
+    "max_abs": 2.375,
+    "nonfinite_count": 0,
+    "nonzero_count": 16384,
+    "numel": 16384,
+    "passed": true,
+    "rms": 0.5819207355380058
+  },
+  "backend_proof": {
+    "accepted": {
+      "activation": "swigluoai_uninterleave",
+      "activation_precision": "fp4",
+      "dynamic_workspace": "NoneType",
+      "implementation": "flashinfer.fused_moe.cute_dsl.b12x_moe.B12xMoEWrapper",
+      "max_num_tokens": 4,
+      "normalized_quant_mode": "nvfp4",
+      "requested": "w4a4",
+      "serving_adapter_output_copy": true,
+      "source_format": "modelopt",
+      "static_workspace": "Sm120StaticMoEWorkspace",
+      "swiglu_alpha": 1.0,
+      "swiglu_beta": 0.0,
+      "swiglu_limit": 10.0,
+      "workspace_memory": {
+        "ceiling_bytes": null,
+        "contract_applies": false,
+        "passed": null,
+        "required_roots_present": false,
+        "tensor_object_count": 15,
+        "unique_storage_bytes": 21057548,
+        "unique_storage_count": 12
+      }
+    },
+    "route_major": {
+      "handoff_quant_scale": "reciprocal raw prepared a2_gscale",
+      "phase1": "MoEPhase1Kernel FC1+OAI-SwiGLU+NVFP4",
+      "phase1_weights": "raw prepared W13 + accepted FlashInfer MMA-to-TMA W13-scale view + reciprocal a1 + g1",
+      "phase2": "group_gemm_nvfp4_nt_groupwise raw W2 + g2",
+      "prefill_changed": false,
+      "reduction": "Triton atomics-free router-weight sum"
+    }
+  },
+  "checkpoint": {
+    "layer_file": "/models/checkpoint/model-layer-00000.safetensors",
+    "physical_validation": {
+      "dtypes": {
+        "a1_gscale": "F32",
+        "a2_gscale": "F32",
+        "g1_alphas": "F32",
+        "g2_alphas": "F32",
+        "w13.weight": "U8",
+        "w13.weight_scale": "F8_E4M3",
+        "w2.weight": "U8",
+        "w2.weight_scale": "F8_E4M3"
+      },
+      "families": [
+        "w13.weight",
+        "w2.weight",
+        "w13.weight_scale",
+        "w2.weight_scale",
+        "a1_gscale",
+        "a2_gscale",
+        "g1_alphas",
+        "g2_alphas"
+      ],
+      "file_size": 3623888352,
+      "fingerprints_match": true,
+      "header_metadata": {
+        "dspark_layer": "0",
+        "dspark_loader_contract": "deepseek_v4_nvfp4_tp2_cutlass_prepared_v1",
+        "dspark_namespace": "__dspark_tp2_nvfp4_cutlass_v1__",
+        "dspark_payload_stage": "flashinfer_cutlass_prepared_v1",
+        "dspark_required_backend": "FLASHINFER_CUTLASS",
+        "dspark_schema": "dspark.deepseek_v4.nvfp4.tp2_cutlass_prepared.v1",
+        "dspark_standard_loader_compatible": "false",
+        "format": "pt"
+      },
+      "layer": 0,
+      "ok": true,
+      "path": "/models/checkpoint/model-layer-00000.safetensors",
+      "rank0_fingerprints": {
+        "a1_gscale": "ca75efb8ecb87d5b545fb8e0acdbe4db69c2683b34073738ed3132c7fed8755a",
+        "a2_gscale": "4fe0db93441a8df2f59f74d196fdf5511db258c02dababb9bd9cd95a0b6f2887",
+        "g1_alphas": "42fd9084021adf41c496f6696244ac24c853d114ece6143660b428a5c4a1e193",
+        "g2_alphas": "e67aa7dc665954c5a922e9a74d645ef903240c935e9bc2b09f37770ac5ed0615",
+        "w13.weight": "f02bb1c5778d151fbc210d57fe14c232a3dcb5b3ef213366a466ddf8ce875e55",
+        "w13.weight_scale": "b76d300f85af4d71e6df85b2910cd1f6da319c97d7875d022c08c62e67ae8a0a",
+        "w2.weight": "24b3299b6f60cd66f9b9209294503d7d8c18f5565790c52b1f2b5012270b586d",
+        "w2.weight_scale": "4a2c3041d99597af244183af181d3ca99edf738df4563f2c06a3b65fa67b7156"
+      },
+      "rank_bytes": {
+        "0": 1811943424,
+        "1": 1811943424
+      },
+      "rank_slices_contiguous": {
+        "0": true,
+        "1": true
+      },
+      "reference_json_sha256": "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6",
+      "source_shapes": {
+        "a1_gscale": [
+          2,
+          256
+        ],
+        "a2_gscale": [
+          2,
+          256
+        ],
+        "g1_alphas": [
+          2,
+          256
+        ],
+        "g2_alphas": [
+          2,
+          256
+        ],
+        "w13.weight": [
+          2,
+          256,
+          2048,
+          2048
+        ],
+        "w13.weight_scale": [
+          2,
+          256,
+          2048,
+          256
+        ],
+        "w2.weight": [
+          2,
+          256,
+          4096,
+          512
+        ],
+        "w2.weight_scale": [
+          2,
+          256,
+          4096,
+          64
+        ]
+      },
+      "tensor_count": 8,
+      "tp_size": 2
+    },
+    "tp_rank": 0
+  },
+  "numeric_passed": true,
+  "numeric_vs_accepted": {
+    "actual_max_abs": 2.375,
+    "actual_nonfinite_count": 0,
+    "actual_nonzero_count": 16384,
+    "cosine": 0.987207293510437,
+    "finite": true,
+    "max_abs": 0.404296875,
+    "mean_abs": 0.07434555888175964,
+    "nonfinite_count": 0,
+    "nonzero_activity": true,
+    "normalized_rmse": 0.15989689035744753,
+    "reference_max_abs": 2.46875,
+    "reference_nonfinite_count": 0,
+    "reference_nonzero_count": 16381,
+    "relative_p50": 0.16233766078948975,
+    "relative_p95": 2.0661590099334717,
+    "relative_p99": 10.781302452087402,
+    "rmse": 0.09311608652933501
+  },
+  "passed": false,
+  "performance_gate": {
+    "kind": "absolute_serving_projection",
+    "maximum_median_ms": 0.682812,
+    "minimum_speedup": 1.130712,
+    "passed": false
+  },
+  "probe": "nvfp4_route_major_phase1_sm121",
+  "route_metadata": {
+    "active_experts": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23
+    ],
+    "handoff_bytes": 2916352,
+    "padded_rows": 96,
+    "row_counts": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "scale_storage_rows": 32512
+  },
+  "settings": {
+    "iters": 20,
+    "m": 4,
+    "max_active_clusters": 28,
+    "repeats": 2,
+    "routing": "balanced",
+    "seed": 4104,
+    "warmup": 3
+  },
+  "timing": {
+    "accepted_fused": {
+      "max_ms": 0.9418240189552307,
+      "mean_ms": 0.8121383965015412,
+      "median_ms": 0.799591988325119,
+      "min_ms": 0.7944639921188354,
+      "repeat_medians_ms": [
+        0.8014079928398132,
+        0.7977759838104248
+      ],
+      "samples": 40
+    },
+    "component_sum_ms": 0.8269919976592064,
+    "paired_execution_orders": [
+      [
+        "route_major",
+        "accepted_fused"
+      ],
+      [
+        "accepted_fused",
+        "route_major"
+      ]
+    ],
+    "phase1": {
+      "max_ms": 0.7544000148773193,
+      "mean_ms": 0.5564216002821922,
+      "median_ms": 0.539343997836113,
+      "min_ms": 0.5272319912910461,
+      "repeat_medians_ms": [
+        0.533376008272171,
+        0.5453119874000549
+      ],
+      "samples": 40
+    },
+    "phase2": {
+      "max_ms": 0.3301439881324768,
+      "mean_ms": 0.28904479965567587,
+      "median_ms": 0.2876479998230934,
+      "min_ms": 0.2815360128879547,
+      "repeat_medians_ms": [
+        0.2884960025548935,
+        0.28679999709129333
+      ],
+      "samples": 40
+    },
+    "route_major_end_to_end": {
+      "max_ms": 1.0228159427642822,
+      "mean_ms": 0.8140472024679184,
+      "median_ms": 0.8036880046129227,
+      "min_ms": 0.7930880188941956,
+      "repeat_medians_ms": [
+        0.80622398853302,
+        0.8011520206928253
+      ],
+      "samples": 40
+    },
+    "speedup_route_major_over_accepted": 0.9949034746514894
+  }
+}

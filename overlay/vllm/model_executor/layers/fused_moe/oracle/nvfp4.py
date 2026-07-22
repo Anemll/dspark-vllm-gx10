@@ -80,6 +80,12 @@ def backend_to_kernel_cls(
         ]
 
     elif backend == NvFp4MoeBackend.FLASHINFER_CUTLASS:
+        if envs.VLLM_NVFP4_W4A16_DUAL_DECODE:
+            from vllm.model_executor.layers.fused_moe.experts.nvfp4_dual_decode_moe import (  # noqa: E501
+                NvFp4CutlassW4A16DualExperts,
+            )
+
+            return [NvFp4CutlassW4A16DualExperts]
         from vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe import (  # noqa: E501
             FlashInferExperts,
         )

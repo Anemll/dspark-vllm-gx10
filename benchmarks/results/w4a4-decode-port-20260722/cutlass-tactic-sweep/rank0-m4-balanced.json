@@ -1,0 +1,1041 @@
+{
+  "backend_proof": {
+    "activation": "silu",
+    "activation_precision": "nvfp4",
+    "activation_quantizer": "vllm.model_executor.layers.fused_moe.utils.moe_kernel_quantize_input",
+    "b12x_scale_storage_prepared": false,
+    "checkpoint_input_scale_stats": null,
+    "checkpoint_input_scale_tensor_count": 768,
+    "global_scales_baked_into_block_scales": false,
+    "implementation": "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe.FlashInferExperts",
+    "intermediate_size_per_rank": 1024,
+    "modelopt_activation_scale_contract": {
+      "loaded_from_prepared_checkpoint": true,
+      "runtime_transforms": 0
+    },
+    "normalized_quant_mode": "nvfp4",
+    "oracle_reason": null,
+    "oracle_supported": true,
+    "process_weights_after_loading_algebra_preapplied": true,
+    "quant_config_uses_raw_w13_scale_storage": true,
+    "quant_config_uses_raw_w2_scale_storage": true,
+    "requested": "flashinfer_cutlass",
+    "same_source_w13": true,
+    "same_source_w2": true,
+    "scale_layout": "raw ModelOpt block scales, swizzled",
+    "swiglu_limit": 10.0,
+    "tp_rank": 0,
+    "tp_size": 2,
+    "w13_scale_storage_distinct_from_b12x_baked": null,
+    "w2_scale_storage_distinct_from_b12x_baked": null,
+    "weight_layout": "up_gate (w13: up/w3, gate/w1)"
+  },
+  "cache_proof": {
+    "entries": {
+      "trtllm::fused_moe::gemm1": [
+        {
+          "extras": [],
+          "first_shape": [
+            4,
+            2048
+          ],
+          "key_sha256": "4683883e39359c0cc043cab517f2cd65158b6d3c650cdf2cec2a260563620431",
+          "runner": "MoERunner",
+          "tactic": 16
+        }
+      ],
+      "trtllm::fused_moe::gemm2": [
+        {
+          "extras": [],
+          "first_shape": [
+            4,
+            2048
+          ],
+          "key_sha256": "a1847dda203a7b65d232bca68d24cbcaa3dc6a9e1a484da84906882226ea3bc9",
+          "runner": "MoERunner",
+          "tactic": 58
+        }
+      ]
+    },
+    "m": 4,
+    "malformed_key_sha256": [],
+    "metadata": {
+      "cublas_version": "13.1.0",
+      "cuda_version": "13.0",
+      "cudnn_frontend_version": "1.26.0",
+      "cudnn_version": "91900",
+      "flashinfer_version": "0.6.15",
+      "gpu": "NVIDIA GB10"
+    },
+    "path": "/input/autotune_configs.json",
+    "sha256": "4548720aa05dda6032105f0ff87be66a044aa56b1edf0e948401df6eb4d8a0f3",
+    "total_config_entries": 60
+  },
+  "created_at": "2026-07-22T19:34:41.292968+00:00",
+  "decision": {
+    "best": {
+      "enable_pdl": true,
+      "gemm1_tactic": 16,
+      "gemm2_tactic": 59
+    },
+    "best_median_ms": 0.7631040215492249,
+    "material_improvement": false,
+    "service_materially_optimal": true,
+    "service_median_ms": 0.7669119834899902,
+    "speedup_over_service": 1.0049900954958075
+  },
+  "memory": {
+    "allocated_gib": 1.6955318450927734,
+    "peak_allocated_gib": 1.7039389610290527,
+    "reserved_gib": 1.708984375
+  },
+  "ok": true,
+  "prepared_checkpoint_proof": {
+    "checkpoint_input_scale_tensor_count": 768,
+    "layer_file": "/model/model-layer-00000.safetensors",
+    "layer_file_sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+    "modelopt_activation_scale_contract": {
+      "loaded_from_prepared_checkpoint": true,
+      "runtime_transforms": 0
+    },
+    "physical_validation": {
+      "dtypes": {
+        "a1_gscale": "F32",
+        "a2_gscale": "F32",
+        "g1_alphas": "F32",
+        "g2_alphas": "F32",
+        "w13.weight": "U8",
+        "w13.weight_scale": "F8_E4M3",
+        "w2.weight": "U8",
+        "w2.weight_scale": "F8_E4M3"
+      },
+      "families": [
+        "w13.weight",
+        "w2.weight",
+        "w13.weight_scale",
+        "w2.weight_scale",
+        "a1_gscale",
+        "a2_gscale",
+        "g1_alphas",
+        "g2_alphas"
+      ],
+      "file_size": 3623888352,
+      "fingerprints_match": true,
+      "header_metadata": {
+        "dspark_layer": "0",
+        "dspark_loader_contract": "deepseek_v4_nvfp4_tp2_cutlass_prepared_v1",
+        "dspark_namespace": "__dspark_tp2_nvfp4_cutlass_v1__",
+        "dspark_payload_stage": "flashinfer_cutlass_prepared_v1",
+        "dspark_required_backend": "FLASHINFER_CUTLASS",
+        "dspark_schema": "dspark.deepseek_v4.nvfp4.tp2_cutlass_prepared.v1",
+        "dspark_standard_loader_compatible": "false",
+        "format": "pt"
+      },
+      "layer": 0,
+      "ok": true,
+      "path": "/model/model-layer-00000.safetensors",
+      "rank0_fingerprints": {
+        "a1_gscale": "ca75efb8ecb87d5b545fb8e0acdbe4db69c2683b34073738ed3132c7fed8755a",
+        "a2_gscale": "4fe0db93441a8df2f59f74d196fdf5511db258c02dababb9bd9cd95a0b6f2887",
+        "g1_alphas": "42fd9084021adf41c496f6696244ac24c853d114ece6143660b428a5c4a1e193",
+        "g2_alphas": "e67aa7dc665954c5a922e9a74d645ef903240c935e9bc2b09f37770ac5ed0615",
+        "w13.weight": "f02bb1c5778d151fbc210d57fe14c232a3dcb5b3ef213366a466ddf8ce875e55",
+        "w13.weight_scale": "b76d300f85af4d71e6df85b2910cd1f6da319c97d7875d022c08c62e67ae8a0a",
+        "w2.weight": "24b3299b6f60cd66f9b9209294503d7d8c18f5565790c52b1f2b5012270b586d",
+        "w2.weight_scale": "4a2c3041d99597af244183af181d3ca99edf738df4563f2c06a3b65fa67b7156"
+      },
+      "rank_bytes": {
+        "0": 1811943424,
+        "1": 1811943424
+      },
+      "rank_slices_contiguous": {
+        "0": true,
+        "1": true
+      },
+      "reference_json_sha256": "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6",
+      "source_shapes": {
+        "a1_gscale": [
+          2,
+          256
+        ],
+        "a2_gscale": [
+          2,
+          256
+        ],
+        "g1_alphas": [
+          2,
+          256
+        ],
+        "g2_alphas": [
+          2,
+          256
+        ],
+        "w13.weight": [
+          2,
+          256,
+          2048,
+          2048
+        ],
+        "w13.weight_scale": [
+          2,
+          256,
+          2048,
+          256
+        ],
+        "w2.weight": [
+          2,
+          256,
+          4096,
+          512
+        ],
+        "w2.weight_scale": [
+          2,
+          256,
+          4096,
+          64
+        ]
+      },
+      "tensor_count": 8,
+      "tp_size": 2
+    },
+    "source": "prepared-physical-layer0-cutlass-only",
+    "source_weight_data_ptrs": {
+      "w13": 262142792040448,
+      "w2": 262142255169536
+    },
+    "weight_preparation_contract": {
+      "flashinfer_b12x": false,
+      "flashinfer_cutlass": true
+    }
+  },
+  "probe": "prepared_nvfp4_cutlass_tactic_pdl_sweep_sm121",
+  "results": [
+    {
+      "activity": {
+        "finite": true,
+        "max_abs": 2.265625,
+        "nonfinite_count": 0,
+        "nonzero_count": 16370,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953256483189762
+      },
+      "cuda_graph": {
+        "max_ms": 1.3507839441299438,
+        "mean_ms": 0.7803307534456253,
+        "median_ms": 0.7669119834899902,
+        "min_ms": 0.7579200267791748,
+        "p95_ms": 0.8242495745420455,
+        "repeat_median_ms": [
+          0.7668799757957458,
+          0.7669279873371124,
+          0.76596799492836,
+          0.7689760029315948,
+          0.766319990158081
+        ],
+        "repeat_median_range_ms": [
+          0.76596799492836,
+          0.7689760029315948
+        ],
+        "repeats": 5,
+        "samples": 500
+      },
+      "eager_numeric_passed": true,
+      "eager_vs_service_reference": {
+        "actual_max_abs": 2.265625,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16370,
+        "cosine": 1.0,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "enable_pdl": true,
+      "gemm1_tactic": 16,
+      "gemm2_tactic": 58,
+      "graph_activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16370,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953317536041141
+      },
+      "graph_numeric_passed": true,
+      "graph_vs_eager": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16370,
+        "cosine": 0.9999953508377075,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0007417262531816959,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.003083579952207752,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.012820512987673283,
+        "relative_p99": 0.05263157933950424,
+        "rmse": 0.0018357342341914773
+      },
+      "trace": [
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm1",
+          "tactic": 16
+        },
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm2",
+          "tactic": 58
+        }
+      ]
+    },
+    {
+      "activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16370,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953133292496204
+      },
+      "cuda_graph": {
+        "max_ms": 1.110975980758667,
+        "mean_ms": 0.7721781136989594,
+        "median_ms": 0.7631040215492249,
+        "min_ms": 0.7572159767150879,
+        "p95_ms": 0.8054560095071792,
+        "repeat_median_ms": [
+          0.764704018831253,
+          0.7638719975948334,
+          0.7628800272941589,
+          0.7628960013389587,
+          0.7631040215492249
+        ],
+        "repeat_median_range_ms": [
+          0.7628800272941589,
+          0.764704018831253
+        ],
+        "repeats": 5,
+        "samples": 500
+      },
+      "eager_numeric_passed": true,
+      "eager_vs_service_reference": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16370,
+        "cosine": 0.9999961853027344,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0005865967832505703,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0027426735532081084,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.01123595517128706,
+        "relative_p99": 0.0476190485060215,
+        "rmse": 0.001632783911190927
+      },
+      "enable_pdl": true,
+      "gemm1_tactic": 16,
+      "gemm2_tactic": 59,
+      "graph_activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16368,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953225754201412
+      },
+      "graph_numeric_passed": true,
+      "graph_vs_eager": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16368,
+        "cosine": 0.9999967217445374,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0005261870101094246,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.002621450669590763,
+        "reference_max_abs": 2.28125,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.010869565419852734,
+        "relative_p99": 0.042553190141916275,
+        "rmse": 0.001560584525577724
+      },
+      "trace": [
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm1",
+          "tactic": 16
+        },
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm2",
+          "tactic": 59
+        }
+      ]
+    },
+    {
+      "activity": {
+        "finite": true,
+        "max_abs": 2.265625,
+        "nonfinite_count": 0,
+        "nonzero_count": 16366,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953228799626231
+      },
+      "cuda_graph": {
+        "max_ms": 0.9592639803886414,
+        "mean_ms": 0.7735509761571884,
+        "median_ms": 0.7679039835929871,
+        "min_ms": 0.7618880271911621,
+        "p95_ms": 0.8080000281333923,
+        "repeat_median_ms": [
+          0.7679359912872314,
+          0.7671200037002563,
+          0.7683040201663971,
+          0.7671999931335449,
+          0.7681599855422974
+        ],
+        "repeat_median_range_ms": [
+          0.7671200037002563,
+          0.7683040201663971
+        ],
+        "repeats": 5,
+        "samples": 500
+      },
+      "eager_numeric_passed": true,
+      "eager_vs_service_reference": {
+        "actual_max_abs": 2.265625,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16366,
+        "cosine": 0.9999949336051941,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0007995842024683952,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0031899701333744537,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.013888888992369175,
+        "relative_p99": 0.06488154828548431,
+        "rmse": 0.0018990710377693176
+      },
+      "enable_pdl": true,
+      "gemm1_tactic": 18,
+      "gemm2_tactic": 58,
+      "graph_activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16365,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953326374292374
+      },
+      "graph_numeric_passed": true,
+      "graph_vs_eager": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16365,
+        "cosine": 0.9999958872795105,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0006675883196294308,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.00290733481421959,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16366,
+        "relative_p50": 0.0,
+        "relative_p95": 0.012500000186264515,
+        "relative_p99": 0.054054055362939835,
+        "rmse": 0.0017308029346168041
+      },
+      "trace": [
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm1",
+          "tactic": 18
+        },
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm2",
+          "tactic": 58
+        }
+      ]
+    },
+    {
+      "activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16368,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953284222632647
+      },
+      "cuda_graph": {
+        "max_ms": 0.9508159756660461,
+        "mean_ms": 0.7734429438114166,
+        "median_ms": 0.7651839852333069,
+        "min_ms": 0.7578880190849304,
+        "p95_ms": 0.8080815762281418,
+        "repeat_median_ms": [
+          0.7660000026226044,
+          0.7668479979038239,
+          0.7651679813861847,
+          0.7651040256023407,
+          0.7649919986724854
+        ],
+        "repeat_median_range_ms": [
+          0.7649919986724854,
+          0.7668479979038239
+        ],
+        "repeats": 5,
+        "samples": 500
+      },
+      "eager_numeric_passed": true,
+      "eager_vs_service_reference": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16368,
+        "cosine": 0.9999960660934448,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0006210827268660069,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0028098450180880654,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.011904762126505375,
+        "relative_p99": 0.0476190485060215,
+        "rmse": 0.0016727728070691228
+      },
+      "enable_pdl": true,
+      "gemm1_tactic": 18,
+      "gemm2_tactic": 59,
+      "graph_activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16370,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953309377655387
+      },
+      "graph_numeric_passed": true,
+      "graph_vs_eager": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16370,
+        "cosine": 0.9999982714653015,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.00025516189634799957,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0018499934325573006,
+        "reference_max_abs": 2.28125,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16368,
+        "relative_p50": 0.0,
+        "relative_p95": 0.006410256493836641,
+        "relative_p99": 0.021755261346697807,
+        "rmse": 0.0011013536714017391
+      },
+      "trace": [
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm1",
+          "tactic": 18
+        },
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm2",
+          "tactic": 59
+        }
+      ]
+    },
+    {
+      "activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16367,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953165246173739
+      },
+      "cuda_graph": {
+        "max_ms": 1.0598080158233643,
+        "mean_ms": 0.7728025621175766,
+        "median_ms": 0.768064022064209,
+        "min_ms": 0.7609279751777649,
+        "p95_ms": 0.8061631977558136,
+        "repeat_median_ms": [
+          0.7681759893894196,
+          0.768064022064209,
+          0.7684800028800964,
+          0.7680320143699646,
+          0.7673280239105225
+        ],
+        "repeat_median_range_ms": [
+          0.7673280239105225,
+          0.7684800028800964
+        ],
+        "repeats": 5,
+        "samples": 500
+      },
+      "eager_numeric_passed": true,
+      "eager_vs_service_reference": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16367,
+        "cosine": 0.9999945759773254,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0008572046644985676,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0032939247520260037,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.014705882407724857,
+        "relative_p99": 0.06727069616317749,
+        "rmse": 0.0019609578885138035
+      },
+      "enable_pdl": false,
+      "gemm1_tactic": 16,
+      "gemm2_tactic": 58,
+      "graph_activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16369,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953167285770178
+      },
+      "graph_numeric_passed": true,
+      "graph_vs_eager": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16369,
+        "cosine": 0.9999963641166687,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0005633346736431122,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0026854886704061596,
+        "reference_max_abs": 2.28125,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16367,
+        "relative_p50": 0.0,
+        "relative_p95": 0.010869565419852734,
+        "relative_p99": 0.043478261679410934,
+        "rmse": 0.0015987157821655273
+      },
+      "trace": [
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm1",
+          "tactic": 16
+        },
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm2",
+          "tactic": 58
+        }
+      ]
+    },
+    {
+      "activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16369,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953316856175661
+      },
+      "cuda_graph": {
+        "max_ms": 1.1641279458999634,
+        "mean_ms": 0.7718127362728119,
+        "median_ms": 0.7651999890804291,
+        "min_ms": 0.7593600153923035,
+        "p95_ms": 0.8049280047416687,
+        "repeat_median_ms": [
+          0.7662720084190369,
+          0.7650080025196075,
+          0.7651200294494629,
+          0.7651679813861847,
+          0.7650400102138519
+        ],
+        "repeat_median_range_ms": [
+          0.7650080025196075,
+          0.7662720084190369
+        ],
+        "repeats": 5,
+        "samples": 500
+      },
+      "eager_numeric_passed": true,
+      "eager_vs_service_reference": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16369,
+        "cosine": 0.9999949932098389,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0007984600961208344,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.003176567402003436,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.014084506779909134,
+        "relative_p99": 0.06463528424501419,
+        "rmse": 0.0018910920480266213
+      },
+      "enable_pdl": false,
+      "gemm1_tactic": 16,
+      "gemm2_tactic": 59,
+      "graph_activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16368,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953413397073746
+      },
+      "graph_numeric_passed": true,
+      "graph_vs_eager": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16368,
+        "cosine": 0.9999963045120239,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0006115324795246124,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.002747848462905979,
+        "reference_max_abs": 2.28125,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16369,
+        "relative_p50": 0.0,
+        "relative_p95": 0.01123595517128706,
+        "relative_p99": 0.05000000074505806,
+        "rmse": 0.0016358812572434545
+      },
+      "trace": [
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm1",
+          "tactic": 16
+        },
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm2",
+          "tactic": 59
+        }
+      ]
+    },
+    {
+      "activity": {
+        "finite": true,
+        "max_abs": 2.265625,
+        "nonfinite_count": 0,
+        "nonzero_count": 16370,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953144398517907
+      },
+      "cuda_graph": {
+        "max_ms": 1.0652480125427246,
+        "mean_ms": 0.7735850236415863,
+        "median_ms": 0.7689599990844727,
+        "min_ms": 0.7617599964141846,
+        "p95_ms": 0.8059648126363754,
+        "repeat_median_ms": [
+          0.7685920000076294,
+          0.7691999971866608,
+          0.7682880163192749,
+          0.7685120105743408,
+          0.769135981798172
+        ],
+        "repeat_median_range_ms": [
+          0.7682880163192749,
+          0.7691999971866608
+        ],
+        "repeats": 5,
+        "samples": 500
+      },
+      "eager_numeric_passed": true,
+      "eager_vs_service_reference": {
+        "actual_max_abs": 2.265625,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16370,
+        "cosine": 0.9999943971633911,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0009027561172842979,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0033717149174838654,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.016393441706895828,
+        "relative_p99": 0.0714285746216774,
+        "rmse": 0.0020072683691978455
+      },
+      "enable_pdl": false,
+      "gemm1_tactic": 18,
+      "gemm2_tactic": 58,
+      "graph_activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16368,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953133292496204
+      },
+      "graph_numeric_passed": true,
+      "graph_vs_eager": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16368,
+        "cosine": 0.9999951124191284,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0007819570600986481,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0031635850207523417,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.014417875558137894,
+        "relative_p99": 0.0625,
+        "rmse": 0.0018833278445526958
+      },
+      "trace": [
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm1",
+          "tactic": 18
+        },
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm2",
+          "tactic": 58
+        }
+      ]
+    },
+    {
+      "activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16371,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953371245414019
+      },
+      "cuda_graph": {
+        "max_ms": 1.146016001701355,
+        "mean_ms": 0.774243200302124,
+        "median_ms": 0.768127977848053,
+        "min_ms": 0.7609919905662537,
+        "p95_ms": 0.8080655843019486,
+        "repeat_median_ms": [
+          0.7681439816951752,
+          0.7681759893894196,
+          0.7684159874916077,
+          0.7672159969806671,
+          0.7678560018539429
+        ],
+        "repeat_median_range_ms": [
+          0.7672159969806671,
+          0.7684159874916077
+        ],
+        "repeats": 5,
+        "samples": 500
+      },
+      "eager_numeric_passed": true,
+      "eager_vs_service_reference": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16371,
+        "cosine": 0.9999943375587463,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0009102155454456806,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.003390522035946916,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16370,
+        "relative_p50": 0.0,
+        "relative_p95": 0.014925372786819935,
+        "relative_p99": 0.07778899371623993,
+        "rmse": 0.0020184647291898727
+      },
+      "enable_pdl": false,
+      "gemm1_tactic": 18,
+      "gemm2_tactic": 59,
+      "graph_activity": {
+        "finite": true,
+        "max_abs": 2.28125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16370,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953175444155931
+      },
+      "graph_numeric_passed": true,
+      "graph_vs_eager": {
+        "actual_max_abs": 2.28125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16370,
+        "cosine": 0.9999958276748657,
+        "finite": true,
+        "max_abs": 0.015625,
+        "mean_abs": 0.0006574541330337524,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.002895720261598189,
+        "reference_max_abs": 2.28125,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16371,
+        "relative_p50": 0.0,
+        "relative_p95": 0.011685679666697979,
+        "relative_p99": 0.05000000074505806,
+        "rmse": 0.0017239297740161419
+      },
+      "trace": [
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm1",
+          "tactic": 18
+        },
+        {
+          "gemm1_tactic_count": 20,
+          "gemm2_tactic_count": 40,
+          "occupancy": 1,
+          "op": "trtllm::fused_moe::gemm2",
+          "tactic": 59
+        }
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "settings": {
+    "gemm1_tactics": [
+      16,
+      18
+    ],
+    "gemm2_tactics": [
+      58,
+      59
+    ],
+    "iters": 100,
+    "minimum_material_speedup": 1.03,
+    "pdl_values": [
+      true,
+      false
+    ],
+    "repeats": 5,
+    "routing": "balanced",
+    "seed": 4104,
+    "service_pair": [
+      16,
+      58
+    ],
+    "service_pdl": true,
+    "warmup": 10
+  },
+  "shape": {
+    "hidden_size": 4096,
+    "intermediate_size_per_rank": 1024,
+    "m": 4,
+    "num_experts": 256,
+    "top_k": 6,
+    "tp_rank": 0,
+    "tp_size": 2
+  }
+}

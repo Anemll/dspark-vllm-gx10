@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-"""Compare prepared W4A4 with packed W4A16 on one real TP2 layer.
+"""Compare prepared W4A4 with W4A16 on one real TP2 layer.
 
 This diagnostic answers one narrow question: is the decode advantage of the
 native MXFP4 serving arm caused by its once-prepared packed tensor-core layout,
 rather than by BF16 activation math alone?  It loads one immutable prepared
-NVFP4 layer, keeps the existing FlashInfer-B12X W4A4 tensors untouched, makes
-one separate packed W4A16 copy, and times both paths on identical activations
-and routes.  It never constructs or serves a full model.
+NVFP4 layer and times both paths on identical activations and routes.  The
+default comparator makes one separate packed W4A16 copy.  The opt-in
+``modelopt`` comparator keeps the existing W4A4 tensors as the only physical
+weight copy and requires the B12X tensor-core decode schedule to prove that it
+did not silently fall back to the older direct microkernel.  It never
+constructs or serves a full model.
 """
 
 from __future__ import annotations
@@ -34,6 +37,85 @@ SCHEMA_VERSION = 1
 REFERENCE_W4A4_M4_MS = 0.772064
 GAP_CLOSING_M4_MAX_MS = 0.682812
 GAP_CLOSING_M4_MIN_SPEEDUP = REFERENCE_W4A4_M4_MS / GAP_CLOSING_M4_MAX_MS
+
+
+def candidate_label(weight_layout: str) -> str:
+    if weight_layout == 'packed':
+        return 'packed_w4a16'
+    if weight_layout == 'modelopt':
+        return 'modelopt_tc_w4a16'
+    raise ValueError(f'unsupported W4A16 weight layout {weight_layout!r}')
+
+
+def require_modelopt_tc_environment(environ: dict[str, str]) -> None:
+    """Fail closed unless the two B12X selectors force the intended path."""
+
+    if environ.get('B12X_W4A16_TC_DECODE') != '1':
+        raise RuntimeError('modelopt comparator requires B12X_W4A16_TC_DECODE=1')
+    if environ.get('B12X_W4A16_SMALL_M_DIRECT') != '0':
+        raise RuntimeError(
+            'modelopt comparator requires B12X_W4A16_SMALL_M_DIRECT=0'
+        )
+
+
+def install_compile_trace(kernel_module: Any) -> tuple[list[dict[str, Any]], Any]:
+    """Record the actual fused compile result selected by ``run_w4a16_moe``."""
+
+    original = kernel_module.compile_w4a16_fused_moe
+    events: list[dict[str, Any]] = []
+
+    def traced_compile(**kwargs: Any) -> Any:
+        result = original(**kwargs)
+        events.append(
+            {
+                'size_m': int(result.size_m),
+                'weight_layout': str(result.weight_layout),
+                'direct_topk_routes': bool(result.direct_topk_routes),
+                'tc_decode_fused_sum': bool(result.tc_decode_fused_sum),
+                'zero_fc2_output': bool(result.zero_fc2_output),
+                'element_dtype': str(result.element_dtype),
+            }
+        )
+        return result
+
+    kernel_module.compile_w4a16_fused_moe = traced_compile
+    return events, original
+
+
+def evaluate_modelopt_tc_contract(
+    events: list[dict[str, Any]], requested_m: tuple[int, ...]
+) -> dict[str, Any]:
+    """Prove every measured M compiled the single-copy tensor-core path."""
+
+    unique = [dict(items) for items in sorted({tuple(sorted(e.items())) for e in events})]
+    required_m = sorted(set(requested_m))
+    passing_m = sorted(
+        {
+            int(event['size_m'])
+            for event in unique
+            if event['weight_layout'] == 'modelopt'
+            and event['direct_topk_routes'] is True
+            and event['tc_decode_fused_sum'] is True
+            and event['zero_fc2_output'] is False
+            and event['element_dtype'] == 'bf16'
+        }
+    )
+    return {
+        'required': {
+            'weight_layout': 'modelopt',
+            'direct_topk_routes': True,
+            'tc_decode_fused_sum': True,
+            'zero_fc2_output': False,
+            'element_dtype': 'bf16',
+            'size_m': required_m,
+        },
+        'observed_unique_compile_results': unique,
+        'passing_m': passing_m,
+        # Frozen serving arenas deliberately precompile every supported small-M
+        # TC shape.  Extra proven shapes are not a contract failure; every
+        # measured shape must be present in that superset.
+        'passed': set(required_m).issubset(passing_m),
+    }
 
 
 def _csv_positive_ints(value: str) -> tuple[int, ...]:
@@ -66,39 +148,41 @@ def direct_output_backend_proof(proof: dict[str, Any]) -> dict[str, Any]:
 
 def evaluate_performance_gate(
     speedups: dict[int, float],
-    packed_w4a16_median_ms: dict[int, float],
+    candidate_median_ms: dict[int, float],
     *,
     required_m4_speedup: float,
     maximum_m4_latency_ms: float,
+    candidate: str = 'packed_w4a16',
 ) -> dict[str, Any]:
     if 4 not in speedups:
-        raise ValueError('packed W4A16 gate requires M=4')
-    if 4 not in packed_w4a16_median_ms:
-        raise ValueError('packed W4A16 latency gate requires M=4')
+        raise ValueError(f'{candidate} gate requires M=4')
+    if 4 not in candidate_median_ms:
+        raise ValueError(f'{candidate} latency gate requires M=4')
     if not speedups or any(not math.isfinite(value) or value <= 0 for value in speedups.values()):
         raise ValueError('speedups must be positive and finite')
-    if not packed_w4a16_median_ms or any(
+    if not candidate_median_ms or any(
         not math.isfinite(value) or value <= 0
-        for value in packed_w4a16_median_ms.values()
+        for value in candidate_median_ms.values()
     ):
-        raise ValueError('packed W4A16 latencies must be positive and finite')
+        raise ValueError(f'{candidate} latencies must be positive and finite')
     if not math.isfinite(required_m4_speedup) or required_m4_speedup <= 0:
         raise ValueError('required M=4 speedup must be positive and finite')
     if not math.isfinite(maximum_m4_latency_ms) or maximum_m4_latency_ms <= 0:
         raise ValueError('maximum M=4 latency must be positive and finite')
     speedup_passed = speedups[4] >= required_m4_speedup
-    latency_passed = packed_w4a16_median_ms[4] <= maximum_m4_latency_ms
+    latency_passed = candidate_median_ms[4] <= maximum_m4_latency_ms
     return {
-        'comparison': 'packed_w4a16_over_flashinfer_b12x_w4a4',
+        'comparison': f'{candidate}_over_flashinfer_b12x_w4a4',
+        'candidate': candidate,
         'reference_w4a4_m4_ms': REFERENCE_W4A4_M4_MS,
         'required_m4_speedup': required_m4_speedup,
         'maximum_m4_latency_ms': maximum_m4_latency_ms,
         'speedup_by_m': {str(m): value for m, value in sorted(speedups.items())},
-        'packed_w4a16_median_ms_by_m': {
-            str(m): value for m, value in sorted(packed_w4a16_median_ms.items())
+        f'{candidate}_median_ms_by_m': {
+            str(m): value for m, value in sorted(candidate_median_ms.items())
         },
         'm4_speedup': speedups[4],
-        'm4_latency_ms': packed_w4a16_median_ms[4],
+        'm4_latency_ms': candidate_median_ms[4],
         'speedup_passed': speedup_passed,
         'latency_passed': latency_passed,
         'passed': speedup_passed and latency_passed,
@@ -107,6 +191,7 @@ def evaluate_performance_gate(
 
 def run(args: argparse.Namespace) -> int:
     import torch
+    from b12x.moe.fused.w4a16 import kernel as w4a16_kernel
     from vllm.models.deepseek_v4.nvidia.prepared_weight_loading import (
         validate_prepared_layer_file,
     )
@@ -118,6 +203,12 @@ def run(args: argparse.Namespace) -> int:
         raise RuntimeError(f'packed W4A16 gate requires SM121; got {capability}')
     if args.tp_rank not in (0, 1):
         raise ValueError('TP rank must be 0 or 1')
+    candidate = candidate_label(args.w4a16_weight_layout)
+    compile_events: list[dict[str, Any]] = []
+    original_compile = None
+    if args.w4a16_weight_layout == 'modelopt':
+        require_modelopt_tc_environment(dict(os.environ))
+        compile_events, original_compile = install_compile_trace(w4a16_kernel)
 
     physical = validate_prepared_layer_file(args.layer_file, layer=0)
     shape = kernel_bench.Dsv4Shape(tp_rank=args.tp_rank)
@@ -131,7 +222,7 @@ def run(args: argparse.Namespace) -> int:
         swiglu_beta=0.0,
         swiglu_limit=10.0,
         fast_math=True,
-        w4a16_weight_layout='packed',
+        w4a16_weight_layout=args.w4a16_weight_layout,
     )
     w4a4_wrapper, w4a4_proof = kernel_bench._make_w4a4_runner(
         torch, weights, shape, runner_args
@@ -140,18 +231,22 @@ def run(args: argparse.Namespace) -> int:
     w4a4_arena = w4a4_wrapper._moe_output
     if w4a4_arena is None:
         raise RuntimeError('graph-enabled W4A4 wrapper has no output arena')
-    packed_w4a16, packed_proof = kernel_bench._prepare_w4a16(
+    candidate_w4a16, candidate_proof = kernel_bench._prepare_w4a16(
         torch, weights, runner_args
     )
-    if getattr(packed_w4a16, 'weight_layout', None) != 'packed':
-        raise RuntimeError('W4A16 comparator did not use packed weights')
+    if getattr(candidate_w4a16, 'weight_layout', None) != args.w4a16_weight_layout:
+        raise RuntimeError(
+            'W4A16 comparator did not use the requested weight layout: '
+            f"expected {args.w4a16_weight_layout}, got "
+            f"{getattr(candidate_w4a16, 'weight_layout', None)}"
+        )
     torch.cuda.synchronize()
 
     failures: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
     speedups: dict[int, float] = {}
-    packed_w4a16_median_ms: dict[int, float] = {}
-    keepalive: list[Any] = [w4a4_wrapper, packed_w4a16]
+    candidate_median_ms: dict[int, float] = {}
+    keepalive: list[Any] = [w4a4_wrapper, candidate_w4a16]
     for m in args.m:
         x, topk_ids, topk_weights = kernel_bench.make_routes(
             torch,
@@ -173,7 +268,7 @@ def run(args: argparse.Namespace) -> int:
         )
         w4a16_launch, w4a16_buffers = kernel_bench._make_w4a16_launch(
             torch,
-            packed_w4a16,
+            candidate_w4a16,
             x,
             topk_ids,
             topk_weights,
@@ -184,7 +279,7 @@ def run(args: argparse.Namespace) -> int:
         activity: dict[str, Any] = {}
         for name, launch in (
             ('w4a4', w4a4_launch),
-            ('packed_w4a16', w4a16_launch),
+            (candidate, w4a16_launch),
         ):
             output = launch()
             torch.cuda.synchronize()
@@ -194,7 +289,7 @@ def run(args: argparse.Namespace) -> int:
                 failures.append({'kind': 'output_activity', 'm': m, 'backend': name})
 
         numeric = kernel_bench.compare_tensors(
-            torch, eager_outputs['packed_w4a16'], eager_outputs['w4a4']
+            torch, eager_outputs[candidate], eager_outputs['w4a4']
         )
         numeric_passed = kernel_bench.numeric_metrics_pass(
             numeric,
@@ -208,7 +303,7 @@ def run(args: argparse.Namespace) -> int:
         graph_status: dict[str, Any] = {}
         for name, launch in (
             ('w4a4', w4a4_launch),
-            ('packed_w4a16', w4a16_launch),
+            (candidate, w4a16_launch),
         ):
             replay, graph_output, graph = kernel_bench.capture_graph(torch, launch)
             replay()
@@ -237,14 +332,12 @@ def run(args: argparse.Namespace) -> int:
             warmup=args.warmup,
             iters=args.iters,
             repeats=args.repeats,
-            pair=('packed_w4a16', 'w4a4'),
+            pair=(candidate, 'w4a4'),
         )
-        speedup = float(
-            timing['combined']['speedup_packed_w4a16_over_w4a4']
-        )
+        speedup = float(timing['combined'][f'speedup_{candidate}_over_w4a4'])
         speedups[m] = speedup
-        packed_w4a16_median_ms[m] = float(
-            timing['combined']['packed_w4a16']['median_ms']
+        candidate_median_ms[m] = float(
+            timing['combined'][candidate]['median_ms']
         )
         unique_experts, counts = torch.unique(topk_ids, return_counts=True)
         results.append(
@@ -259,23 +352,36 @@ def run(args: argparse.Namespace) -> int:
                 'numeric_passed': numeric_passed,
                 'cuda_graph_status': graph_status,
                 'cuda_graph': timing,
-                'speedup_packed_w4a16_over_w4a4': speedup,
+                f'speedup_{candidate}_over_w4a4': speedup,
             }
         )
 
     performance_gate = evaluate_performance_gate(
         speedups,
-        packed_w4a16_median_ms,
+        candidate_median_ms,
         required_m4_speedup=args.min_m4_speedup,
         maximum_m4_latency_ms=args.max_m4_latency_ms,
+        candidate=candidate,
     )
     if not performance_gate['passed']:
         failures.append({'kind': 'performance', **performance_gate})
 
+    modelopt_tc_contract = None
+    if args.w4a16_weight_layout == 'modelopt':
+        modelopt_tc_contract = evaluate_modelopt_tc_contract(
+            compile_events, args.m
+        )
+        if not modelopt_tc_contract['passed']:
+            failures.append(
+                {'kind': 'modelopt_tc_compile_contract', **modelopt_tc_contract}
+            )
+    if original_compile is not None:
+        w4a16_kernel.compile_w4a16_fused_moe = original_compile
+
     report = {
         'schema_version': SCHEMA_VERSION,
         'created_at': datetime.now(timezone.utc).isoformat(),
-        'probe': 'prepared_nvfp4_packed_w4a16_vs_w4a4_sm121',
+        'probe': f'prepared_nvfp4_{candidate}_vs_w4a4_sm121',
         'gpu': {
             'name': torch.cuda.get_device_name(),
             'capability': list(capability),
@@ -294,11 +400,16 @@ def run(args: argparse.Namespace) -> int:
             'repeats': args.repeats,
             'seed': args.seed,
             'b12x_w4a16_tc_decode': os.getenv('B12X_W4A16_TC_DECODE', '0'),
+            'b12x_w4a16_small_m_direct': os.getenv(
+                'B12X_W4A16_SMALL_M_DIRECT', '1'
+            ),
+            'w4a16_weight_layout': args.w4a16_weight_layout,
         },
         'backend_proof': {
             'w4a4': w4a4_proof,
-            'packed_w4a16': packed_proof,
+            candidate: candidate_proof,
         },
+        'modelopt_tc_compile_contract': modelopt_tc_contract,
         'performance_gate': performance_gate,
         'results': results,
         'memory': {
@@ -321,6 +432,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--layer-file', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tp-rank', type=int, default=0)
+    parser.add_argument(
+        '--w4a16-weight-layout',
+        choices=('packed', 'modelopt'),
+        default='packed',
+        help=(
+            'Use the existing packed-copy diagnostic or the single-copy '
+            'ModelOpt tensor-core decode experiment. ModelOpt requires '
+            'B12X_W4A16_TC_DECODE=1 and B12X_W4A16_SMALL_M_DIRECT=0.'
+        ),
+    )
     parser.add_argument('--m', type=_csv_positive_ints, default=(1, 4))
     parser.add_argument('--routing', choices=('balanced', 'random', 'hot'), default='balanced')
     parser.add_argument('--warmup', type=int, default=3)
