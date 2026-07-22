@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: 2026 Anemll contributors
-"""Matched B12X-vs-CUTLASS gate from one prepared NVFP4 layer.
+"""Matched native-B12X/FlashInfer-B12X/CUTLASS gate from prepared NVFP4.
 
 The production checkpoint stores the exact CUTLASS-prepared payload.  This
-probe loads one TP rank, preserves the packed weights, converts a distinct
-copy of the scale storage to B12X's baked-scale contract, and times both
-FlashInfer backends against identical activations and routes.  It is a bounded
-hardware gate for the serving optimization; it never constructs a full model.
+probe loads one TP rank and compares three paths against identical activations
+and routes: the native B12X NVFP4 direct microkernel using the prepared scale
+contract without transforms, FlashInfer B12X using its baked/MMA scale
+contract, and FlashInfer CUTLASS.  It is a bounded hardware gate for the
+decode-only serving optimization; it never constructs a full model.
 """
 
 from __future__ import annotations
@@ -209,6 +210,103 @@ def _b12x_launch(
     return launch, output
 
 
+def _make_native_b12x_runner(
+    torch: Any,
+    tensors: dict[str, Any],
+    shape: kernel_bench.Dsv4Shape,
+    m_values: tuple[int, ...],
+) -> tuple[Any, dict[str, Any]]:
+    """Build one caller-owned frozen native-B12X scratch arena.
+
+    The prepared checkpoint already stores B12X's NVFP4 runtime-alpha
+    contract: ``g*_alphas = raw_weight_scale_2 / reciprocal_input_scale``.
+    Consume those tensors directly; no scale bake, MMA conversion, or runtime
+    preparation is permitted in this path.
+    """
+    from b12x.integration.tp_moe import TPMoEScratchCaps, plan_tp_moe_scratch
+
+    plan = plan_tp_moe_scratch(
+        TPMoEScratchCaps(
+            max_tokens=max(m_values),
+            weight_E=shape.num_experts,
+            k=shape.hidden_size,
+            n=shape.intermediate_size_per_rank,
+            num_topk=shape.top_k,
+            device=torch.device("cuda"),
+            dtype=torch.bfloat16,
+            core_token_counts=tuple(m_values),
+            route_num_experts=0,
+            quant_mode="nvfp4",
+            activation="silu",
+            swiglu_limit=10.0,
+            source_format="modelopt_nvfp4",
+            w13_layout="w13",
+            frozen=True,
+        )
+    )
+    specs = plan.scratch_specs()
+    if len(specs) != 1 or specs[0].dtype != torch.uint8:
+        raise RuntimeError(f"unexpected native B12X scratch specs: {specs!r}")
+    scratch = torch.empty(specs[0].shape, dtype=specs[0].dtype, device="cuda")
+    pool = plan.make_workspace_pool(scratch=scratch)
+    proof = {
+        "implementation": "b12x.integration.tp_moe.b12x_moe_fp4",
+        "quant_mode": "nvfp4",
+        "source_format": "modelopt_nvfp4",
+        "activation": "silu",
+        "swiglu_limit": 10.0,
+        "prepared_scale_contract": "direct-no-transform",
+        "planned_token_counts": list(m_values),
+        "scratch_bytes": int(scratch.numel()),
+        "reads_per_layer": 8,
+        "runtime_scale_transforms": 0,
+    }
+    return SimpleNamespace(plan=plan, scratch=scratch, pool=pool, tensors=tensors), proof
+
+
+def _native_b12x_launch(
+    torch: Any,
+    runner: Any,
+    x: Any,
+    topk_ids: Any,
+    topk_weights: Any,
+) -> tuple[Any, Any]:
+    from b12x.integration.tp_moe import b12x_moe_fp4
+
+    output = torch.empty_like(x)
+    selected_experts = (
+        topk_ids if topk_ids.dtype == torch.int32 else topk_ids.to(torch.int32)
+    )
+
+    def launch() -> Any:
+        return b12x_moe_fp4(
+            a=x,
+            a1_gscale=runner.tensors["a1_gscale"],
+            w1_fp4=runner.tensors["w13.weight"],
+            w1_blockscale=runner.tensors["w13.weight_scale"],
+            w1_alphas=runner.tensors["g1_alphas"],
+            a2_gscale=runner.tensors["a2_gscale"],
+            w2_fp4=runner.tensors["w2.weight"],
+            w2_blockscale=runner.tensors["w2.weight_scale"],
+            w2_alphas=runner.tensors["g2_alphas"],
+            topk_weights=topk_weights,
+            topk_ids=selected_experts,
+            workspace=runner.pool,
+            output=output,
+            input_scales_are_reciprocal=True,
+            input_scales_static=True,
+            fast_math=True,
+            activation="silu",
+            quant_mode="nvfp4",
+            unit_scale_contract=False,
+            source_format="modelopt_nvfp4",
+            w13_layout="w13",
+            swiglu_limit=10.0,
+        )
+
+    return launch, output
+
+
 def _time_orders(
     torch: Any,
     launches: dict[str, Any],
@@ -291,11 +389,14 @@ def run(args: argparse.Namespace) -> int:
     cutlass_runner, cutlass_proof = kernel_bench._make_flashinfer_cutlass_runner(
         torch, weights, shape, runner_args
     )
+    native_runner, native_proof = _make_native_b12x_runner(
+        torch, tensors, shape, args.m
+    )
 
     failures: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
     speedups_by_m: dict[int, float] = {}
-    keepalive: list[Any] = [b12x_wrapper, cutlass_runner]
+    keepalive: list[Any] = [b12x_wrapper, cutlass_runner, native_runner]
     for m in args.m:
         x, topk_ids, topk_weights = kernel_bench.make_routes(
             torch,
@@ -334,7 +435,18 @@ def run(args: argparse.Namespace) -> int:
             topk_ids,
             topk_weights,
         )
-        launches = {"b12x": b12x_launch, "cutlass": cutlass_launch}
+        native_launch, native_output = _native_b12x_launch(
+            torch,
+            native_runner,
+            x,
+            topk_ids,
+            topk_weights,
+        )
+        launches = {
+            "native_b12x": native_launch,
+            "b12x": b12x_launch,
+            "cutlass": cutlass_launch,
+        }
         eager = {}
         activity = {}
         for backend, launch in launches.items():
@@ -348,6 +460,9 @@ def run(args: argparse.Namespace) -> int:
                 )
         numeric = kernel_bench.compare_tensors(
             torch, eager["b12x"], eager["cutlass"]
+        )
+        native_numeric = kernel_bench.compare_tensors(
+            torch, eager["native_b12x"], eager["cutlass"]
         )
         legacy_output = legacy_b12x_launch()
         torch.cuda.synchronize()
@@ -373,13 +488,23 @@ def run(args: argparse.Namespace) -> int:
         )
         if not numeric_passed:
             failures.append({"kind": "numeric", "m": m, **numeric})
+        native_numeric_passed = kernel_bench.numeric_metrics_pass(
+            native_numeric,
+            min_cosine=args.numeric_min_cosine,
+            max_normalized_rmse=args.numeric_max_nrmse,
+        )
+        if not native_numeric_passed:
+            failures.append(
+                {"kind": "native_numeric", "m": m, **native_numeric}
+            )
 
         eager_timing = _time_orders(
             torch,
-            launches,
+            {"native_b12x": native_launch, "b12x": b12x_launch},
             warmup=args.warmup,
             iters=args.iters,
             repeats=args.repeats,
+            pair=("native_b12x", "b12x"),
         )
         eager_copy_timing = _time_orders(
             torch,
@@ -421,10 +546,14 @@ def run(args: argparse.Namespace) -> int:
                 )
         graph_timing = _time_orders(
             torch,
-            graph_launches,
+            {
+                "native_b12x": graph_launches["native_b12x"],
+                "b12x": graph_launches["b12x"],
+            },
             warmup=args.warmup,
             iters=args.iters,
             repeats=args.repeats,
+            pair=("native_b12x", "b12x"),
         )
         graph_copy_timing = _time_orders(
             torch,
@@ -437,16 +566,18 @@ def run(args: argparse.Namespace) -> int:
             repeats=args.repeats,
             pair=("direct_output", "legacy_two_copy"),
         )
-        cutlass_speedup = float(
-            graph_timing["combined"]["speedup_b12x_over_cutlass"]
+        native_speedup = float(
+            graph_timing["combined"]["speedup_native_b12x_over_b12x"]
         )
-        speedups_by_m[m] = cutlass_speedup
+        speedups_by_m[m] = native_speedup
         results.append(
             {
                 "m": m,
                 "routed_rows": m * shape.top_k,
                 "numeric": numeric,
                 "numeric_passed": numeric_passed,
+                "native_vs_cutlass_numeric": native_numeric,
+                "native_vs_cutlass_numeric_passed": native_numeric_passed,
                 "activity": activity,
                 "eager": eager_timing,
                 "cuda_graph": graph_timing,
@@ -483,8 +614,8 @@ def run(args: argparse.Namespace) -> int:
         "scope": "decode-only; MTP disabled in the subsequent serving A/B",
         "minimum_geomean_speedup": args.min_geomean_speedup,
         "minimum_per_shape_speedup": args.min_per_shape_speedup,
-        "b12x_over_cutlass_geomean": decode_geomean,
-        "b12x_over_cutlass_by_m": {
+        "native_b12x_over_flashinfer_b12x_geomean": decode_geomean,
+        "native_b12x_over_flashinfer_b12x_by_m": {
             str(m): value for m, value in speedups_by_m.items()
         },
         "passed": decode_passed,
@@ -519,6 +650,7 @@ def run(args: argparse.Namespace) -> int:
                 "direct_output_alias": True,
                 "legacy_full_serving_copy_count": 2,
             },
+            "native_b12x": native_proof,
             "cutlass": cutlass_proof,
         },
         "performance_gate": performance_gate,

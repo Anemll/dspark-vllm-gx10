@@ -6,3 +6,4 @@
 !benchmarks/benchmark_nvfp4_prepared_b12x_sm121.py
 !scripts/
 !scripts/patch_vllm_b12x_output_alias.py
+!scripts/patch_b12x_nvfp4_swiglu_limit.py

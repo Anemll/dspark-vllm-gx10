@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from benchmarks import benchmark_nvfp4_prepared_b12x_sm121 as probe
+from scripts import patch_b12x_nvfp4_swiglu_limit as b12x_clamp_patch
 from scripts import patch_vllm_b12x_output_alias as output_alias_patch
 
 
@@ -82,7 +83,8 @@ class PreparedB12xBenchmarkTest(unittest.TestCase):
             dockerfile,
         )
         self.assertIn("dspark-patch-vllm-b12x-output-alias", dockerfile)
-        self.assertIn("direct-output-alias-v1", dockerfile)
+        self.assertIn("dspark-patch-b12x-nvfp4-swiglu-limit", dockerfile)
+        self.assertIn("native-clamped-decode-v1", dockerfile)
         dockerignore = (
             root
             / "docker"
@@ -93,6 +95,9 @@ class PreparedB12xBenchmarkTest(unittest.TestCase):
             dockerignore,
         )
         self.assertIn("!scripts/patch_vllm_b12x_output_alias.py", dockerignore)
+        self.assertIn(
+            "!scripts/patch_b12x_nvfp4_swiglu_limit.py", dockerignore
+        )
 
     def test_pinned_modular_patch_adds_only_explicit_alias_contract(self) -> None:
         source = (
@@ -116,6 +121,28 @@ class PreparedB12xBenchmarkTest(unittest.TestCase):
     def test_pinned_modular_patch_rejects_anchor_drift(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "experts property"):
             output_alias_patch.patch_source("not the pinned source")
+
+    def test_pinned_b12x_patch_enables_only_direct_micro_clamp(self) -> None:
+        source = "\n".join(
+            anchor for anchor, _replacement, _label in b12x_clamp_patch._REPLACEMENTS
+        )
+        patched = b12x_clamp_patch.patch_source(source)
+
+        self.assertIn("swiglu_limit=swiglu_limit,\n            device=a.device", patched)
+        self.assertIn(
+            "NVFP4 swiglu_limit requires the compact direct microkernel",
+            patched,
+        )
+        self.assertNotIn(
+            "swiglu_limit is implemented only for W4A16 MoE", patched
+        )
+        self.assertRegex(
+            b12x_clamp_patch.PINNED_SOURCE_SHA256, r"^[0-9a-f]{64}$"
+        )
+
+    def test_pinned_b12x_patch_rejects_anchor_drift(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "micro signature"):
+            b12x_clamp_patch.patch_source("not the pinned source")
 
     def test_baked_sibling_layout_imports_without_repo_package(self) -> None:
         root = Path(__file__).resolve().parents[1]
