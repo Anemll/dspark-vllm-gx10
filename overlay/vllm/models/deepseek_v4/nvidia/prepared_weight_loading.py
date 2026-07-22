@@ -81,7 +81,7 @@ PINNED_PREPARATION_SOURCE_SHA256 = {
 # Keep its runtime pin separate and validate it immediately before bypassing
 # the ordinary B12X post-load transform.
 PINNED_B12X_EXPERTS_SHA256 = (
-    "c0fca8bec5c7013d1777ad5b8a5f78efe00ebf78a86dc40c401a49597e0ade08"
+    "e87c3a6e3a40703a580ecc0b2771d8fd075c04c6da9acfba445fecf3ffd31407"
 )
 LAYER0_RANK0_REFERENCE_JSON_SHA256 = (
     "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6"
