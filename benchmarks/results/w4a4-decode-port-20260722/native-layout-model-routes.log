@@ -1,0 +1,43 @@
+MoE benchmark (Pre-routed MoE kernel only)
+DeepSeek V4 Flash  TP=2, K=4096, I_tp=1024, E=256, top_k=6
+Model path: /model
+Layer: 0
+Activation: silu
+Quant mode: w4a16
+Routing source: model
+Batch-size profile: micro -> [1, 4]
+Backend: b12x
+Reference: none
+Scale contract: shared
+Validation: none
+Fast math: on
+W4A16 kernel: fused W4A16 FC1+FC2
+SwiGLU limit: 10
+L2 flush: off
+Graph mode: single-op
+Graph only: yes
+Timing passes per batch size: 3 x 30 iterations
+Timed region: backend launch only
+
+  Loading 256 DeepSeek V4 Flash FP4 experts... done.
+Source format: fp4_e8m0_k32
+W4A16 prep: native (micro decode path enabled for small M, w13_layout=w31)
+W4A16 scale format: fp4_e8m0_k32
+  Warming up b12x (compilation)... done.
+
+======================================================================
+  batch_size=1  (tokens*top_k = 6 expert calls)
+======================================================================
+  b12x (CUDA graph):            283.6 us (repeat medians 283.2-283.7, sample min 279.6)
+
+======================================================================
+  batch_size=4  (tokens*top_k = 24 expert calls)
+======================================================================
+  b12x (CUDA graph):           1091.0 us (repeat medians 1089.3-1094.7, sample min 1083.5)
+
+======================================================================
+  Summary
+======================================================================
+  bs=1 | b12x 283.6 us
+  bs=4 | b12x 1091.0 us
+  geo mean: 556.3 us

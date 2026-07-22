@@ -1,0 +1,20 @@
+/usr/local/lib/python3.12/dist-packages/torch/profiler/profiler.py:224: UserWarning: Warning: Profiler clears events at the end of each cycle.Only events from the current cycle will be reported.To keep events across cycles, set acc_events=True.
+  _warn_once(
+{"iters": 20, "maximum_multiplicity": 1, "output_max_abs": 2.265625, "proof": {"activation": "swigluoai_uninterleave", "activation_precision": "fp4", "dynamic_workspace": "NoneType", "implementation": "flashinfer.fused_moe.cute_dsl.b12x_moe.B12xMoEWrapper", "max_num_tokens": 4, "normalized_quant_mode": "nvfp4", "requested": "w4a4", "serving_adapter_output_copy": true, "source_format": "modelopt", "static_workspace": "Sm120StaticMoEWorkspace", "swiglu_alpha": 1.0, "swiglu_beta": 0.0, "swiglu_limit": 10.0, "workspace_memory": {"ceiling_bytes": null, "contract_applies": false, "passed": null, "required_roots_present": false, "tensor_object_count": 15, "unique_storage_bytes": 21057548, "unique_storage_count": 12}}, "routing": "balanced", "unique_experts": 24}
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+kernel_cutlass_kernel_flashinferfused_moecute_dslbla...         0.00%       0.000us         0.00%       0.000us       0.000us      15.335ms        99.75%      15.335ms     766.743us            20  
+                               _compact_topk_ids_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      38.751us         0.25%      38.751us       1.938us            20  
+                                            aten::slice         0.36%      52.721us         0.45%      66.769us       1.669us       0.000us         0.00%       0.000us       0.000us            40  
+                                       aten::as_strided         0.09%      14.048us         0.09%      14.048us       0.351us       0.000us         0.00%       0.000us       0.000us            40  
+                                             aten::view         0.14%      21.408us         0.14%      21.408us       0.535us       0.000us         0.00%       0.000us       0.000us            40  
+                                               aten::to         0.07%       9.680us         0.07%       9.680us       0.121us       0.000us         0.00%       0.000us       0.000us            80  
+                                Activity Buffer Request         0.36%      52.689us         0.36%      52.689us      52.689us       0.000us         0.00%       0.000us       0.000us             1  
+                                       cuLaunchKernelEx         0.62%      92.224us         0.62%      92.224us       4.611us       0.000us         0.00%       0.000us       0.000us            20  
+                                    cudaLaunchKernelExC         0.71%     105.057us         0.71%     105.057us       5.253us       0.000us         0.00%       0.000us       0.000us            20  
+                                  cudaDeviceSynchronize        97.65%      14.457ms        97.65%      14.457ms       7.229ms       0.000us         0.00%       0.000us       0.000us             2  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 14.805ms
+Self CUDA time total: 15.374ms
+

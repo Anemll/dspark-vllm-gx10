@@ -80,6 +80,12 @@ services:
       VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ:-1}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE:-0}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT:-0}"
+      # Diagnostic-only target router trace. Disabled means no callbacks,
+      # buffers, synchronization, or artifacts in the serving path.
+      VLLM_DSPARK_TARGET_ROUTE_CAPTURE: "${VLLM_DSPARK_TARGET_ROUTE_CAPTURE:-0}"
+      VLLM_DSPARK_TARGET_ROUTE_CAPTURE_DIR: "${VLLM_DSPARK_TARGET_ROUTE_CAPTURE_DIR:-}"
+      VLLM_DSPARK_TARGET_ROUTE_CAPTURE_STEPS: "${VLLM_DSPARK_TARGET_ROUTE_CAPTURE_STEPS:-64}"
+      VLLM_DSPARK_TARGET_ROUTE_CAPTURE_WARMUP_STEPS: "${VLLM_DSPARK_TARGET_ROUTE_CAPTURE_WARMUP_STEPS:-8}"
 
       # Opt-in startup-only checkpoint transport. `auto` preserves the v0.1.1
       # behavior where both TP ranks read checkpoint payloads locally.

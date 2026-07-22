@@ -3444,22 +3444,32 @@ def _prepare_w4a16(
     weights: PreparedWeights,
     args: argparse.Namespace,
 ) -> tuple[Any, dict[str, Any]]:
-    from b12x.moe.fused.w4a16.prepare import prepare_w4a16_modelopt_native_weights
+    from b12x.moe.fused.w4a16.prepare import (
+        prepare_w4a16_modelopt_native_weights,
+        prepare_w4a16_modelopt_nvfp4_weights,
+    )
 
-    prepared = prepare_w4a16_modelopt_native_weights(
+    prepare_kwargs = {
+        "activation": "silu",
+        "params_dtype": torch.bfloat16,
+        # FlashInfer consumes the shared physical tensor as [up/w3, gate/w1].
+        # B12X calls that layout "w13"/"up_gate"; "w31" means the opposite
+        # [gate, up] order and would invalidate the same-weight comparison.
+        "w13_layout": B12X_W13_LAYOUT,
+    }
+    if args.w4a16_weight_layout == "packed":
+        prepare = prepare_w4a16_modelopt_nvfp4_weights
+    else:
+        prepare = prepare_w4a16_modelopt_native_weights
+        prepare_kwargs["source_format"] = "modelopt_nvfp4"
+    prepared = prepare(
         weights.w13,
         weights.w13_sf_swizzled,
         weights.alpha1,
         weights.w2,
         weights.w2_sf_swizzled,
         weights.alpha2,
-        activation="silu",
-        params_dtype=torch.bfloat16,
-        source_format="modelopt_nvfp4",
-        # FlashInfer consumes the shared physical tensor as [up/w3, gate/w1].
-        # B12X calls that layout "w13"/"up_gate"; "w31" means the opposite
-        # [gate, up] order and would invalidate the same-weight comparison.
-        w13_layout=B12X_W13_LAYOUT,
+        **prepare_kwargs,
     )
     proof = {
         "requested": "w4a16",
@@ -3473,6 +3483,7 @@ def _prepare_w4a16(
         "swiglu_limit": args.swiglu_limit,
         "same_source_w13": int(prepared.w13.data_ptr()) == int(weights.w13.data_ptr()),
         "same_source_w2": int(prepared.w2.data_ptr()) == int(weights.w2.data_ptr()),
+        "requested_weight_layout": args.w4a16_weight_layout,
     }
     return prepared, proof
 
@@ -3979,6 +3990,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             "no_correctness_gate": args.no_correctness_gate,
             "fail_fast": args.fail_fast,
             "fast_math": args.fast_math,
+            "w4a16_weight_layout": args.w4a16_weight_layout,
             "l2_flush_mib": args.l2_flush_mib,
             "numeric_min_cosine": args.numeric_min_cosine,
             "numeric_max_nrmse": args.numeric_max_nrmse,
@@ -4493,6 +4505,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Override B12X wrapper capacity. The serving adapter currently "
             "uses max_num_batched_tokens; this option isolates capacity-driven "
             "decode overhead without changing the measured M values."
+        ),
+    )
+    parser.add_argument(
+        "--w4a16-weight-layout",
+        choices=("modelopt", "packed"),
+        default="modelopt",
+        help=(
+            "Keep the zero-copy ModelOpt layout for the W4A16 small-M microkernel "
+            "or repack once into the tensor-core W4A16 layout used by the native "
+            "MXFP4 serving path. The packed mode is a diagnostic comparator and "
+            "duplicates the layer weights."
         ),
     )
     parser.add_argument(

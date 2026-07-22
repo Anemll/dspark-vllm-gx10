@@ -1,0 +1,2 @@
+{"comparison": "packed_w4a16_over_flashinfer_b12x_w4a4", "m4_speedup": 1.0378368052087368, "passed": false, "required_m4_speedup": 1.05, "speedup_by_m": {"1": 0.9841462537298479, "4": 1.0378368052087368}}
+Wrote /artifacts/official-packed-w4a16-vs-w4a4-balanced.json
