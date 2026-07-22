@@ -780,6 +780,7 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
             return "b12x-quant-config"
 
         kernel = SimpleNamespace()
+        fused_experts = SimpleNamespace()
 
         def postload(layer):
             self.assertIs(layer, routed)
@@ -787,7 +788,8 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
             self.assertEqual(g2.values, [6.0, 7.0])
             calls.append("postload")
 
-        kernel.process_weights_after_loading = postload
+        fused_experts.process_weights_after_loading = postload
+        kernel.fused_experts = fused_experts
 
         def kernel_factory(**kwargs):
             self.assertEqual(kwargs["moe_quant_config"], "b12x-quant-config")
@@ -806,6 +808,7 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
         self.assertTrue(state.finalized)
         self.assertEqual(calls, ["postload"])
         self.assertIs(quant_method.moe_kernel, kernel)
+        self.assertFalse(hasattr(kernel, "process_weights_after_loading"))
 
     def test_installed_hook_is_per_method_and_calls_only_prepared_finalizer(self):
         helper = self.helper

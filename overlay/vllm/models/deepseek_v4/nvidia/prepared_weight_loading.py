@@ -1143,11 +1143,15 @@ def _finalize_prepared_b12x(
         routing_tables=routed_layer._expert_routing_tables(),
         layer=routed_layer,
     )
-    postload = getattr(
-        quant_method.moe_kernel, "process_weights_after_loading", None
-    )
+    # make_nvfp4_moe_kernel returns the orchestration wrapper; the backend
+    # expert instance that owns the B12X scale bake/MMA conversion is exposed
+    # through its pinned ``fused_experts`` property.
+    fused_experts = getattr(quant_method.moe_kernel, "fused_experts", None)
+    postload = getattr(fused_experts, "process_weights_after_loading", None)
     if not callable(postload):
-        raise RuntimeError("Prepared NVFP4 B12X kernel lacks post-load conversion")
+        raise RuntimeError(
+            "Prepared NVFP4 B12X fused experts lack post-load conversion"
+        )
     postload(routed_layer)
     state.finalized = True
     logger.info(
