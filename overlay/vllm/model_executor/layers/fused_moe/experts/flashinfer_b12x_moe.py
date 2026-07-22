@@ -164,11 +164,12 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             swiglu_limit,
         )
 
-        # Decode and prefill use separate model-scoped arenas.  FlashInfer's
-        # B12X dispatch cost grows measurably with max_num_tokens even when the
-        # actual M is tiny, so decode should not pay for the 8192-token prefill
-        # capacity.  The large wrapper remains unchanged for M values beyond
-        # the CUDA-graph capture frontier.
+        # Micro-decode, larger decode, and prefill use separate model-scoped
+        # arenas. FlashInfer's B12X dispatch cost grows measurably with
+        # max_num_tokens even when the actual M is tiny. Keep the proven M<=4
+        # micro path at the same capacity used by the winning kernel gate,
+        # without changing any M above four or the prefill path.
+        self._micro_wrapper: Any | None = None
         self._decode_wrapper: Any | None = None
         self._prefill_wrapper: Any | None = None
         self.w1_sf_mma: torch.Tensor | None = None
@@ -324,7 +325,7 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
         return True
 
     def _ensure_wrapper(self, num_tokens: int | None = None) -> Any:
-        """Acquire the decode- or prefill-sized graph workspace.
+        """Acquire the micro-decode, decode, or prefill graph workspace.
 
         Each wrapper is deliberately shared across sequential target layers:
         weights, scales, and the caller-owned output are call arguments. The
@@ -340,9 +341,16 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
                 f"B12X token count {num_tokens} exceeds configured capacity "
                 f"{self.max_num_tokens}"
             )
-        decode = num_tokens <= self.max_capture_size
-        wrapper_attr = "_decode_wrapper" if decode else "_prefill_wrapper"
-        capacity = self.max_capture_size if decode else self.max_num_tokens
+        micro_capacity = min(4, self.max_capture_size)
+        if num_tokens <= micro_capacity:
+            wrapper_attr = "_micro_wrapper"
+            capacity = micro_capacity
+        elif num_tokens <= self.max_capture_size:
+            wrapper_attr = "_decode_wrapper"
+            capacity = self.max_capture_size
+        else:
+            wrapper_attr = "_prefill_wrapper"
+            capacity = self.max_num_tokens
 
         # Shape and device are immutable after this expert is constructed.
         # Keep the steady eager/capture path free of cache-key construction and
@@ -392,6 +400,12 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
                     quant_mode="nvfp4",
                     source_format="modelopt",
                 )
+                # This adapter has already baked the calibrated expert-global
+                # scales into the block scales and replaced both activation
+                # global-scale vectors with exact ones.  The pinned wrapper
+                # patch consumes this opt-in only for M=1, where one BF16 row
+                # can be quantized once and shared by all routed experts.
+                wrapper._dspark_unit_input_scales = True
                 _B12X_WRAPPER_CACHE[cache_key] = wrapper
 
         setattr(self, wrapper_attr, wrapper)

@@ -7,3 +7,4 @@
 !scripts/
 !scripts/patch_vllm_b12x_output_alias.py
 !scripts/patch_b12x_nvfp4_swiglu_limit.py
+!scripts/patch_flashinfer_b12x_shared_input.py

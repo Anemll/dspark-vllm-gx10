@@ -281,7 +281,7 @@ class B12xClampAdapterTest(unittest.TestCase):
         self.assertEqual(len(constructed), 1)
         self.assertTrue(all(wrapper is wrappers[0] for wrapper in wrappers))
 
-    def test_decode_and_prefill_use_distinct_shared_capacities(self) -> None:
+    def test_micro_decode_and_prefill_use_distinct_shared_capacities(self) -> None:
         scope = object()
         experts = []
         for _ in range(43):
@@ -309,17 +309,45 @@ class B12xClampAdapterTest(unittest.TestCase):
             sys.modules,
             {"flashinfer": flashinfer, "flashinfer.fused_moe": fused_moe},
         ):
-            decode = [expert._ensure_wrapper(4) for expert in experts]
+            micro = [expert._ensure_wrapper(4) for expert in experts]
+            decode = [expert._ensure_wrapper(5) for expert in experts]
             prefill = [expert._ensure_wrapper(65) for expert in experts]
 
-        self.assertEqual(len(constructed), 2)
+        self.assertEqual(len(constructed), 3)
         self.assertEqual(
             sorted(wrapper.kwargs["max_num_tokens"] for wrapper in constructed),
-            [64, 4096],
+            [4, 64, 4096],
         )
+        self.assertTrue(all(wrapper is micro[0] for wrapper in micro))
         self.assertTrue(all(wrapper is decode[0] for wrapper in decode))
         self.assertTrue(all(wrapper is prefill[0] for wrapper in prefill))
+        self.assertIsNot(micro[0], decode[0])
         self.assertIsNot(decode[0], prefill[0])
+
+    def test_micro_capacity_never_exceeds_capture_frontier(self) -> None:
+        config = _moe_config(limit=None)
+        config.max_capture_size = 2
+        experts = self.module.FlashInferB12xExperts(
+            config,
+            _quant_config(limit=10.0),
+        )
+        constructed = []
+
+        class _Wrapper:
+            def __init__(self, **kwargs) -> None:
+                constructed.append(kwargs)
+
+        flashinfer = _package("flashinfer")
+        fused_moe = ModuleType("flashinfer.fused_moe")
+        fused_moe.B12xMoEWrapper = _Wrapper
+        flashinfer.fused_moe = fused_moe
+        with patch.dict(
+            sys.modules,
+            {"flashinfer": flashinfer, "flashinfer.fused_moe": fused_moe},
+        ):
+            experts._ensure_wrapper(2)
+
+        self.assertEqual(constructed[0]["max_num_tokens"], 2)
 
     def test_wrapper_capacity_rejects_out_of_range_tokens(self) -> None:
         experts = self.module.FlashInferB12xExperts(

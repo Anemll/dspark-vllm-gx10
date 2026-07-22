@@ -8,9 +8,12 @@ COPY scripts/patch_vllm_b12x_output_alias.py \
   /usr/local/bin/dspark-patch-vllm-b12x-output-alias
 COPY scripts/patch_b12x_nvfp4_swiglu_limit.py \
   /usr/local/bin/dspark-patch-b12x-nvfp4-swiglu-limit
+COPY scripts/patch_flashinfer_b12x_shared_input.py \
+  /usr/local/bin/dspark-patch-flashinfer-b12x-shared-input
 
 RUN python3 /usr/local/bin/dspark-patch-vllm-b12x-output-alias
 RUN python3 /usr/local/bin/dspark-patch-b12x-nvfp4-swiglu-limit
+RUN python3 /usr/local/bin/dspark-patch-flashinfer-b12x-shared-input
 
 COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/
 COPY benchmarks/benchmark_nvfp4_a4w4_sm121.py \
@@ -24,6 +27,8 @@ RUN python3 -m py_compile \
       /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py \
       /usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/flashinfer_b12x_moe.py \
       /usr/local/lib/python3.12/dist-packages/b12x/integration/tp_moe.py \
+      /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/b12x_moe.py \
+      /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_dispatch.py \
       /usr/local/bin/dspark-benchmark-nvfp4-a4w4-sm121 \
       /usr/local/bin/dspark-benchmark-nvfp4-prepared-b12x-sm121
 
