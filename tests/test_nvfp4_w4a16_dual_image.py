@@ -224,6 +224,7 @@ class NvFp4W4A16DualImageTests(unittest.TestCase):
             lines,
         )
         self.assertNotIn("patch_b12x_w4a16_modelopt_tc_decode", text)
+        self.assertEqual(len(re.findall(r"(?m)^ARG BASE_IMAGE$", text)), 2)
         self.assertEqual(
             text.count("dspark-patch-nvfp4-dual-uniform-decode"), 2
         )
