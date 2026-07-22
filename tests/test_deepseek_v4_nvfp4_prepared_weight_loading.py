@@ -891,9 +891,7 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
         paths = ["/pinned/modelopt.py", "/pinned/flashinfer_b12x_moe.py"]
         hashes = [
             helper.PINNED_PREPARATION_SOURCE_SHA256["modelopt"],
-            helper.PINNED_PREPARATION_SOURCE_SHA256[
-                "flashinfer_b12x_experts"
-            ],
+            helper.PINNED_B12X_EXPERTS_SHA256,
         ]
         with (
             mock.patch.object(helper.inspect, "getsourcefile", side_effect=paths),
@@ -906,6 +904,14 @@ class PreparedNvfp4WeightLoadingTest(unittest.TestCase):
             self.assertRaisesRegex(RuntimeError, "source digest drifted"),
         ):
             helper._validate_runtime_transform_sources(routed)
+
+    def test_b12x_runtime_pin_does_not_drift_preparation_identity(self):
+        helper = self.helper
+        self.assertNotIn(
+            "flashinfer_b12x_experts",
+            helper.PINNED_PREPARATION_SOURCE_SHA256,
+        )
+        self.assertRegex(helper.PINNED_B12X_EXPERTS_SHA256, r"^[0-9a-f]{64}$")
 
     def test_factory_full_lifecycle_is_43_layers_344_copies_and_one_finalize(self):
         helper = self.helper

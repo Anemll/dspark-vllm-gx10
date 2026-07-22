@@ -71,13 +71,18 @@ PINNED_PREPARATION_SOURCE_SHA256 = {
     "flashinfer_experts": (
         "d90f5215a6972c742be60ff8e9786432ab544570273483daa8faf317ba2d3ab5"
     ),
-    "flashinfer_b12x_experts": (
-        "4a6728752e7653a45c3afe65b88e9041e70cb95d1c44458b44b39d6e63231229"
-    ),
     "nvfp4_utils": (
         "ed665537e42580e82ae71bb4f2ce8a699c0ffe8a042947c4eb600107c0b924ba"
     ),
 }
+# B12X is an optional runtime consumer of the already-prepared payload.  It
+# was not used to create that payload, so its source identity must not be
+# added to the immutable preparation identity stored in existing manifests.
+# Keep its runtime pin separate and validate it immediately before bypassing
+# the ordinary B12X post-load transform.
+PINNED_B12X_EXPERTS_SHA256 = (
+    "4a6728752e7653a45c3afe65b88e9041e70cb95d1c44458b44b39d6e63231229"
+)
 LAYER0_RANK0_REFERENCE_JSON_SHA256 = (
     "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6"
 )
@@ -1222,7 +1227,7 @@ def _validate_runtime_transform_sources(routed_layer: Any) -> None:
         PREPARED_B12X_BACKEND: (
             "FlashInferB12xExperts",
             "vllm.model_executor.layers.fused_moe.experts.flashinfer_b12x_moe",
-            PINNED_PREPARATION_SOURCE_SHA256["flashinfer_b12x_experts"],
+            PINNED_B12X_EXPERTS_SHA256,
         ),
     }.get(backend)
     if expert_contract is None:
