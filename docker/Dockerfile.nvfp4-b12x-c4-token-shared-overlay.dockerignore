@@ -1,0 +1,4 @@
+*
+!docker/Dockerfile.nvfp4-b12x-c4-token-shared-overlay.dockerignore
+!scripts/
+!scripts/patch_flashinfer_b12x_c4_token_shared.py

@@ -1,0 +1,8 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+
+COPY scripts/patch_flashinfer_b12x_c4_token_shared.py /tmp/dspark-patch-c4-token-shared.py
+RUN python3 /tmp/dspark-patch-c4-token-shared.py && rm -f /tmp/dspark-patch-c4-token-shared.py
