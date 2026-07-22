@@ -121,6 +121,12 @@ class RouteMajorFC2ContractTest(unittest.TestCase):
         self.assertIn("k=h", adapter)
         self.assertIn("num_groups=e", adapter)
         self.assertIn("w13_scale_storage=w13_scale_storage", adapter)
+        self.assertIn("ws.packed_input_scale.data_ptr()", adapter)
+        self.assertIn("self.w13_scale_storage.data_ptr()", adapter)
+        self.assertNotIn(
+            "self.max_active_clusters,\n            self.current_cuda_stream()",
+            adapter,
+        )
         self.assertGreaterEqual(adapter.count("torch.zeros("), 2)
         self.assertNotIn("w13_scale.data_ptr()", adapter)
 

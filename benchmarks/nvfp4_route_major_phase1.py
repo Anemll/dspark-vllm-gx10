@@ -38,13 +38,15 @@ class Phase1Runner:
             self.x,
             self.compact_topk_ids,
             ws.packed_a_view,
-            ws.sfa_ptr,
+            # TVM-FFI pointer arguments cross the generated ABI as raw device
+            # addresses, exactly as in FlashInfer's accepted dispatcher.
+            ws.packed_input_scale.data_ptr(),
             ws.packed_a_flat,
             ws.scale_flat,
             ws.barrier_count,
             ws.barrier_epoch,
             self.w13_view,
-            self.w13_scale_ptr,
+            self.w13_scale_storage.data_ptr(),
             ws.row_counts,
             ws.active_expert_count,
             ws.weight_expert_ids,
@@ -56,7 +58,8 @@ class Phase1Runner:
             self.local_scale_row_bases_kernel,
             self.handoff.packed_a.reshape(-1),
             self.handoff.a_scale.reshape(-1),
-            self.max_active_clusters,
+            # max_active_clusters is a cutlass.Constexpr baked by cute.compile
+            # and therefore is not part of the generated runtime ABI.
             self.current_cuda_stream(),
         )
         return self.handoff
