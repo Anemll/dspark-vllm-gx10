@@ -109,6 +109,31 @@ class RouteMajorFC2ContractTest(unittest.TestCase):
         self.assertIn("numeric_vs_accepted", probe)
         self.assertIn("route_major_over_accepted", probe)
 
+    def test_phase1_adapter_pins_prepared_scale_and_capacity_contracts(self) -> None:
+        adapter = (ROOT / "benchmarks/nvfp4_route_major_phase1.py").read_text()
+        ast.parse(adapter)
+        self.assertIn("max_rows=metadata.routed_rows", adapter)
+        self.assertIn("(metadata.routed_rows, h, active)", adapter)
+        self.assertIn("input_scales_are_reciprocal=True", adapter)
+        self.assertIn("convert_sf_to_mma_layout(", adapter)
+        self.assertIn("convert_sf_from_mma_layout(", adapter)
+        self.assertIn("m=2 * i", adapter)
+        self.assertIn("k=h", adapter)
+        self.assertIn("num_groups=e", adapter)
+        self.assertIn("w13_scale_storage=w13_scale_storage", adapter)
+        self.assertGreaterEqual(adapter.count("torch.zeros("), 2)
+        self.assertNotIn("w13_scale.data_ptr()", adapter)
+
+        probe = (
+            ROOT / "benchmarks/probe_nvfp4_route_major_phase1_sm121.py"
+        ).read_text()
+        ast.parse(probe)
+        self.assertIn("phase1.launch()", probe)
+        self.assertIn("phase2_launch()", probe)
+        self.assertIn("numeric_vs_accepted", probe)
+        self.assertIn("m4_max_ms", probe)
+        self.assertIn("m2_max_regression", probe)
+
 
 if __name__ == "__main__":
     unittest.main()
