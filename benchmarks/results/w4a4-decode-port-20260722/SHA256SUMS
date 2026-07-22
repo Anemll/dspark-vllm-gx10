@@ -1,3 +1,5 @@
+45064fc2ee34b766b8b0cb63d6775fc4363b451eef13eac6f677f41fd154c532  benchmarks/results/w4a4-decode-port-20260722/b12x-base-direct-final-m4.json
+b43d8b1bbe8805e959d245ef0bdc1977d692f2ebbddf7fe75f24021294ed0e5e  benchmarks/results/w4a4-decode-port-20260722/b12x-base-direct-final-m4.log
 6a9e334183ded197004e0b53863580b7ae2058bd1864f4d00ce4a4c3fd91c499  benchmarks/results/w4a4-decode-port-20260722/cooperative-fc2-baseline-balanced.json
 470525ac0e6c9e1a0000905db87764620f231887c6d6f6011d36305465cae915  benchmarks/results/w4a4-decode-port-20260722/cooperative-fc2-candidate-balanced.json
 895dc4fd814075db31a6ed8bbd2daed9a9271a8fa5042b61f2a98ae04639bf40  benchmarks/results/w4a4-decode-port-20260722/native-layout-model-routes.log

@@ -1,0 +1,2 @@
+{"minimum_speedup": 1.0, "passed": false, "speedup_b12x_direct_over_flashinfer_cutlass": {"cuda_graph": 0.6590032997015554, "eager": 0.6598290317584536}}
+Wrote /artifacts/b12x-base-direct-final-m4.json
