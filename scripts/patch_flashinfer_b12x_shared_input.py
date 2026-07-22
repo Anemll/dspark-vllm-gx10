@@ -109,17 +109,6 @@ _DISPATCH_SHARE_SCALE_REPLACEMENT = """\
     share_expert_scales = input_gs_is_shared and down_input_scale_is_shared
 """
 
-# The generic compact micro kernel is best for C1--C3 (6--18 routed rows).
-# On GB10, the existing compact static path wins the real prepared C4 layer
-# (24 rows) while retaining the same routing, quantization, and FC1/FC2
-# semantics.  Keep this a source-pinned selection change, not a new kernel.
-_DISPATCH_MULTI_TOPK_MICRO_CUTOVER_ANCHOR = """\
-_MICRO_COMPACT_CUTOVER_PAIRS_MULTI_TOPK = 40
-"""
-_DISPATCH_MULTI_TOPK_MICRO_CUTOVER_REPLACEMENT = """\
-_MICRO_COMPACT_CUTOVER_PAIRS_MULTI_TOPK = 18
-"""
-
 _DISPATCH_PAIRWISE_DECL_ANCHOR = """\
     if use_micro:
         assert flat_ids.numel() <= workspace.compact_topk_ids.numel(), (
@@ -264,12 +253,6 @@ def patch_wrapper_source(source: str) -> str:
 
 
 def patch_dispatch_source(source: str) -> str:
-    source = _replace_once(
-        source,
-        _DISPATCH_MULTI_TOPK_MICRO_CUTOVER_ANCHOR,
-        _DISPATCH_MULTI_TOPK_MICRO_CUTOVER_REPLACEMENT,
-        "dispatcher multi-top-k micro cutover",
-    )
     source = _replace_once(
         source,
         _DISPATCH_SHARE_INPUT_ANCHOR,

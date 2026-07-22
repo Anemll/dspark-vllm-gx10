@@ -1,0 +1,14 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_REVISION=unknown
+
+COPY scripts/patch_flashinfer_b12x_c4_static_cutover.py \
+  /usr/local/bin/dspark-patch-flashinfer-b12x-c4-static-cutover
+
+RUN python3 /usr/local/bin/dspark-patch-flashinfer-b12x-c4-static-cutover
+RUN python3 -m py_compile \
+      /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_dispatch.py
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.nvfp4-b12x-c4-dispatch="compact-static-c4-v1"

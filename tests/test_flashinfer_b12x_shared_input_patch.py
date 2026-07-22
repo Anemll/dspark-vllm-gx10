@@ -22,20 +22,13 @@ class FlashInferB12xSharedInputPatchTest(unittest.TestCase):
         self.assertIn("fc2_input_scale[:1]", wrapper_patched)
 
         dispatch = (
-            shared_input_patch._DISPATCH_MULTI_TOPK_MICRO_CUTOVER_ANCHOR
-            + shared_input_patch._DISPATCH_SHARE_INPUT_ANCHOR
+            shared_input_patch._DISPATCH_SHARE_INPUT_ANCHOR
             + shared_input_patch._DISPATCH_SHARE_SCALE_ANCHOR
             + shared_input_patch._DISPATCH_PAIRWISE_DECL_ANCHOR
             + shared_input_patch._DISPATCH_ROUTING_ANCHOR
             + shared_input_patch._DISPATCH_SINGLE_TOKEN_ANCHOR
         )
         dispatch_patched = shared_input_patch.patch_dispatch_source(dispatch)
-        self.assertIn(
-            "_MICRO_COMPACT_CUTOVER_PAIRS_MULTI_TOPK = 18", dispatch_patched
-        )
-        self.assertNotIn(
-            "_MICRO_COMPACT_CUTOVER_PAIRS_MULTI_TOPK = 40", dispatch_patched
-        )
         self.assertIn("num_tokens == 1", dispatch_patched)
         self.assertNotIn('activation == "relu2"', dispatch_patched)
         self.assertIn("pairwise_routes = num_tokens == 1", dispatch_patched)
@@ -66,7 +59,7 @@ class FlashInferB12xSharedInputPatchTest(unittest.TestCase):
     def test_patch_rejects_source_drift(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "wrapper launch"):
             shared_input_patch.patch_wrapper_source("not pinned")
-        with self.assertRaisesRegex(RuntimeError, "dispatcher multi-top-k micro cutover"):
+        with self.assertRaisesRegex(RuntimeError, "dispatcher shared input"):
             shared_input_patch.patch_dispatch_source("not pinned")
         with self.assertRaisesRegex(RuntimeError, "microkernel pair token"):
             shared_input_patch.patch_micro_kernel_source("not pinned")
