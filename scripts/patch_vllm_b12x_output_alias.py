@@ -20,6 +20,9 @@ from pathlib import Path
 PINNED_SOURCE_SHA256 = (
     "0722a23b0526c141206d17aa6472a610aca77d24f80fa72194c44d320a133687"
 )
+PINNED_RESULT_SHA256 = (
+    "ce4b85fe464a31a0171daedcb0a498310290f1b40969728ebbeb7f6db13290fd"
+)
 DEFAULT_TARGET = Path(
     "/usr/local/lib/python3.12/dist-packages/vllm/"
     "model_executor/layers/fused_moe/modular_kernel.py"
@@ -101,6 +104,12 @@ def main() -> int:
 
     original = args.target.read_bytes()
     original_sha = _sha256(original)
+    if original_sha == PINNED_RESULT_SHA256:
+        print(
+            "vLLM modular output alias already patched: "
+            f"result={original_sha}"
+        )
+        return 0
     if original_sha != PINNED_SOURCE_SHA256:
         raise RuntimeError(
             "pinned modular_kernel.py SHA-256 mismatch: "

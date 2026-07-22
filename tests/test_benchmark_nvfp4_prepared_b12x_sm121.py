@@ -117,6 +117,9 @@ class PreparedB12xBenchmarkTest(unittest.TestCase):
         self.assertRegex(
             output_alias_patch.PINNED_SOURCE_SHA256, r"^[0-9a-f]{64}$"
         )
+        self.assertRegex(
+            output_alias_patch.PINNED_RESULT_SHA256, r"^[0-9a-f]{64}$"
+        )
 
     def test_pinned_modular_patch_rejects_anchor_drift(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "experts property"):
