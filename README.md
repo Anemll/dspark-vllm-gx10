@@ -229,20 +229,21 @@ Warmed server-side prefill improved at all six tested sizes:
 To isolate target-model decode from speculative acceptance, we first disabled
 DSpark completely and required the speculative counters to remain inactive.
 All targets used the same canonical prompt, 512 output tokens, temperature 0,
-TP=2, and three trials. Values are best aggregate throughput, with the median in
-parentheses:
+and TP=2. Values are best aggregate throughput, with the median in parentheses.
+The optimized W4A4 arm used five C=1 trials and three fully warmed C=4 trials;
+the FP8 control used three trials:
 
 | Target-only concurrency | FP8/B12X, no draft | W4A4/CUTLASS, no draft | W4A4/B12X, no draft | W4A4/B12X vs FP8 | W4A4/B12X vs CUTLASS |
 |---:|---:|---:|---:|---:|---:|
-| 1 | **27.57** (27.45) tok/s | 27.03 (26.92) tok/s | 27.14 (27.05) tok/s | -1.6% / -1.5% | +0.4% / +0.5% |
-| 4 | **78.74** (77.21) tok/s | 73.37 (72.55) tok/s | 71.64 (71.44) tok/s | -9.0% / -7.5% | -2.4% / -1.5% |
+| 1 | 27.40 (27.37) tok/s | 27.03 (26.92) tok/s | **27.70 (27.20) tok/s** | **+1.1% / +1.2%** | **+2.5% / +1.0%** |
+| 4 | **77.49 (76.85) tok/s** | 73.37 (72.55) tok/s | **72.90 (71.70) tok/s** | -5.9% / -5.9% | -0.8% / -1.2% |
 
-The prepared B12X W4A4 path is effectively tied with CUTLASS at concurrency 1
-and slower at concurrency 4. It therefore does not recover the FP8/B12X decode
-advantage. The widening deficit is already present with the target alone and is
-not primarily a DSpark acceptance difference. Prefill still favors W4A4, as
-shown above. The raw target-only comparison is documented in
-[decode-target-only-fp8-vs-w4a4.md](benchmarks/results/decode-target-only-fp8-vs-w4a4.md).
+The optimized prepared B12X W4A4 path now slightly leads FP8/B12X and CUTLASS
+at concurrency 1. At concurrency 4 it remains about 5.9% behind FP8/B12X by
+best throughput. The remaining deficit is already present with the target alone and is not
+primarily a DSpark acceptance difference. Prefill still favors W4A4, as shown
+above. The exact optimization gates and raw artifacts are documented in
+[decode-w4a4-kernel-optimization-646be4d.md](benchmarks/results/decode-w4a4-kernel-optimization-646be4d.md).
 
 Decode with speculation remains prompt- and acceptance-dependent. A same-prompt
 canonical check with **MTP=5 on both sides**, probabilistic draft sampling, and
