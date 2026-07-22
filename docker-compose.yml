@@ -120,10 +120,10 @@ services:
       DSPARK_SPECULATION_MODE: "${DSPARK_SPECULATION_MODE:-dspark}"
       MTP_NUM_TOKENS: "${MTP_NUM_TOKENS:-3}"
       KV_CACHE_MEMORY_BYTES: "${KV_CACHE_MEMORY_BYTES:-}"
-      # Optional, diagnostic-only PyTorch profiler configuration.  The value
-      # is forwarded as vLLM's structured ProfilerConfig JSON.  Empty keeps
-      # the released runtime path byte-for-byte unchanged.
-      DSPARK_PROFILER_CONFIG: "${DSPARK_PROFILER_CONFIG:-}"
+      # Optional, diagnostic-only PyTorch profiler directory. Empty keeps the
+      # released runtime path byte-for-byte unchanged. The command uses vLLM's
+      # native nested flags rather than shell-sensitive JSON.
+      DSPARK_TORCH_PROFILER_DIR: "${DSPARK_TORCH_PROFILER_DIR:-}"
 
     command:
       - bash
@@ -147,8 +147,20 @@ services:
           KV_CACHE_ARGS=(--kv-cache-memory-bytes "$${KV_CACHE_MEMORY_BYTES}");
         fi;
         PROFILER_ARGS=();
-        if [[ -n "$${DSPARK_PROFILER_CONFIG:-}" ]]; then
-          PROFILER_ARGS=(--profiler-config "$${DSPARK_PROFILER_CONFIG}");
+        if [[ -n "$${DSPARK_TORCH_PROFILER_DIR:-}" ]]; then
+          if [[ "$${DSPARK_TORCH_PROFILER_DIR}" != /* ]]; then
+            printf 'Invalid DSPARK_TORCH_PROFILER_DIR=%q; expected an absolute path\n' "$${DSPARK_TORCH_PROFILER_DIR}" >&2;
+            exit 64;
+          fi;
+          PROFILER_ARGS=(
+            --profiler-config.profiler=torch
+            --profiler-config.torch_profiler_dir="$${DSPARK_TORCH_PROFILER_DIR}"
+            --profiler-config.torch_profiler_with_stack=false
+            --profiler-config.torch_profiler_record_shapes=true
+            --profiler-config.torch_profiler_use_gzip=false
+            --profiler-config.torch_profiler_dump_cuda_time_total=true
+            --profiler-config.ignore_frontend=true
+          );
         fi;
         SPECULATIVE_ARGS=();
         case "$${DSPARK_SPECULATION_MODE:-dspark}" in

@@ -286,9 +286,9 @@ done
         )
         env = {**os.environ}
         if value is None:
-            env.pop("DSPARK_PROFILER_CONFIG", None)
+            env.pop("DSPARK_TORCH_PROFILER_DIR", None)
         else:
-            env["DSPARK_PROFILER_CONFIG"] = value
+            env["DSPARK_TORCH_PROFILER_DIR"] = value
         return subprocess.run(
             ["bash", "-c", script],
             check=False,
@@ -303,16 +303,23 @@ done
         self.assertEqual(result.stdout, "argc=0\n")
 
     def test_profiler_config_is_forwarded_as_one_structured_value(self) -> None:
-        value = (
-            '{"profiler":"torch","torch_profiler_dir":"/tmp/profile",'
-            '"ignore_frontend":true,"max_iterations":8}'
-        )
+        value = "/tmp/profile"
         result = self._run_profiler_setup(value)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(
+        self.assertIn("arg=<--profiler-config.profiler=torch>\n", result.stdout)
+        self.assertIn(
+            "arg=<--profiler-config.torch_profiler_dir=/tmp/profile>\n",
             result.stdout,
-            "argc=2\narg=<--profiler-config>\narg=<" + value + ">\n",
         )
+        self.assertIn(
+            "arg=<--profiler-config.torch_profiler_record_shapes=true>\n",
+            result.stdout,
+        )
+
+    def test_relative_profiler_directory_fails_closed(self) -> None:
+        result = self._run_profiler_setup("relative/profile")
+        self.assertEqual(result.returncode, 64)
+        self.assertIn("expected an absolute path", result.stderr)
 
     def test_vllm_command_consumes_conditional_profiler_outputs(self) -> None:
         self.assertIn('"$${PROFILER_ARGS[@]}"', self.compose)
