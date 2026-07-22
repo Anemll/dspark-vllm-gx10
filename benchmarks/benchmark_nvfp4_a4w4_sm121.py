@@ -3103,9 +3103,10 @@ def _make_w4a4_runner(
 ) -> tuple[Any, dict[str, Any]]:
     from flashinfer.fused_moe import B12xMoEWrapper
 
+    configured_max_num_tokens = getattr(args, "b12x_max_num_tokens", None)
     max_num_tokens = (
-        args.b12x_max_num_tokens
-        if args.b12x_max_num_tokens is not None
+        configured_max_num_tokens
+        if configured_max_num_tokens is not None
         else max(args.m)
     )
     wrapper = B12xMoEWrapper(
