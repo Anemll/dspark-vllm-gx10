@@ -168,9 +168,44 @@ def run(args: argparse.Namespace) -> int:
     # in CUTLASS-prepared [up, gate] storage and B12X receives only the derived
     # E8M0/K32 scale view.  Unlike the packed-layout oracle below, the native
     # ModelOpt preparer never rewrites the source FP4 bytes.
-    prepared_shared, shared_proof = (
-        collapse_bench.convert_prepared_to_native_mxfp4(torch, tensors, shape)
+    from b12x.moe.fused.w4a16.prepare import (
+        prepare_w4a16_e8m0_native_weights,
     )
+    unit_scale = torch.ones(
+        shape.num_experts, dtype=torch.float32, device="cuda"
+    )
+    prepared_shared = prepare_w4a16_e8m0_native_weights(
+        shared["w13"],
+        shared["w13_scale"],
+        unit_scale,
+        shared["w2"],
+        shared["w2_scale"],
+        unit_scale.clone(),
+        activation="silu",
+        params_dtype=torch.bfloat16,
+        w13_layout="w13",
+    )
+    shared_proof = {
+        "implementation": (
+            "b12x.moe.fused.w4a16.prepare."
+            "prepare_w4a16_e8m0_native_weights"
+        ),
+        "weight_layout": prepared_shared.weight_layout,
+        "source_format": prepared_shared.source_format,
+        "w13_layout": prepared_shared.w13_layout,
+        "activation_precision": "BF16",
+        "scale_format": "E8M0/K32 derived losslessly from E4M3/K16",
+    }
+    if prepared_shared.weight_layout != "modelopt":
+        raise RuntimeError(
+            "shared-layout preparer copied/repacked FP4 weights: "
+            f"{prepared_shared.weight_layout!r}"
+        )
+    if prepared_shared.source_format != "fp4_e8m0_k32":
+        raise RuntimeError(
+            "shared-layout source format drifted: "
+            f"{prepared_shared.source_format!r}"
+        )
     shared_runner_args = SimpleNamespace(
         m=args.m,
         swiglu_alpha=1.0,
