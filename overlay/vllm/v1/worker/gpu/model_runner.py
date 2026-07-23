@@ -208,7 +208,7 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         # callbacks or allocate capture buffers.
         self.target_route_capture = None
         self._target_route_capture_config = None
-        if os.getenv("VLLM_DSPARK_TARGET_ROUTE_CAPTURE", "0") != "0":
+        if os.getenv("DSPARK_TARGET_ROUTE_CAPTURE", "0") != "0":
             from vllm.v1.worker.gpu.target_route_capture import (
                 TargetRouteCaptureConfig,
                 validate_target_only_runtime,
