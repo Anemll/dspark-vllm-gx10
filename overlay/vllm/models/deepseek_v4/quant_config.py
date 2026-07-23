@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
 from vllm.config import get_current_vllm_config
@@ -21,6 +22,13 @@ from vllm.model_executor.layers.quantization.utils.quant_utils import (
 _DEEPSEEK_V4_EXPERT_DTYPES = ("fp4", "fp8")
 _PREPARED_NVFP4_TARGET_BACKENDS = (
     "auto",
+    "flashinfer_cutlass",
+    "flashinfer_b12x",
+)
+_PREPARED_NVFP4_AUTO_BACKEND_ENV = (
+    "VLLM_DSV4_NVFP4_PREPARED_MOE_BACKEND"
+)
+_PREPARED_NVFP4_SCOPED_BACKENDS = (
     "flashinfer_cutlass",
     "flashinfer_b12x",
 )
@@ -51,10 +59,11 @@ def _scope_prepared_nvfp4_target_backend(layer: RoutedExperts) -> str | None:
     called only from the target-NVFP4 branch below, so a runner-wide ``auto``
     value remains unchanged on the separately constructed draft layers.
 
-    Explicit CUTLASS remains the zero-transform production path. Explicit
-    B12X opts into the audited in-place conversion from the checkpoint's
-    CUTLASS-prepared scale contract to B12X's baked-scale contract. Any other
-    explicit backend fails before ModelOpt constructs its kernel.
+    When the runner remains on ``auto``, the target-only environment selector
+    chooses CUTLASS (the compatibility default) or B12X without changing the
+    separately constructed draft layers. Explicit runner backends preserve
+    the target-only deployment contract. Any unsupported value fails before
+    ModelOpt constructs its kernel.
     """
 
     if not _prepared_nvfp4_load_requested():
@@ -67,7 +76,17 @@ def _scope_prepared_nvfp4_target_backend(layer: RoutedExperts) -> str | None:
             f"got {runner_backend!r}"
         )
     if runner_backend == "auto":
-        layer.moe_config.moe_backend = "flashinfer_cutlass"
+        scoped_backend = os.environ.get(
+            _PREPARED_NVFP4_AUTO_BACKEND_ENV,
+            "flashinfer_cutlass",
+        ).strip().lower()
+        if scoped_backend not in _PREPARED_NVFP4_SCOPED_BACKENDS:
+            raise ValueError(
+                f"{_PREPARED_NVFP4_AUTO_BACKEND_ENV} must be "
+                "'flashinfer_cutlass' or 'flashinfer_b12x'; "
+                f"got {scoped_backend!r}"
+            )
+        layer.moe_config.moe_backend = scoped_backend
     return runner_backend
 
 

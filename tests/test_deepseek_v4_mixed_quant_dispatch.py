@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -249,6 +250,57 @@ class DeepseekV4MixedQuantDispatchTest(unittest.TestCase):
         self.assertEqual(target.moe_config.moe_backend, "flashinfer_cutlass")
         self.assertIsInstance(draft_method, _Mxfp4MoEMethod)
         self.assertEqual(draft.moe_config.moe_backend, "auto")
+
+    def test_prepared_target_scopes_b12x_without_mutating_auto_draft(
+        self,
+    ) -> None:
+        config = self._new_config()
+        target = _RoutedExperts("auto")
+        draft = _RoutedExperts("auto")
+
+        with (
+            patch.object(
+                self.module, "_prepared_nvfp4_load_requested", return_value=True
+            ),
+            patch.dict(
+                os.environ,
+                {
+                    "VLLM_DSV4_NVFP4_PREPARED_MOE_BACKEND": (
+                        "flashinfer_b12x"
+                    )
+                },
+            ),
+        ):
+            target_method = config.get_quant_method(
+                target, "model.layers.0.ffn.experts"
+            )
+            draft_method = config.get_quant_method(
+                draft, "model.layers.43.ffn.experts"
+            )
+
+        self.assertIsInstance(target_method, _ModelOptNvFp4FusedMoE)
+        self.assertEqual(target.moe_config.moe_backend, "flashinfer_b12x")
+        self.assertIsInstance(draft_method, _Mxfp4MoEMethod)
+        self.assertEqual(draft.moe_config.moe_backend, "auto")
+
+    def test_prepared_target_rejects_invalid_scoped_backend(self) -> None:
+        target = _RoutedExperts("auto")
+        with (
+            patch.object(
+                self.module, "_prepared_nvfp4_load_requested", return_value=True
+            ),
+            patch.dict(
+                os.environ,
+                {"VLLM_DSV4_NVFP4_PREPARED_MOE_BACKEND": "marlin"},
+            ),
+            self.assertRaisesRegex(
+                ValueError,
+                "VLLM_DSV4_NVFP4_PREPARED_MOE_BACKEND",
+            ),
+        ):
+            self._new_config().get_quant_method(
+                target, "model.layers.0.ffn.experts"
+            )
 
     def test_prepared_target_keeps_target_only_explicit_cutlass_compatible(
         self,

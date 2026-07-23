@@ -91,6 +91,10 @@ services:
       VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD:-0}"
       VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256:-}"
       VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ: "${VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ:-1}"
+      # Target-only backend override for a prepared NVFP4 target in a mixed
+      # target/draft process. The runner stays on auto so MXFP4 drafts retain
+      # their compatible backend.
+      VLLM_DSV4_NVFP4_PREPARED_MOE_BACKEND: "${VLLM_DSV4_NVFP4_PREPARED_MOE_BACKEND:-flashinfer_cutlass}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE:-0}"
       VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT: "${VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT:-0}"
       # Diagnostic-only target router trace. Disabled means no callbacks,
