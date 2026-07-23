@@ -1,0 +1,7 @@
+INFO 07-23 20:42:12 [b12x_mxfp4_moe.py:465] Prewarmed B12X route-pack capacities (1, 2, 4, 8, 16, 32, 64) on cuda:0 (experts=256, topk=6)
+M= 1 converted=0.196560 ms abliterated=0.196256 ms delta=+0.15%
+M= 4 converted=0.706928 ms abliterated=0.713480 ms delta=-0.92%
+M=24 converted=4.164192 ms abliterated=4.173048 ms delta=-0.21%
+M=48 converted=7.405936 ms abliterated=7.430728 ms delta=-0.33%
+Wrote /artifacts/exact-b12x.json
+PASSED
