@@ -186,6 +186,25 @@ def occupancy_valid_tactics(inventory: dict[str, Any], op: str) -> tuple[int, ..
     )
 
 
+def unsupported_tile_phase(error: BaseException) -> str | None:
+    """Classify only the native launch-time unsupported-tile rejection.
+
+    Occupancy is necessary but not sufficient in the pinned FlashInfer module:
+    several profiles report positive occupancy before the typed MoE dispatcher
+    rejects their tile.  Numerical failures and every other runtime error stay
+    fatal.
+    """
+
+    message = str(error)
+    if "Unsupported tile shape config" not in message:
+        return None
+    if "::gemm1(" in message:
+        return GEMM1_OP
+    if "::gemm2(" in message:
+        return GEMM2_OP
+    return None
+
+
 def _load_prepared_cutlass_weights(
     torch: Any,
     layer_file: Path,
@@ -521,30 +540,53 @@ def run(args: argparse.Namespace) -> int:
         )
         results.append(service_result)
         matrix = matrix[1:]
+    unsupported_tactics: dict[str, set[int]] = {GEMM1_OP: set(), GEMM2_OP: set()}
+    skipped_profiles: list[dict[str, Any]] = []
     for gemm1_tactic, gemm2_tactic, enable_pdl in matrix:
+        if (
+            gemm1_tactic in unsupported_tactics[GEMM1_OP]
+            or gemm2_tactic in unsupported_tactics[GEMM2_OP]
+        ):
+            continue
         print(
             f"M=4 gemm1={gemm1_tactic} gemm2={gemm2_tactic} "
             f"pdl={str(enable_pdl).lower()}",
             flush=True,
         )
-        result, eager_snapshot = _time_candidate(
-            torch,
-            runner=runner,
-            weights=weights,
-            shape=shape,
-            x=x,
-            topk_ids=topk_ids,
-            topk_weights=topk_weights,
-            gemm1_tactic=gemm1_tactic,
-            gemm2_tactic=gemm2_tactic,
-            enable_pdl=enable_pdl,
-            reference_output=service_reference,
-            warmup=args.warmup,
-            iters=args.iters,
-            repeats=args.repeats,
-            numeric_min_cosine=args.numeric_min_cosine,
-            numeric_max_nrmse=args.numeric_max_nrmse,
-        )
+        try:
+            result, eager_snapshot = _time_candidate(
+                torch,
+                runner=runner,
+                weights=weights,
+                shape=shape,
+                x=x,
+                topk_ids=topk_ids,
+                topk_weights=topk_weights,
+                gemm1_tactic=gemm1_tactic,
+                gemm2_tactic=gemm2_tactic,
+                enable_pdl=enable_pdl,
+                reference_output=service_reference,
+                warmup=args.warmup,
+                iters=args.iters,
+                repeats=args.repeats,
+                numeric_min_cosine=args.numeric_min_cosine,
+                numeric_max_nrmse=args.numeric_max_nrmse,
+            )
+        except Exception as error:
+            phase = unsupported_tile_phase(error)
+            if not args.all_tactics or phase is None:
+                raise
+            tactic = gemm1_tactic if phase == GEMM1_OP else gemm2_tactic
+            unsupported_tactics[phase].add(tactic)
+            skipped_profiles.append(
+                {
+                    "op": phase,
+                    "tactic": tactic,
+                    "reason": "native_dispatch_unsupported_tile_shape",
+                }
+            )
+            print(f"  skipped unsupported {phase} tactic={tactic}", flush=True)
+            continue
         if service_reference is None:
             service_reference = eager_snapshot
         median_ms = float(result["cuda_graph"]["median_ms"])
@@ -586,6 +628,7 @@ def run(args: argparse.Namespace) -> int:
         },
         "cache_proof": cache,
         "tactic_inventory": tactic_inventory[0] if tactic_inventory else None,
+        "unsupported_profiles": skipped_profiles,
         "prepared_checkpoint_proof": prepared_proof,
         "backend_proof": backend_proof,
         "results": results,

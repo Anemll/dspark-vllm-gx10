@@ -16,6 +16,7 @@ from benchmarks.benchmark_nvfp4_cutlass_tactic_sweep_sm121 import (
     collect_tactic_inventory,
     inspect_cache,
     occupancy_valid_tactics,
+    unsupported_tile_phase,
 )
 
 
@@ -72,6 +73,18 @@ class CutlassTacticSweepTests(unittest.TestCase):
         inventory = collect_tactic_inventory(Native())
         self.assertEqual(occupancy_valid_tactics(inventory, GEMM1_OP), (0,))
         self.assertEqual(occupancy_valid_tactics(inventory, GEMM2_OP), (2, 4))
+
+    def test_only_exact_native_unsupported_tile_errors_are_skippable(self) -> None:
+        self.assertEqual(
+            unsupported_tile_phase(
+                RuntimeError("Unsupported tile shape config 128128256 in Foo::gemm2(x)")
+            ),
+            GEMM2_OP,
+        )
+        self.assertIsNone(unsupported_tile_phase(RuntimeError("CUDA illegal access")))
+        self.assertIsNone(
+            unsupported_tile_phase(RuntimeError("Unsupported tile shape config without phase"))
+        )
 
 
 if __name__ == "__main__":
