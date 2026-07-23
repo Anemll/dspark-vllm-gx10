@@ -89,8 +89,12 @@ def _make_scale_views(
     native = {
         "w13": deep_bench.swap_gate_up_halves(shared["w13"]),
         "w13_scale": deep_bench.swap_gate_up_halves(w13_scale),
-        "w2": shared["w2"],
-        "w2_scale": w2_scale,
+        # The native packed-layout oracle deliberately reuses its input
+        # storage while repacking.  Keep every oracle tensor physically
+        # separate so it cannot mutate the one-copy serving payload or either
+        # scale view used by the shared CUTLASS/B12X arms.
+        "w2": shared["w2"].clone(),
+        "w2_scale": w2_scale.clone(),
     }
     proof = {
         "w13": w13_proof,
@@ -160,14 +164,32 @@ def run(args: argparse.Namespace) -> int:
     collapse_bench.validate_prepared_contract(torch, tensors, shape)
     shared, native, conversion = _make_scale_views(torch, tensors, shape)
 
-    shared_runner, shared_proof = exact_bench._make_exact_b12x_runner(
-        torch,
-        shared,
-        max_tokens=max(args.m),
-        top_k=shape.top_k,
-        swiglu_limit=args.swiglu_limit,
-        w13_layout="w13",
+    # This is the exact one-copy serving representation: the FP4 payload stays
+    # in CUTLASS-prepared [up, gate] storage and B12X receives only the derived
+    # E8M0/K32 scale view.  Unlike the packed-layout oracle below, the native
+    # ModelOpt preparer never rewrites the source FP4 bytes.
+    prepared_shared, shared_proof = (
+        collapse_bench.convert_prepared_to_native_mxfp4(torch, tensors, shape)
     )
+    shared_runner_args = SimpleNamespace(
+        m=args.m,
+        swiglu_alpha=1.0,
+        swiglu_beta=0.0,
+        swiglu_limit=args.swiglu_limit,
+        fast_math=True,
+        w4a16_weight_layout="modelopt",
+    )
+
+    # Construct the CUTLASS view before the destructive native-oracle pack.
+    # Both serving arms must continue to alias the same untouched FP4 payload.
+    cutlass_weights = prepared_bench._prepare_weights(torch, tensors, shape)
+    cutlass_runner, cutlass_proof = kernel_bench._make_flashinfer_cutlass_runner(
+        torch,
+        cutlass_weights,
+        shape,
+        SimpleNamespace(m=args.m, swiglu_limit=args.swiglu_limit),
+    )
+
     native_runner, native_proof = exact_bench._make_exact_b12x_runner(
         torch,
         native,
@@ -176,7 +198,6 @@ def run(args: argparse.Namespace) -> int:
         swiglu_limit=args.swiglu_limit,
         w13_layout="w31",
     )
-    prepared_shared = shared_runner["prepared_w4a16"]
     alias_proof = {
         "w13_same_data_ptr": int(prepared_shared.w13.data_ptr())
         == int(shared["w13"].data_ptr()),
@@ -190,17 +211,22 @@ def run(args: argparse.Namespace) -> int:
     if not all(alias_proof.values()):
         raise RuntimeError(f"shared-layout B12X duplicated FP4 storage: {alias_proof}")
 
-    cutlass_weights = deep_bench._make_cutlass_weights(torch, tensors)
-    cutlass_runner, cutlass_proof = kernel_bench._make_flashinfer_cutlass_runner(
-        torch,
-        cutlass_weights,
-        shape,
-        SimpleNamespace(m=args.m, swiglu_limit=args.swiglu_limit),
-    )
+    cutlass_alias_proof = {
+        "w13_same_data_ptr": int(cutlass_weights.w13.data_ptr())
+        == int(shared["w13"].data_ptr()),
+        "w2_same_data_ptr": int(cutlass_weights.w2.data_ptr())
+        == int(shared["w2"].data_ptr()),
+    }
+    if not all(cutlass_alias_proof.values()):
+        raise RuntimeError(
+            "CUTLASS and shared-layout B12X do not alias one FP4 payload: "
+            f"{cutlass_alias_proof}"
+        )
+    alias_proof["cutlass"] = cutlass_alias_proof
 
     rows: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
-    keepalive: list[Any] = [shared_runner, native_runner, cutlass_runner]
+    keepalive: list[Any] = [prepared_shared, native_runner, cutlass_runner]
     for m in args.m:
         x, topk_ids, topk_weights = kernel_bench.make_routes(
             torch,
@@ -210,8 +236,13 @@ def run(args: argparse.Namespace) -> int:
             seed=args.seed + m,
             input_rms=1.0,
         )
-        shared_launch, _, shared_scratch = exact_bench._make_launch(
-            torch, shared_runner, x, topk_ids, topk_weights
+        shared_launch, shared_scratch = kernel_bench._make_w4a16_launch(
+            torch,
+            prepared_shared,
+            x,
+            topk_ids,
+            topk_weights,
+            shared_runner_args,
         )
         native_launch, _, native_scratch = exact_bench._make_launch(
             torch, native_runner, x, topk_ids, topk_weights
