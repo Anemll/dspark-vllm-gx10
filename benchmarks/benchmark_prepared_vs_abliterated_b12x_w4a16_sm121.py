@@ -335,20 +335,32 @@ def _make_launch(
     topk_weights: Any,
 ) -> tuple[Any, Any, Any]:
     b12x = runner["module"]
+    from b12x.integration.tp_moe import TPMoEScratchCaps, plan_tp_moe_scratch
+
     output = torch.empty_like(x)
-    plan = b12x._plan_b12x_moe_fp4_scratch(
-        tokens=int(x.shape[0]),
-        weight_E=runner["num_experts"],
-        k=runner["hidden_size"],
-        n=runner["intermediate_size"],
-        topk=runner["top_k"],
-        device=x.device,
-        dtype=x.dtype,
-        activation="silu",
-        quant_mode="w4a16",
-        source_format="fp4_e8m0_k32",
-        w13_layout=runner["w13_layout"],
-        swiglu_limit=runner["swiglu_limit"],
+    # Use the pinned B12X planner API directly. Some immutable overlay images
+    # carry a newer optional ``w4a16_weight_layout`` wrapper argument than
+    # their installed B12X package. The common planner contract below is the
+    # exact production contract and avoids making this component gate depend
+    # on that unrelated Python/package signature drift.
+    plan = plan_tp_moe_scratch(
+        TPMoEScratchCaps(
+            max_tokens=max(int(x.shape[0]), 1),
+            weight_E=runner["num_experts"],
+            k=runner["hidden_size"],
+            n=runner["intermediate_size"],
+            num_topk=runner["top_k"],
+            device=x.device,
+            dtype=x.dtype,
+            core_token_counts=(max(int(x.shape[0]), 1),),
+            route_num_experts=0,
+            quant_mode="w4a16",
+            activation="silu",
+            swiglu_limit=runner["swiglu_limit"],
+            source_format="fp4_e8m0_k32",
+            w13_layout=runner["w13_layout"],
+            frozen=True,
+        )
     )
     scratch = torch.empty(
         b12x._b12x_scratch_nbytes(plan), dtype=torch.uint8, device=x.device
