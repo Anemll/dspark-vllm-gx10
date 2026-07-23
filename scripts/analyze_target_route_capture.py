@@ -94,9 +94,20 @@ def analyze_rank_pair(
 
     steps = rank0.shape[0]
     active = np.empty((steps, 43), dtype=np.int32)
+    max_multiplicity = np.empty((steps, 43), dtype=np.int32)
+    multiplicity_histogram = {str(value): 0 for value in range(1, 5)}
     for step in range(steps):
         for layer in range(43):
-            active[step, layer] = np.unique(rank0[step, :, layer, :]).size
+            counts = np.bincount(
+                rank0[step, :, layer, :].reshape(-1), minlength=256
+            )
+            nonzero = counts[counts > 0]
+            active[step, layer] = nonzero.size
+            max_multiplicity[step, layer] = int(nonzero.max())
+            for value in range(1, 5):
+                multiplicity_histogram[str(value)] += int(
+                    np.count_nonzero(nonzero == value)
+                )
     collisions = 24 - active
     percentiles = (0, 10, 25, 50, 75, 90, 100)
     active_percentiles = np.percentile(active, percentiles)
@@ -125,6 +136,15 @@ def analyze_rank_pair(
             "mean_fraction": float(collisions.mean() / 24.0),
             "minimum": int(collisions.min()),
             "maximum": int(collisions.max()),
+        },
+        "expert_row_multiplicity": {
+            "maximum": int(max_multiplicity.max()),
+            "mean_of_layer_step_maximum": float(max_multiplicity.mean()),
+            "layer_step_maximum_histogram": {
+                str(value): int(np.count_nonzero(max_multiplicity == value))
+                for value in range(1, 5)
+            },
+            "active_expert_histogram": multiplicity_histogram,
         },
         "per_layer": [
             {

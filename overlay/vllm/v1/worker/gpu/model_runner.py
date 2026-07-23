@@ -104,9 +104,6 @@ from vllm.v1.worker.gpu.sample.prompt_logprob import PromptLogprobsWorker
 from vllm.v1.worker.gpu.sample.sampler import Sampler
 from vllm.v1.worker.gpu.shutdown import free_before_shutdown
 from vllm.v1.worker.gpu.spec_decode import init_speculator
-from vllm.v1.worker.gpu.spec_decode.dspark.overlap_trace import (
-    maybe_begin_overlap_trace,
-)
 from vllm.v1.worker.gpu.spec_decode.eagle.eagle3_utils import (
     set_eagle3_aux_hidden_state_layers,
 )
@@ -1173,30 +1170,7 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         skip_attn_for_dummy_run: bool = False,
         is_profile: bool = False,
     ) -> ModelRunnerOutput | IntermediateTensors | None:
-        confidence_invalid_spec_tokens: dict[str, int] = {}
-        confidence_physical_target_rows: list[int] | None = None
-        confidence_d2h_copy_fallback: bool | None = None
-        dspark_overlap_trace = maybe_begin_overlap_trace(
-            device=self.device,
-            dummy_run=dummy_run,
-            has_speculator=self.speculator is not None,
-            is_verifier_block=bool(
-                scheduler_output.scheduled_spec_decode_tokens
-            ),
-        )
         if not dummy_run:
-            # The confidence prefix belongs to the proposal produced by the
-            # prior step. Compact before request updates and CUDA-graph dispatch
-            # so target attention/MoE kernels execute only physical rows.
-            confidence_invalid_spec_tokens = (
-                self.draft_tokens_handler.compact_scheduler_output(
-                    scheduler_output
-                )
-            )
-            (
-                confidence_physical_target_rows,
-                confidence_d2h_copy_fallback,
-            ) = self.draft_tokens_handler.get_last_compaction_telemetry()
             # Update the request states.
             self.update_pp_decode_requests()
             self.finish_requests(scheduler_output)
@@ -1214,6 +1188,19 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         num_toks = scheduler_output.total_num_scheduled_tokens
         max_query_len = max(scheduler_output.num_scheduled_tokens.values())
         uniform_tok_count = get_uniform_token_count(num_reqs, num_toks, max_query_len)
+        if not dummy_run and uniform_tok_count is not None:
+            req_ids = tuple(scheduler_output.num_scheduled_tokens)
+            idx_mapping_np = np.fromiter(
+                (self.req_states.req_id_to_index[req_id] for req_id in req_ids),
+                dtype=np.int32,
+                count=num_reqs,
+            )
+            prefilling = (
+                self.req_states.num_computed_prefill_tokens[idx_mapping_np]
+                < self.req_states.prefill_len.np[idx_mapping_np]
+            )
+            if bool(np.any(prefilling)):
+                uniform_tok_count = None
 
         num_active_loras = 0
         if self.lora_config:
@@ -1367,8 +1354,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             )
 
         # Run model.
-        if dspark_overlap_trace is not None:
-            dspark_overlap_trace.begin_verify()
         if batch_desc.cg_mode == CUDAGraphMode.FULL:
             # Use explicit cudagraph replay for FULL mode.
             # NOTE(woosuk): Here, we don't need to pass the input tensors,
@@ -1380,6 +1365,8 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             # For piecewise and eager mode, just call model().
             batch_descriptor = BatchDescriptor(
                 num_tokens=input_batch.num_tokens_after_padding,
+                num_reqs=num_reqs,
+                uniform=uniform_tok_count == self.decode_query_len,
                 has_lora=self.lora_config is not None,
                 num_active_loras=batch_desc.num_active_loras,
             )
@@ -1413,9 +1400,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             if route_manifest is not None:
                 logger.info("Completed target route capture: %s", route_manifest)
 
-        if dspark_overlap_trace is not None:
-            dspark_overlap_trace.end_verify_and_measure_rank_wait()
-
         if self.is_last_pp_rank:
             if self.use_aux_hidden_state_outputs:
                 assert isinstance(model_output, tuple)
@@ -1439,10 +1423,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             hidden_states=hidden_states,
             aux_hidden_states=aux_hidden_states,
             finished_req_ids=finished_req_ids,
-            confidence_invalid_spec_tokens=confidence_invalid_spec_tokens,
-            confidence_physical_target_rows=confidence_physical_target_rows,
-            confidence_d2h_copy_fallback=confidence_d2h_copy_fallback,
-            dspark_overlap_trace=dspark_overlap_trace,
         )
 
         if not self.is_last_pp_rank:
@@ -1465,16 +1445,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         hidden_states = self.execute_model_state.hidden_states
         aux_hidden_states = self.execute_model_state.aux_hidden_states
         finished_req_ids = self.execute_model_state.finished_req_ids
-        confidence_invalid_spec_tokens = (
-            self.execute_model_state.confidence_invalid_spec_tokens
-        )
-        confidence_physical_target_rows = (
-            self.execute_model_state.confidence_physical_target_rows
-        )
-        confidence_d2h_copy_fallback = (
-            self.execute_model_state.confidence_d2h_copy_fallback
-        )
-        dspark_overlap_trace = self.execute_model_state.dspark_overlap_trace
         self.execute_model_state = None
 
         if not self.is_last_pp_rank:
@@ -1496,8 +1466,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             return ModelRunnerOutput.with_kv_conn_output_only(kv_connector_output)
 
         # Last rank: sample tokens
-        if dspark_overlap_trace is not None:
-            dspark_overlap_trace.begin_commit()
         sampler_output, num_sampled, num_rejected = self.sample(
             hidden_states, input_batch, grammar_output
         )
@@ -1529,11 +1497,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             req_id_to_index={req_id: i for i, req_id in enumerate(input_batch.req_ids)},
             sampled_token_ids=None,  # type: ignore
             prompt_logprobs_dict=prompt_logprobs_dict,  # type: ignore[arg-type]
-            confidence_invalid_spec_tokens=(
-                confidence_invalid_spec_tokens or None
-            ),
-            confidence_physical_target_rows=confidence_physical_target_rows,
-            confidence_d2h_copy_fallback=confidence_d2h_copy_fallback,
         )
         # Start async output copy here so that it can overlap with speculator proposal.
         async_output = AsyncOutput(
@@ -1566,9 +1529,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             num_rejected,
             input_batch.query_start_loc,
         )
-        if dspark_overlap_trace is not None:
-            dspark_overlap_trace.end_commit()
-            dspark_overlap_trace.begin_draft()
 
         if self.speculator is not None:
             assert self.sampler is not None
@@ -1602,11 +1562,6 @@ class GPUModelRunner(LoRAModelRunnerMixin):
             self.draft_tokens_handler.set_draft_tokens(
                 input_batch,
                 self.req_states.draft_tokens[input_batch.idx_mapping],
-            )
-
-        if dspark_overlap_trace is not None:
-            model_runner_output.dspark_overlap_trace = (
-                dspark_overlap_trace.end_draft_and_gather()
             )
 
         # Post-step KV connector related operations.
@@ -1728,10 +1683,3 @@ class ExecuteModelState(NamedTuple):
     hidden_states: torch.Tensor | None
     aux_hidden_states: list[torch.Tensor] | None
     finished_req_ids: set[str]
-    # Physical proposal slots omitted before target CUDA-graph dispatch.
-    # V2 executes the target and sampling in separate calls, so this evidence
-    # must cross that asynchronous boundary with the other per-step state.
-    confidence_invalid_spec_tokens: dict[str, int]
-    confidence_physical_target_rows: list[int] | None
-    confidence_d2h_copy_fallback: bool | None
-    dspark_overlap_trace: object | None

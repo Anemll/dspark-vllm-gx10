@@ -3,13 +3,13 @@ ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 ARG SOURCE_REVISION=unknown
-ARG BASE_V2_MODEL_RUNNER_SHA256=58f45c58969cdd9cba707863e82fefda818002de45c621032b58b6eb364deedf
-ARG ROUTE_V2_MODEL_RUNNER_SHA256=ae123a2ca016b2982560aaf22ca63143a3aa472352e34c107a6ff05dac1463a8
+ARG BASE_V2_MODEL_RUNNER_SHA256=61befb32cdc06e1c58383f9481e805d3b86637c84736f79b904c04a474df34e4
+ARG ROUTE_V2_MODEL_RUNNER_SHA256=cf70039b5305420be85030b78246986da8bcf33110ab78de4b010d672a693f79
 ARG TARGET_ROUTE_CAPTURE_SHA256=9bf7052fe21c4adaf01adc949093c39efd4fa82f4c5d1c09bb087075f8c5567a
 
-# This diagnostic image intentionally starts from the measured pairwise-M=1
-# hardware image.  Refuse a different runner instead of applying the overlay
-# to an unknown serving path.
+# This diagnostic image intentionally starts from the accepted W4A4 dual-
+# dispatch service image. Refuse a different runner instead of applying the
+# overlay to an unknown serving path.
 RUN echo "${BASE_V2_MODEL_RUNNER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py" | sha256sum -c -
 
 COPY overlay/vllm/v1/worker/gpu/model_runner.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py

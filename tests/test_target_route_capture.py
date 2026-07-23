@@ -82,7 +82,7 @@ class TargetRouteCaptureTests(unittest.TestCase):
 
         self.assertIn(
             "ARG BASE_V2_MODEL_RUNNER_SHA256="
-            "58f45c58969cdd9cba707863e82fefda818002de45c621032b58b6eb364deedf",
+            "61befb32cdc06e1c58383f9481e805d3b86637c84736f79b904c04a474df34e4",
             dockerfile,
         )
         self.assertIn(
@@ -362,6 +362,19 @@ class TargetRouteCaptureTests(unittest.TestCase):
             self.assertTrue(result["rank_pair_equal"])
             self.assertEqual(result["active_experts"]["mean"], 6.0)
             self.assertEqual(result["cross_token_collisions"]["mean"], 18.0)
+            self.assertEqual(
+                result["expert_row_multiplicity"]["maximum"], 4
+            )
+            self.assertEqual(
+                result["expert_row_multiplicity"]
+                ["layer_step_maximum_histogram"],
+                {"1": 0, "2": 0, "3": 0, "4": 43},
+            )
+            self.assertEqual(
+                result["expert_row_multiplicity"]
+                ["active_expert_histogram"],
+                {"1": 0, "2": 0, "3": 0, "4": 258},
+            )
 
 
 if __name__ == "__main__":
