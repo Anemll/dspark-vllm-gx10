@@ -73,10 +73,14 @@ class Nvfp4DualDecodeTests(unittest.TestCase):
         oracle_source = ORACLE.read_text()
         compose_source = COMPOSE.read_text()
         self.assertIn('os.getenv("VLLM_NVFP4_W4A16_DUAL_DECODE", "0")', env_source)
+        self.assertIn('os.getenv("VLLM_NVFP4_NATIVE_B12X", "0")', env_source)
+        self.assertIn("if envs.VLLM_NVFP4_NATIVE_B12X:", oracle_source)
         self.assertIn("if envs.VLLM_NVFP4_W4A16_DUAL_DECODE:", oracle_source)
+        self.assertIn("NvFp4NativeB12xExperts", oracle_source)
         self.assertIn("NvFp4CutlassW4A16DualExperts", oracle_source)
         for name, default in (
             ("VLLM_NVFP4_W4A16_DUAL_DECODE", "0"),
+            ("VLLM_NVFP4_NATIVE_B12X", "0"),
             ("VLLM_NVFP4_W4A16_DECODE_MIN_M", "2"),
             ("VLLM_NVFP4_W4A16_DECODE_MAX_M", "8"),
             ("B12X_W4A16_TC_DECODE", "0"),
@@ -98,9 +102,22 @@ class Nvfp4DualDecodeTests(unittest.TestCase):
         self.assertIn("source.untyped_storage().data_ptr()", source)
         self.assertIn('source_format="fp4_e8m0_k32"', source)
         self.assertIn('w13_layout="w13"', source)
-        self.assertIn('w4a16_weight_layout="modelopt"', source)
+        self.assertIn('"modelopt" if weight_layout == "modelopt" else None', source)
         self.assertIn("NVFP4_DUAL_DECODE event=selected", source)
         self.assertIn("uniform_decode=true", source)
+
+    def test_native_b12x_reuses_storage_and_has_no_cutlass_branch(self) -> None:
+        source = EXPERT.read_text()
+        self.assertIn(
+            "class NvFp4NativeB12xExperts(NvFp4CutlassW4A16DualExperts)",
+            source,
+        )
+        self.assertIn("prepare_w4a16_fp4_e8m0_k32_weights(", source)
+        self.assertIn("reuse_input_storage=True", source)
+        self.assertIn('prepared.weight_layout != "packed"', source)
+        self.assertIn("NVFP4_NATIVE_B12X event=prepared", source)
+        native_source = source.split("class NvFp4NativeB12xExperts", 1)[1]
+        self.assertNotIn("return super().apply(", native_source)
 
     def test_scratch_helper_preserves_default_and_forwards_explicit_layout(self) -> None:
         source = B12X_EXPERT.read_text()

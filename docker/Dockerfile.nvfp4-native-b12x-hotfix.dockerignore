@@ -1,0 +1,15 @@
+**
+!overlay/
+!overlay/vllm/
+!overlay/vllm/envs.py
+!overlay/vllm/model_executor/
+!overlay/vllm/model_executor/layers/
+!overlay/vllm/model_executor/layers/fused_moe/
+!overlay/vllm/model_executor/layers/fused_moe/oracle/
+!overlay/vllm/model_executor/layers/fused_moe/oracle/nvfp4.py
+!overlay/vllm/model_executor/layers/fused_moe/experts/
+!overlay/vllm/model_executor/layers/fused_moe/experts/nvfp4_dual_decode_moe.py
+!overlay/vllm/models/
+!overlay/vllm/models/deepseek_v4/
+!overlay/vllm/models/deepseek_v4/nvidia/
+!overlay/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py

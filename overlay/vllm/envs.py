@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     VLLM_B12X_W4A16_FORCE_BLOCKS_MAX_M: int = 16
     VLLM_B12X_W4A16_FORCE_TILE_CONFIG: str = ""
     VLLM_NVFP4_W4A16_DUAL_DECODE: bool = False
+    VLLM_NVFP4_NATIVE_B12X: bool = False
     VLLM_NVFP4_W4A16_DECODE_MIN_M: int = 2
     VLLM_NVFP4_W4A16_DECODE_MAX_M: int = 8
     VLLM_PP_LAYER_PARTITION: str | None = None
@@ -1033,6 +1034,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     "VLLM_NVFP4_W4A16_DUAL_DECODE": lambda: bool(
         int(os.getenv("VLLM_NVFP4_W4A16_DUAL_DECODE", "0"))
+    ),
+    "VLLM_NVFP4_NATIVE_B12X": lambda: bool(
+        int(os.getenv("VLLM_NVFP4_NATIVE_B12X", "0"))
     ),
     "VLLM_NVFP4_W4A16_DECODE_MIN_M": lambda: int(
         os.getenv("VLLM_NVFP4_W4A16_DECODE_MIN_M", "2")

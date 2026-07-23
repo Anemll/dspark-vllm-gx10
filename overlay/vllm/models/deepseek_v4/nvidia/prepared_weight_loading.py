@@ -84,7 +84,7 @@ PINNED_B12X_EXPERTS_SHA256 = (
     "5cc787c52510e614be63b62d2e49f9b8e0c6fc4494a0e8578e7d72250e3f9058"
 )
 PINNED_DUAL_DECODE_EXPERTS_SHA256 = (
-    "7d3beacd52ae30978be04ed21a0a8cafdcc740f63026f60d4f573f76e9d6dcb8"
+    "d03f219b562e94de4c33c0d4945cebf8dbabcd12f953c169ce391c0327d73a05"
 )
 PINNED_DUAL_DECODE_POLICY_SHA256 = (
     "9a1fbc2f61454e9d6779952d5de38dd373ddf1241508edda4b121f0cdf339c63"
@@ -1067,11 +1067,12 @@ def _finalize_prepared_cutlass(
         routing_tables=routed_layer._expert_routing_tables(),
         layer=routed_layer,
     )
-    dual_decode = getattr(quant_method.experts_cls, "__name__", None) == (
-        "NvFp4CutlassW4A16DualExperts"
+    prepared_w4a16 = getattr(quant_method.experts_cls, "__name__", None) in (
+        "NvFp4CutlassW4A16DualExperts",
+        "NvFp4NativeB12xExperts",
     )
     dual_scale_bytes = 0
-    if dual_decode:
+    if prepared_w4a16:
         fused_experts = getattr(quant_method.moe_kernel, "fused_experts", None)
         initialize_dual = getattr(
             fused_experts, "initialize_prepared_w4a16_decode", None
@@ -1089,7 +1090,7 @@ def _finalize_prepared_cutlass(
                 "Prepared NVFP4 dual experts reported no E8M0 scale sidecar"
             )
     state.finalized = True
-    if dual_decode:
+    if prepared_w4a16:
         logger.info(
             "NVFP4_PREPARED event=postload layer=%d "
             "transforms=e4m3_k16_to_e8m0_k32 backend=%s "
@@ -1225,6 +1226,10 @@ def _install_prepared_postload_hook(routed_layer: Any, state: PreparedPostloadSt
                 "NvFp4CutlassW4A16DualExperts",
                 "vllm.model_executor.layers.fused_moe.experts.nvfp4_dual_decode_moe",
             ),
+            (
+                "NvFp4NativeB12xExperts",
+                "vllm.model_executor.layers.fused_moe.experts.nvfp4_dual_decode_moe",
+            ),
         },
         PREPARED_B12X_BACKEND: {
             (
@@ -1267,8 +1272,11 @@ def _validate_runtime_transform_sources(routed_layer: Any) -> None:
     quant_method = routed_layer.quant_method
     experts_cls = getattr(quant_method, "experts_cls", None)
     backend = getattr(getattr(quant_method, "nvfp4_backend", None), "value", None)
-    if backend == PREPARED_BACKEND and getattr(experts_cls, "__name__", None) == (
-        "NvFp4CutlassW4A16DualExperts"
+    if backend == PREPARED_BACKEND and getattr(
+        experts_cls, "__name__", None
+    ) in (
+        "NvFp4CutlassW4A16DualExperts",
+        "NvFp4NativeB12xExperts",
     ):
         expert_contract = (
             "NvFp4CutlassW4A16DualExperts",

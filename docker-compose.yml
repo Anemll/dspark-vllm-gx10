@@ -68,6 +68,7 @@ services:
       # for uniform routed decode batches inside the explicit [MIN_M, MAX_M]
       # interval.  Keep default-off until the immutable image gates pass.
       VLLM_NVFP4_W4A16_DUAL_DECODE: "${VLLM_NVFP4_W4A16_DUAL_DECODE:-0}"
+      VLLM_NVFP4_NATIVE_B12X: "${VLLM_NVFP4_NATIVE_B12X:-0}"
       VLLM_NVFP4_W4A16_DECODE_MIN_M: "${VLLM_NVFP4_W4A16_DECODE_MIN_M:-2}"
       VLLM_NVFP4_W4A16_DECODE_MAX_M: "${VLLM_NVFP4_W4A16_DECODE_MAX_M:-8}"
 

@@ -303,6 +303,11 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
         prepared = self._prepared_w4a16
         if prepared is None:
             raise RuntimeError("prepared W4A16 decode sidecar is unavailable")
+        weight_layout = getattr(prepared, "weight_layout", None)
+        if weight_layout not in ("modelopt", "packed"):
+            raise RuntimeError(
+                f"prepared W4A16 weight layout drifted: {weight_layout!r}"
+            )
         return _plan_b12x_moe_fp4_scratch(
             tokens=tokens,
             weight_E=int(prepared.num_experts),
@@ -315,7 +320,11 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
             quant_mode="w4a16",
             source_format="fp4_e8m0_k32",
             w13_layout="w13",
-            w4a16_weight_layout="modelopt",
+            # The pinned planner's default is native packed storage.  Only the
+            # legacy dual-view arm needs the explicit modelopt override.
+            w4a16_weight_layout=(
+                "modelopt" if weight_layout == "modelopt" else None
+            ),
             apply_router_weight_on_input=apply_router_weight_on_input,
             swiglu_limit=getattr(self.quant_config, "gemm1_clamp_limit", None),
         )
@@ -406,6 +415,32 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
                 apply_router_weight_on_input=apply_router_weight_on_input,
             )
 
+        self._apply_prepared_w4a16(
+            output=output,
+            hidden_states=hidden_states,
+            topk_weights=topk_weights,
+            topk_ids=topk_ids,
+            activation=activation,
+            expert_map=expert_map,
+            workspace2=workspace2,
+            apply_router_weight_on_input=apply_router_weight_on_input,
+            log_selection=True,
+        )
+
+    def _apply_prepared_w4a16(
+        self,
+        *,
+        output: torch.Tensor,
+        hidden_states: torch.Tensor,
+        topk_weights: torch.Tensor,
+        topk_ids: torch.Tensor,
+        activation: MoEActivation,
+        expert_map: torch.Tensor | None,
+        workspace2: torch.Tensor | None,
+        apply_router_weight_on_input: bool | None,
+        log_selection: bool,
+    ) -> None:
+        tokens = int(hidden_states.shape[0])
         prepared = self._prepared_w4a16
         unit_scale = self._w4a16_unit_scale
         if prepared is None or unit_scale is None:
@@ -430,7 +465,7 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
             apply_router_weight_on_input=apply_weight_on_input,
         )
         scratch = _workspace2_as_b12x_scratch(workspace2, plan)
-        if not self._w4a16_selection_logged:
+        if log_selection and not self._w4a16_selection_logged:
             logger.info(
                 "NVFP4_DUAL_DECODE event=selected tokens=%d bounds=%s "
                 "uniform_decode=true",
@@ -463,4 +498,184 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
             swiglu_limit=getattr(self.quant_config, "gemm1_clamp_limit", None),
             plan=plan,
             scratch=scratch,
+        )
+
+
+class NvFp4NativeB12xExperts(NvFp4CutlassW4A16DualExperts):
+    """Prepared NVFP4 converted once to native-packed B12X W4A16.
+
+    The prepared checkpoint's exact E4M3/K16 expansion is collapsed back to
+    E8M0/K32, then the existing FP4 parameter storage is repacked in place.
+    Every routed-expert forward uses the resulting native B12X W4A16 path;
+    there is no CUTLASS branch and no duplicate FP4 payload.
+    """
+
+    def initialize_prepared_w4a16_decode(self, layer: torch.nn.Module) -> None:
+        if self._prepared_w4a16 is not None:
+            raise RuntimeError("prepared native B12X weights initialized twice")
+        if self.quant_dtype != "nvfp4":
+            raise RuntimeError(
+                f"native B12X requires NVFP4 quantization, got {self.quant_dtype!r}"
+            )
+        if self.w1_scale is None or self.w2_scale is None:
+            raise RuntimeError("native B12X requires both prepared CUTLASS scales")
+        if self.g1_alphas is None or self.g2_alphas is None:
+            raise RuntimeError("native B12X requires both prepared CUTLASS alphas")
+        if self.a1_gscale is None or self.a2_gscale is None:
+            raise RuntimeError("native B12X requires both reciprocal input scales")
+
+        w13 = layer.w13_weight
+        w2 = layer.w2_weight
+        if w13.device.type != "cuda" or w2.device != w13.device:
+            raise RuntimeError("native B12X preparation requires colocated CUDA weights")
+        if w13.dtype != torch.uint8 or w2.dtype != torch.uint8:
+            raise RuntimeError("native B12X requires packed uint8 FP4 weights")
+        experts = int(w13.shape[0])
+        hidden = int(w2.shape[1])
+        intermediate = int(w2.shape[2]) * 2
+        if tuple(w13.shape[1:]) != (2 * intermediate, hidden // 2):
+            raise RuntimeError(
+                "native B12X prepared W13 shape drifted: "
+                f"{tuple(w13.shape)}"
+            )
+
+        raw_g1 = (self.g1_alphas * self.a1_gscale).to(torch.float32)
+        raw_g2 = (self.g2_alphas * self.a2_gscale).to(torch.float32)
+        w13_e8m0 = _collapse_nvfp4_scale_grid(
+            self.w1_scale,
+            raw_g1,
+            rows=2 * intermediate,
+            cols=hidden,
+            name="w13",
+        )
+        w2_e8m0 = _collapse_nvfp4_scale_grid(
+            self.w2_scale,
+            raw_g2,
+            rows=hidden,
+            cols=intermediate,
+            name="w2",
+        )
+        from b12x.moe.fused.w4a16.prepare import (
+            prepare_w4a16_fp4_e8m0_k32_weights,
+        )
+
+        unit_scale = torch.ones(experts, dtype=torch.float32, device=w13.device)
+        prepared = prepare_w4a16_fp4_e8m0_k32_weights(
+            w13,
+            w13_e8m0,
+            unit_scale,
+            w2,
+            w2_e8m0,
+            unit_scale.clone(),
+            activation="silu",
+            params_dtype=self.out_dtype,
+            # Prepared physical W13 is [w3/up, w1/gate].  The native packer
+            # folds the half rotation into its one-time in-place transform.
+            w13_layout="w13",
+            reuse_input_storage=True,
+        )
+        if prepared.weight_layout != "packed":
+            raise RuntimeError(
+                "native B12X preparation did not produce packed weights: "
+                f"{prepared.weight_layout!r}"
+            )
+        if prepared.source_format != "fp4_e8m0_k32":
+            raise RuntimeError(
+                f"native B12X source format drifted: {prepared.source_format!r}"
+            )
+        for name, source, candidate in (
+            ("w13", w13, prepared.w13),
+            ("w2", w2, prepared.w2),
+        ):
+            if (
+                int(source.data_ptr()) != int(candidate.data_ptr())
+                or int(source.untyped_storage().data_ptr())
+                != int(candidate.untyped_storage().data_ptr())
+            ):
+                raise RuntimeError(f"native B12X duplicated {name} FP4 storage")
+
+        self._prepared_w4a16 = prepared
+        self._w4a16_unit_scale = unit_scale
+        retained_scales = (
+            prepared.w13_scale,
+            prepared.w2_scale,
+            prepared.w13_global_scale,
+            prepared.w2_global_scale,
+        )
+        unique_scale_storages: dict[int, int] = {}
+        for value in retained_scales:
+            storage = value.untyped_storage()
+            unique_scale_storages.setdefault(
+                int(storage.data_ptr()), int(storage.nbytes())
+            )
+        self._w4a16_additional_scale_bytes = sum(unique_scale_storages.values())
+        logger.info(
+            "NVFP4_NATIVE_B12X event=prepared scale_bytes=%d "
+            "duplicate_weight_bytes=0 weight_layout=packed",
+            self._w4a16_additional_scale_bytes,
+        )
+
+    def workspace_shapes(
+        self,
+        M: int,
+        N: int,
+        K: int,
+        topk: int,
+        global_num_experts: int,
+        local_num_experts: int,
+        expert_tokens_meta: Any | None,
+        activation: MoEActivation,
+    ) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
+        prepared = self._prepared_w4a16
+        if prepared is None:
+            raise RuntimeError(
+                "native B12X workspace requested before prepared post-load"
+            )
+        plan = self._w4a16_plan(
+            tokens=max(int(M), 1),
+            k=int(K),
+            topk=int(topk),
+            device=prepared.w13.device,
+            dtype=self.out_dtype,
+            activation=activation,
+        )
+        scratch_elements = max(
+            1,
+            _ceil_div(
+                _b12x_scratch_nbytes(plan),
+                _dtype_element_size(self.out_dtype),
+            ),
+        )
+        return (0,), (scratch_elements,), (M, K)
+
+    def apply(
+        self,
+        output: torch.Tensor,
+        hidden_states: torch.Tensor,
+        w1: torch.Tensor,
+        w2: torch.Tensor,
+        topk_weights: torch.Tensor,
+        topk_ids: torch.Tensor,
+        activation: MoEActivation,
+        global_num_experts: int,
+        expert_map: torch.Tensor | None,
+        a1q_scale: torch.Tensor | None,
+        a2_scale: torch.Tensor | None,
+        workspace13: torch.Tensor | None,
+        workspace2: torch.Tensor | None,
+        expert_tokens_meta: Any | None,
+        apply_router_weight_on_input: bool | None,
+    ) -> None:
+        if a1q_scale is not None:
+            raise RuntimeError("native B12X requires unquantized BF16 inputs")
+        self._apply_prepared_w4a16(
+            output=output,
+            hidden_states=hidden_states,
+            topk_weights=topk_weights,
+            topk_ids=topk_ids,
+            activation=activation,
+            expert_map=expert_map,
+            workspace2=workspace2,
+            apply_router_weight_on_input=apply_router_weight_on_input,
+            log_selection=False,
         )
