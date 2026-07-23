@@ -2911,6 +2911,32 @@ def make_routes(
     return x.contiguous(), ids.contiguous(), weights.contiguous()
 
 
+def load_captured_route_ids(
+    torch: Any,
+    path: pathlib.Path,
+    *,
+    sample_index: int,
+    m: int,
+    top_k: int,
+) -> Any:
+    """Load one captured route sample without changing its row/expert order."""
+    import numpy as np
+
+    raw = np.load(path, mmap_mode="r", allow_pickle=False)
+    if raw.ndim < 2 or tuple(raw.shape[-2:]) != (m, top_k):
+        raise ValueError(
+            f"captured routes end in {tuple(raw.shape[-2:])}, expected {(m, top_k)}"
+        )
+    samples = raw.reshape((-1, m, top_k))
+    if sample_index < 0 or sample_index >= samples.shape[0]:
+        raise ValueError(
+            f"route sample index {sample_index} outside [0, {samples.shape[0]})"
+        )
+    # Materialize the read-only mmap slice before handing it to PyTorch.
+    host = np.array(samples[sample_index], dtype=np.int32, copy=True, order="C")
+    return torch.from_numpy(host).to(device="cuda", dtype=torch.int32).contiguous()
+
+
 def _scaled_rms(torch: Any, value: Any) -> float:
     """Compute RMS without squaring tiny values before normalizing them."""
 
@@ -3978,6 +4004,15 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             "m": list(args.m),
             "correctness_m": list(args.correctness_m),
             "routing": args.routing,
+            "route_ids_npy": (
+                {
+                    "path": str(args.route_ids_npy),
+                    "sha256": _sha256_file(args.route_ids_npy),
+                    "sample_index": args.route_sample_index,
+                }
+                if args.route_ids_npy is not None
+                else None
+            ),
             "seed": args.seed,
             "synthetic_fixture": weights.metadata.get("synthetic_fixture"),
             "input_rms": args.input_rms,
@@ -4031,6 +4066,14 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             seed=args.seed + m,
             input_rms=args.input_rms,
         )
+        if args.route_ids_npy is not None:
+            topk_ids = load_captured_route_ids(
+                torch,
+                args.route_ids_npy,
+                sample_index=args.route_sample_index,
+                m=m,
+                top_k=shape.top_k,
+            )
         per_token_rms = x.float().square().mean(dim=-1).sqrt()
         input_rms_contract = evaluate_input_rms_contract(
             requested=args.input_rms,
@@ -4531,6 +4574,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated M values for selected cross-backend numerical checks",
     )
     parser.add_argument("--routing", choices=("balanced", "random", "hot"), default="balanced")
+    parser.add_argument(
+        "--route-ids-npy",
+        type=pathlib.Path,
+        help=(
+            "Replace synthetic route IDs with one sample from an NPY array whose "
+            "last dimensions are [M, top_k]. Hidden states and route weights remain "
+            "the deterministic matched fixture."
+        ),
+    )
+    parser.add_argument("--route-sample-index", type=int, default=0)
     parser.add_argument("--seed", type=int, default=4104)
     parser.add_argument(
         "--input-rms",

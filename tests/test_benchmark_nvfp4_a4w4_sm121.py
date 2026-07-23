@@ -2016,6 +2016,46 @@ class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires --cuda-graph"):
             bench.validate_args(args)
 
+    def test_captured_routes_preserve_exact_sample_order(self) -> None:
+        try:
+            import numpy as np
+        except ImportError:
+            self.skipTest("numpy unavailable")
+
+        class _Tensor:
+            def __init__(self, array):
+                self.array = array
+
+            def to(self, **_kwargs):
+                return self
+
+            def contiguous(self):
+                return self
+
+        fake_torch = SimpleNamespace(
+            int32="int32", from_numpy=lambda array: _Tensor(array)
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = pathlib.Path(temp_dir) / "routes.npy"
+            routes = np.arange(3 * 4 * 6, dtype=np.int32).reshape(3, 4, 6)
+            np.save(path, routes)
+            loaded = bench.load_captured_route_ids(
+                fake_torch,
+                path,
+                sample_index=2,
+                m=4,
+                top_k=6,
+            )
+            self.assertTrue(np.array_equal(loaded.array, routes[2]))
+            with self.assertRaisesRegex(ValueError, "outside"):
+                bench.load_captured_route_ids(
+                    fake_torch,
+                    path,
+                    sample_index=3,
+                    m=4,
+                    top_k=6,
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
