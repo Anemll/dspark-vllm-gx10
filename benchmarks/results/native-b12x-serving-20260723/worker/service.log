@@ -1,0 +1,1091 @@
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_BUILD_URL
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSPARK_CONFIDENCE_SCHEDULER
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSV4_NVFP4_CUTLASS_PREPARED_DIRECT_READ
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSPARK_REPLICATE_MARKOV_W1
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_SKIP_INIT_MEMORY_CHECK
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSV4_NVFP4_CUTLASS_PREPARED_LOAD
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_IMAGE_TAG
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSV4_B12X_COMPRESSED_MLA
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_USE_B12X_WO_PROJECTION
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSV4_NVFP4_CUTLASS_PREPARED_MANIFEST_SHA256
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSPARK_HARDWARE_SCHEDULER_EARLY_STOP
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSPARK_FUSED_MARKOV_ARGMAX
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_TRITON_MLA_SPARSE
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSPARK_REFERENCE_KV_QUANT_DEQUANT
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSV4_NVFP4_LAYER_STAGED_LOAD
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSV4_DSPARK_DEFER_TARGET_CAPTURE_EXACT
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_BUILD_PIPELINE
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSPARK_CONFIDENCE_THRESHOLD
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSPARK_LOCAL_ARGMAX
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSV4_NVFP4_PREPARED_MOE_BACKEND
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_BUILD_COMMIT
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_DSPARK_GPU_REJECTED_CONTEXT_MASK
+WARNING 07-23 22:38:05 [envs.py:2071] Unknown vLLM environment variable detected: VLLM_PROMETHEUS_MULTIPROC_ACTIVE_DIR
+INFO 07-23 22:38:05 [config.py:742] Detected quantization_config.scale_fmt=ue8m0; enabling UE8M0 for DeepGEMM.
+INFO 07-23 22:38:05 [model.py:619] Resolved architecture: DeepseekV4ForCausalLM
+INFO 07-23 22:38:05 [model.py:1776] Using max model len 350000
+INFO 07-23 22:38:06 [cache.py:287] Using nvfp4_ds_mla data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor
+INFO 07-23 22:38:06 [arg_utils.py:2026] Inferred data_parallel_rank 0 from node_rank 1
+INFO 07-23 22:38:06 [scheduler.py:252] Chunked prefill is enabled with max_num_batched_tokens=8192.
+INFO 07-23 22:38:06 [vllm.py:1042] Asynchronous scheduling is enabled.
+INFO 07-23 22:38:06 [vllm.py:1128] Auto-enabling VLLM_USE_BREAKABLE_CUDAGRAPH=1. Set VLLM_USE_BREAKABLE_CUDAGRAPH=0 to opt out.
+WARNING 07-23 22:38:06 [vllm.py:1134] VLLM_USE_BREAKABLE_CUDAGRAPH is set, disabling vLLM's torch.compile pipeline. Equivalent to -cc.mode=none.
+WARNING 07-23 22:38:06 [vllm.py:1144] Inductor compilation was disabled by user settings, optimizations settings that are only active during inductor compilation will be ignored.
+INFO 07-23 22:38:06 [kernel.py:292] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['vllm_c', 'native'], fused_add_rms_norm=['vllm_c', 'native'])
+WARNING 07-23 22:38:06 [vllm.py:1804] Truncating max_cudagraph_capture_size to 8
+INFO 07-23 22:38:06 [compilation.py:312] Enabled custom fusions: norm_quant, act_quant
+INFO 07-23 22:38:06 [serve.py:212] Launching vLLM (v0.25.2.dev0+g752a3a504.d20260714) headless multiproc executor, with head node address 10.200.0.1:25000 for torch.distributed process group.
+WARNING 07-23 22:38:06 [multiproc_executor.py:1067] Reducing Torch parallelism from 20 threads to 1 to avoid unnecessary CPU contention. Set OMP_NUM_THREADS in the external environment to tune this value as needed.
+(Worker pid=174) INFO 07-23 22:38:09 [parallel_state.py:1607] world_size=2 rank=1 local_rank=0 distributed_init_method=tcp://10.200.0.1:25000 backend=nccl
+gx10-3fe8:174:174 [0] NCCL INFO ncclOsDlopen(libnccl-env.so) failed: libnccl-env.so: cannot open shared object file: No such file or directory
+gx10-3fe8:174:174 [0] NCCL INFO ENV/Plugin: Could not find: libnccl-env.so
+gx10-3fe8:174:174 [0] NCCL INFO cudaDriverVersion 13000
+gx10-3fe8:174:174 [0] NCCL INFO NCCL_SOCKET_IFNAME set by environment to enp1s0f0np0
+gx10-3fe8:174:174 [0] NCCL INFO Bootstrap: Using enp1s0f0np0:10.200.0.0<0>
+gx10-3fe8:174:174 [0] NCCL INFO NCCL version 2.30.7+cuda13.3
+gx10-3fe8:174:174 [0] NCCL INFO NCCL git version HEAD a5187fa2e
+gx10-3fe8:174:174 [0] NCCL INFO ncclOsDlopen(libnccl-net.so) failed: libnccl-net.so: cannot open shared object file: No such file or directory
+gx10-3fe8:174:174 [0] NCCL INFO NET/Plugin: Could not find: libnccl-net.so
+gx10-3fe8:174:174 [0] NCCL INFO NCCL_IB_DISABLE set by environment to 0.
+gx10-3fe8:174:174 [0] NCCL INFO NCCL_SOCKET_IFNAME set by environment to enp1s0f0np0
+gx10-3fe8:174:174 [0] NCCL INFO NCCL_IB_HCA set to rocep1s0f0,roceP2p1s0f0
+gx10-3fe8:174:174 [0] NCCL INFO NET/IB : Using [0]rocep1s0f0:1/RoCE [1]roceP2p1s0f0:1/RoCE [RO]; OOB enp1s0f0np0:10.200.0.0<0>
+gx10-3fe8:174:174 [0] NCCL INFO Initialized NET plugin IB
+gx10-3fe8:174:174 [0] NCCL INFO Assigned NET plugin IB to comm
+gx10-3fe8:174:174 [0] NCCL INFO ncclOsDlopen(libnccl-rma.so) failed: libnccl-rma.so: cannot open shared object file: No such file or directory
+gx10-3fe8:174:174 [0] NCCL INFO RMA/Plugin: Could not find: libnccl-rma.so
+gx10-3fe8:174:174 [0] NCCL INFO RMA/Plugin: Failed to load external plugin libnccl-rma.so, dlHandle: (nil), ncclRma: (nil)
+gx10-3fe8:174:174 [0] NCCL INFO RMA/Plugin: Assigned plugin RMA_IB_PROXY to comm
+gx10-3fe8:174:174 [0] NCCL INFO ncclOsDlopen(libnccl-gin.so) failed: libnccl-gin.so: cannot open shared object file: No such file or directory
+gx10-3fe8:174:174 [0] NCCL INFO GIN/Plugin: Could not find: libnccl-gin.so
+gx10-3fe8:174:174 [0] NCCL INFO GIN/Plugin: Failed to load external plugin libnccl-gin.so, dlHandle: (nil), ncclGin: (nil)
+gx10-3fe8:174:174 [0] NCCL INFO GIN/Plugin: Assigned plugin GIN_IB_GDAKI type 3 to comm
+gx10-3fe8:174:174 [0] NCCL INFO Using network IB
+gx10-3fe8:174:174 [0] NCCL INFO Loaded NVML from libnvidia-ml.so.1
+gx10-3fe8:174:174 [0] NCCL INFO [Rank 1] ncclCommInitRank comm 0x39bc06c0 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0x28baa6bdf1acc0fb - Init START
+gx10-3fe8:174:174 [0] NCCL INFO Socket handshake magic 0x564ab9f2fc4b9d6c (built-in default)
+gx10-3fe8:174:174 [0] NCCL INFO RAS client listening socket at 127.0.0.1<28028>
+gx10-3fe8:174:174 [0] NCCL INFO Bootstrap timings total 0.055984 (create 0.000027, send 0.000999, recv 0.035236, ring 0.000592, delay 0.000000)
+gx10-3fe8:174:174 [0] NCCL INFO NCCL_CUMEM_ENABLE set by environment to 0.
+gx10-3fe8:174:174 [0] NCCL INFO NCCL_CROSS_NIC set by environment to 1.
+gx10-3fe8:174:174 [0] NCCL INFO NCCL_IGNORE_CPU_AFFINITY set by environment to 1.
+gx10-3fe8:174:174 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is empty, ignoring. (GPU affinity = ).
+gx10-3fe8:174:174 [0] NCCL INFO NCCL_NVLS_ENABLE set by environment to 0.
+gx10-3fe8:174:174 [0] NCCL INFO Rank 1: 2 Net devices
+gx10-3fe8:174:174 [0] NCCL INFO Rank 1: 0 CollNet devices
+gx10-3fe8:174:174 [0] NCCL INFO comm 0x39bc06c0 rank 1 nRanks 2 nNodes 2 localRanks 1 localRank 0 MNNVL 0
+gx10-3fe8:174:174 [0] NCCL INFO Trees [0] -1/-1/-1->1->0 [1] -1/-1/-1->1->0 [2] -1/-1/-1->1->0 [3] -1/-1/-1->1->0 [4] -1/-1/-1->1->0 [5] -1/-1/-1->1->0 [6] -1/-1/-1->1->0 [7] -1/-1/-1->1->0 [8] -1/-1/-1->1->0 [9] -1/-1/-1->1->0 [10] -1/-1/-1->1->0 [11] -1/-1/-1->1->0 [12] -1/-1/-1->1->0 [13] -1/-1/-1->1->0 [14] -1/-1/-1->1->0 [15] -1/-1/-1->1->0 [16] -1/-1/-1->1->0 [17] -1/-1/-1->1->0 [18] -1/-1/-1->1->0 [19] -1/-1/-1->1->0 [20] -1/-1/-1->1->0 [21] -1/-1/-1->1->0 [22] -1/-1/-1->1->0 [23] -1/-1/-1->1->0 [24] -1/-1/-1->1->0 [25] -1/-1/-1->1->0 [26] -1/-1/-1->1->0 [27] -1/-1/-1->1->0 [28] -1/-1/-1->1->0 [29] -1/-1/-1->1->0 [30] -1/-1/-1->1->0 [31] -1/-1/-1->1->0 [32] 0/-1/-1->1->-1 [33] 0/-1/-1->1->-1 [34] 0/-1/-1->1->-1 [35] 0/-1/-1->1->-1 [36] 0/-1/-1->1->-1 [37] 0/-1/-1->1->-1 [38] 0/-1/-1->1->-1 [39] 0/-1/-1->1->-1 [40] 0/-1/-1->1->-1 [41] 0/-1/-1->1->-1 [42] 0/-1/-1->1->-1 [43] 0/-1/-1->1->-1 [44] 0/-1/-1->1->-1 [45] 0/-1/-1->1->-1 [46] 0/-1/-1->1->-1 [47] 0/-1/-1->1->-1 [48] 0/-1/-1->1->-1 [49] 0/-1/-1->1->-1 [50] 0/-1/-1->1->-1 [51] 0/-1/-
+gx10-3fe8:174:174 [0] NCCL INFO P2P Chunksize set to 262144
+gx10-3fe8:174:174 [0] NCCL INFO Tuning P2P operations with maxP2pPeers = 2
+gx10-3fe8:174:174 [0] NCCL INFO ncclOsDlopen(libnccl-profiler.so) failed: libnccl-profiler.so: cannot open shared object file: No such file or directory
+gx10-3fe8:174:174 [0] NCCL INFO PROFILER/Plugin: Could not find: libnccl-profiler.so
+gx10-3fe8:174:174 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+gx10-3fe8:174:216 [0] NCCL INFO [Proxy Service] Device 0 CPU core 13
+gx10-3fe8:174:216 [0] NCCL INFO proxy listening socket at 10.200.0.0<55127>
+gx10-3fe8:174:217 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 8
+gx10-3fe8:174:218 [0] NCCL INFO [Proxy Progress] Device 0 CPU core 13
+gx10-3fe8:174:174 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 02/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 03/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 04/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 05/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 06/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 07/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 08/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 09/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 10/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 11/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 12/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 13/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 14/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 15/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 16/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 17/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 18/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 19/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 20/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 21/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 22/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 23/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 24/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 25/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 26/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 27/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 28/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 29/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 30/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 31/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 32/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 33/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 34/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 35/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 36/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 37/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 38/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 39/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 40/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 41/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 42/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 43/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 44/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 45/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 46/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 47/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 48/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 49/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 50/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 51/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 52/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 53/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 54/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 55/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 56/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 57/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 58/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 59/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 60/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 61/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 62/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 63/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 00/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 01/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 02/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 03/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 04/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 05/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 06/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 07/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 08/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 09/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 10/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 11/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 12/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 13/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 14/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 15/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 16/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 17/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 18/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 19/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 20/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 21/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 22/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 23/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 24/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 25/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 26/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 27/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 28/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 29/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 30/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 31/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 32/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 33/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 34/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 35/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 36/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 37/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 38/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 39/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 40/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 41/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 42/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 43/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 44/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 45/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 46/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 47/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 48/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 49/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 50/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 51/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 52/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 53/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 54/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 55/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 56/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 57/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 58/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 59/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 60/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 61/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 62/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 63/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ROCE_VERSION_NUM set by environment to 2.
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set(Worker pid=174) WARNING 07-23 22:38:29 [symm_mem.py:66] SymmMemCommunicator: Device capability 12.1 not supported, communicator is not available.
+ by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:216 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:174 [0] NCCL INFO Connected all rings, use ring PXN 0 GDR 0
+gx10-3fe8:174:174 [0] NCCL INFO Connected all trees
+gx10-3fe8:174:174 [0] NCCL INFO Connected binomial trees
+gx10-3fe8:174:174 [0] NCCL INFO ncclOsDlopen(libnccl-tuner.so) failed: libnccl-tuner.so: cannot open shared object file: No such file or directory
+gx10-3fe8:174:174 [0] NCCL INFO TUNER/Plugin: Could not find: libnccl-tuner.so
+gx10-3fe8:174:174 [0] NCCL INFO threadThresholds 8/8/64 | 16/8/64 | 512 | 512
+gx10-3fe8:174:174 [0] NCCL INFO 64 coll channels, 64 collnet channels, 0 nvls channels, 64 p2p channels, 2 p2p channels per peer
+gx10-3fe8:174:174 [0] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, cuMemGdrSupport 0
+gx10-3fe8:174:174 [0] NCCL INFO ncclCommInitRank comm 0x39bc06c0 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0x28baa6bdf1acc0fb - Init COMPLETE
+gx10-3fe8:174:174 [0] NCCL INFO Init timings - ncclCommInitRank: rank 1 nranks 2 total 1.80 (kernels 0.18, alloc 0.03, bootstrap 0.06, allgathers 0.00, topo 0.01, graphs 0.00, connections 1.53, rest 0.00)
+gx10-3fe8:174:174 [0] NCCL INFO Initialized NET plugin IB
+gx10-3fe8:174:174 [0] NCCL INFO Assigned NET plugin IB to comm
+gx10-3fe8:174:174 [0] NCCL INFO RMA/Plugin: Assigned plugin RMA_IB_PROXY to comm
+gx10-3fe8:174:174 [0] NCCL INFO GIN/Plugin: Assigned plugin GIN_IB_GDAKI type 3 to comm
+gx10-3fe8:174:174 [0] NCCL INFO Using network IB
+gx10-3fe8:174:174 [0] NCCL INFO [Rank 1] ncclCommInitRank comm 0x3dba6b90 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0xdbac086f3eebe30e - Init START
+gx10-3fe8:174:174 [0] NCCL INFO Bootstrap timings total 0.001286 (create 0.000017, send 0.000306, recv 0.000494, ring 0.000145, delay 0.000000)
+gx10-3fe8:174:174 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is empty, ignoring. (GPU affinity = ).
+gx10-3fe8:174:174 [0] NCCL INFO Rank 1: 2 Net devices
+gx10-3fe8:174:174 [0] NCCL INFO Rank 1: 0 CollNet devices
+gx10-3fe8:174:174 [0] NCCL INFO comm 0x3dba6b90 rank 1 nRanks 2 nNodes 2 localRanks 1 localRank 0 MNNVL 0
+gx10-3fe8:174:174 [0] NCCL INFO Trees [0] -1/-1/-1->1->0 [1] -1/-1/-1->1->0 [2] -1/-1/-1->1->0 [3] -1/-1/-1->1->0 [4] -1/-1/-1->1->0 [5] -1/-1/-1->1->0 [6] -1/-1/-1->1->0 [7] -1/-1/-1->1->0 [8] -1/-1/-1->1->0 [9] -1/-1/-1->1->0 [10] -1/-1/-1->1->0 [11] -1/-1/-1->1->0 [12] -1/-1/-1->1->0 [13] -1/-1/-1->1->0 [14] -1/-1/-1->1->0 [15] -1/-1/-1->1->0 [16] -1/-1/-1->1->0 [17] -1/-1/-1->1->0 [18] -1/-1/-1->1->0 [19] -1/-1/-1->1->0 [20] -1/-1/-1->1->0 [21] -1/-1/-1->1->0 [22] -1/-1/-1->1->0 [23] -1/-1/-1->1->0 [24] -1/-1/-1->1->0 [25] -1/-1/-1->1->0 [26] -1/-1/-1->1->0 [27] -1/-1/-1->1->0 [28] -1/-1/-1->1->0 [29] -1/-1/-1->1->0 [30] -1/-1/-1->1->0 [31] -1/-1/-1->1->0 [32] 0/-1/-1->1->-1 [33] 0/-1/-1->1->-1 [34] 0/-1/-1->1->-1 [35] 0/-1/-1->1->-1 [36] 0/-1/-1->1->-1 [37] 0/-1/-1->1->-1 [38] 0/-1/-1->1->-1 [39] 0/-1/-1->1->-1 [40] 0/-1/-1->1->-1 [41] 0/-1/-1->1->-1 [42] 0/-1/-1->1->-1 [43] 0/-1/-1->1->-1 [44] 0/-1/-1->1->-1 [45] 0/-1/-1->1->-1 [46] 0/-1/-1->1->-1 [47] 0/-1/-1->1->-1 [48] 0/-1/-1->1->-1 [49] 0/-1/-1->1->-1 [50] 0/-1/-1->1->-1 [51] 0/-1/-
+gx10-3fe8:174:174 [0] NCCL INFO P2P Chunksize set to 262144
+gx10-3fe8:174:174 [0] NCCL INFO Tuning P2P operations with maxP2pPeers = 2
+gx10-3fe8:174:174 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+gx10-3fe8:174:246 [0] NCCL INFO [Proxy Service] Device 0 CPU core 19
+gx10-3fe8:174:246 [0] NCCL INFO proxy listening socket at 10.200.0.0<43659>
+gx10-3fe8:174:247 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 15
+gx10-3fe8:174:248 [0] NCCL INFO [Proxy Progress] Device 0 CPU core 19
+gx10-3fe8:174:174 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 02/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 03/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 04/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 05/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 06/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 07/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 08/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 09/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 10/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 11/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 12/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 13/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 14/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 15/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 16/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 17/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 18/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 19/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 20/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 21/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 22/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 23/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 24/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 25/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 26/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 27/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 28/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 29/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 30/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 31/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 32/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 33/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 34/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 35/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 36/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 37/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 38/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 39/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 40/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 41/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 42/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 43/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 44/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 45/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 46/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 47/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 48/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 49/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 50/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 51/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 52/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 53/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 54/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 55/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 56/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 57/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 58/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 59/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 60/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 61/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 62/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 63/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 00/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 01/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 02/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 03/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 04/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 05/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 06/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 07/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 08/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 09/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 10/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 11/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 12/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 13/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 14/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 15/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 16/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 17/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 18/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 19/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 20/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 21/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 22/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 23/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 24/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 25/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 26/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 27/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 28/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 29/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 30/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 31/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 32/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 33/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 34/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 35/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 36/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 37/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 38/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 39/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 40/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 41/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 42/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 43/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 44/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 45/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 46/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 47/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 48/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 49/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 50/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 51/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 52/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 53/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 54/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 55/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 56/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 57/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 58/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 59/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 60/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 61/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 62/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 63/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY se(Worker pid=174) INFO 07-23 22:38:31 [parallel_state.py:1942] rank 1 in world size 2 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 1, EP rank 1, EPLB rank N/A
+(Worker_TP1 pid=174) INFO 07-23 22:38:31 [quant_config.py:138] DeepSeek V4 expert_dtype resolved to 'fp4'
+(Worker_TP1 pid=174) INFO 07-23 22:38:31 [deep_gemm.py:175] deep_gemm not found in site-packages, trying vendored vllm.third_party.deep_gemm
+(Worker_TP1 pid=174) INFO 07-23 22:38:31 [deep_gemm.py:202] DeepGEMM PDL enabled on vllm.third_party.deep_gemm.
+(Worker_TP1 pid=174) INFO 07-23 22:38:31 [deep_gemm.py:120] DeepGEMM E8M0 enabled on current platform.
+(Worker_TP1 pid=174) INFO 07-23 22:38:31 [attention.py:87] Using DeepSeek V4 padded nvfp4_ds_mla KV cache format.
+(Worker_TP1 pid=174) WARNING 07-23 22:38:31 [modelopt.py:1030] Detected ModelOpt NVFP4 checkpoint (quant_algo=NVFP4). Please note that the format is experimental and could change in future.
+(Worker_TP1 pid=174) INFO 07-23 22:38:31 [nvfp4.py:252] Using 'FLASHINFER_CUTLASS' NvFp4 MoE backend out of potential backends: ['FLASHINFER_TRTLLM', 'FLASHINFER_CUTLASS', 'MARLIN'].
+(Worker_TP1 pid=174) INFO 07-23 22:38:31 [attention.py:712] Using FP8 indexer cache for Lightning Indexer.
+(Worker_TP1 pid=174) INFO 07-23 22:38:34 [prepared_weight_loading.py:1872] NVFP4_PREPARED event=enabled layers=43 reads_per_layer=8 copies_per_layer=8 rank_bytes=1811943424 manifest_sha256=b2b71f05392002f13109f8f6e04aa9d299035173eb2f9ff3ef32a5f757939e3d io_mode=preadv
+(Worker_TP1 pid=174) INFO 07-23 22:38:34 [weight_utils.py:849] Filesystem type for checkpoints: EXT4. Checkpoint size: 156.71 GiB. Available RAM: 31.24 GiB.
+(Worker_TP1 pid=174) INFO 07-23 22:38:34 [weight_utils.py:879] Auto-prefetch is disabled because the filesystem (EXT4) is not a recognized network FS (NFS/Lustre) and the checkpoint size (156.71 GiB) exceeds 90% of available RAM (31.24 GiB).
+(Worker_TP1 pid=174) INFO 07-23 22:38:36 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=0 reads=8 copies=8 bytes=1811943424 seconds=1.057964 io_mode=preadv read_syscalls=8 read_seconds=0.745154 copy_seconds=0.031998
+(Worker_TP1 pid=174) INFO 07-23 22:38:37 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=1 reads=8 copies=8 bytes=1811943424 seconds=0.786094 io_mode=preadv read_syscalls=8 read_seconds=0.749234 copy_seconds=0.031182
+(Worker_TP1 pid=174) INFO 07-23 22:38:38 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=2 reads=8 copies=8 bytes=1811943424 seconds=0.796833 io_mode=preadv read_syscalls=8 read_seconds=0.759484 copy_seconds=0.031209
+(Worker_TP1 pid=174) INFO 07-23 22:38:39 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=3 reads=8 copies=8 bytes=1811943424 seconds=0.821823 io_mode=preadv read_syscalls=8 read_seconds=0.784076 copy_seconds=0.031272
+(Worker_TP1 pid=174) INFO 07-23 22:38:40 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=4 reads=8 copies=8 bytes=1811943424 seconds=0.792619 io_mode=preadv read_syscalls=8 read_seconds=0.755364 copy_seconds=0.031203
+(Worker_TP1 pid=174) INFO 07-23 22:38:41 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=5 reads=8 copies=8 bytes=1811943424 seconds=0.798611 io_mode=preadv read_syscalls=8 read_seconds=0.760996 copy_seconds=0.031257
+(Worker_TP1 pid=174) INFO 07-23 22:38:42 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=6 reads=8 copies=8 bytes=1811943424 seconds=0.808552 io_mode=preadv read_syscalls=8 read_seconds=0.770799 copy_seconds=0.031240
+(Worker_TP1 pid=174) INFO 07-23 22:38:43 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=7 reads=8 copies=8 bytes=1811943424 seconds=0.812569 io_mode=preadv read_syscalls=8 read_seconds=0.775637 copy_seconds=0.031077
+(Worker_TP1 pid=174) INFO 07-23 22:38:44 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=8 reads=8 copies=8 bytes=1811943424 seconds=0.814003 io_mode=preadv read_syscalls=8 read_seconds=0.777090 copy_seconds=0.031152
+(Worker_TP1 pid=174) INFO 07-23 22:38:45 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=9 reads=8 copies=8 bytes=1811943424 seconds=0.874175 io_mode=preadv read_syscalls=8 read_seconds=0.835772 copy_seconds=0.031316
+(Worker_TP1 pid=174) INFO 07-23 22:38:46 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=10 reads=8 copies=8 bytes=1811943424 seconds=0.826138 io_mode=preadv read_syscalls=8 read_seconds=0.788754 copy_seconds=0.031225
+(Worker_TP1 pid=174) INFO 07-23 22:38:47 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=11 reads=8 copies=8 bytes=1811943424 seconds=0.798812 io_mode=preadv read_syscalls=8 read_seconds=0.761413 copy_seconds=0.031249
+(Worker_TP1 pid=174) INFO 07-23 22:38:48 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=12 reads=8 copies=8 bytes=1811943424 seconds=0.817516 io_mode=preadv read_syscalls=8 read_seconds=0.780213 copy_seconds=0.031239
+(Worker_TP1 pid=174) INFO 07-23 22:38:49 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=13 reads=8 copies=8 bytes=1811943424 seconds=0.793820 io_mode=preadv read_syscalls=8 read_seconds=0.756229 copy_seconds=0.031258
+(Worker_TP1 pid=174) INFO 07-23 22:38:50 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=14 reads=8 copies=8 bytes=1811943424 seconds=0.805392 io_mode=preadv read_syscalls=8 read_seconds=0.768053 copy_seconds=0.031202
+(Worker_TP1 pid=174) INFO 07-23 22:38:51 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=15 reads=8 copies=8 bytes=1811943424 seconds=0.792470 io_mode=preadv read_syscalls=8 read_seconds=0.754965 copy_seconds=0.031351
+(Worker_TP1 pid=174) INFO 07-23 22:38:52 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=16 reads=8 copies=8 bytes=1811943424 seconds=0.809126 io_mode=preadv read_syscalls=8 read_seconds=0.771512 copy_seconds=0.031240
+(Worker_TP1 pid=174) INFO 07-23 22:38:54 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=17 reads=8 copies=8 bytes=1811943424 seconds=0.852607 io_mode=preadv read_syscalls=8 read_seconds=0.815051 copy_seconds=0.031307
+(Worker_TP1 pid=174) INFO 07-23 22:38:55 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=18 reads=8 copies=8 bytes=1811943424 seconds=0.808798 io_mode=preadv read_syscalls=8 read_seconds=0.770177 copy_seconds=0.031150
+(Worker_TP1 pid=174) INFO 07-23 22:38:56 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=19 reads=8 copies=8 bytes=1811943424 seconds=0.805338 io_mode=preadv read_syscalls=8 read_seconds=0.767483 copy_seconds=0.031658
+(Worker_TP1 pid=174) INFO 07-23 22:38:57 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=20 reads=8 copies=8 bytes=1811943424 seconds=0.818988 io_mode=preadv read_syscalls=8 read_seconds=0.782152 copy_seconds=0.031140
+(Worker_TP1 pid=174) INFO 07-23 22:38:58 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=21 reads=8 copies=8 bytes=1811943424 seconds=0.809700 io_mode=preadv read_syscalls=8 read_seconds=0.772500 copy_seconds=0.031205
+(Worker_TP1 pid=174) INFO 07-23 22:38:59 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=22 reads=8 copies=8 bytes=1811943424 seconds=0.818281 io_mode=preadv read_syscalls=8 read_seconds=0.781190 copy_seconds=0.031209
+(Worker_TP1 pid=174) INFO 07-23 22:39:00 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=23 reads=8 copies=8 bytes=1811943424 seconds=0.844679 io_mode=preadv read_syscalls=8 read_seconds=0.806724 copy_seconds=0.031287
+(Worker_TP1 pid=174) INFO 07-23 22:39:01 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=24 reads=8 copies=8 bytes=1811943424 seconds=0.796322 io_mode=preadv read_syscalls=8 read_seconds=0.759032 copy_seconds=0.031156
+(Worker_TP1 pid=174) INFO 07-23 22:39:02 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=25 reads=8 copies=8 bytes=1811943424 seconds=0.794471 io_mode=preadv read_syscalls=8 read_seconds=0.757119 copy_seconds=0.031235
+(Worker_TP1 pid=174) INFO 07-23 22:39:03 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=26 reads=8 copies=8 bytes=1811943424 seconds=0.803663 io_mode=preadv read_syscalls=8 read_seconds=0.765678 copy_seconds=0.031885
+(Worker_TP1 pid=174) INFO 07-23 22:39:04 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=27 reads=8 copies=8 bytes=1811943424 seconds=0.801685 io_mode=preadv read_syscalls=8 read_seconds=0.764162 copy_seconds=0.031278
+(Worker_TP1 pid=174) INFO 07-23 22:39:05 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=28 reads=8 copies=8 bytes=1811943424 seconds=0.800179 io_mode=preadv read_syscalls=8 read_seconds=0.762667 copy_seconds=0.031293
+(Worker_TP1 pid=174) INFO 07-23 22:39:06 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=29 reads=8 copies=8 bytes=1811943424 seconds=0.806889 io_mode=preadv read_syscalls=8 read_seconds=0.769384 copy_seconds=0.031267
+(Worker_TP1 pid=174) INFO 07-23 22:39:07 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=30 reads=8 copies=8 bytes=1811943424 seconds=0.820877 io_mode=preadv read_syscalls=8 read_seconds=0.783634 copy_seconds=0.031260
+(Worker_TP1 pid=174) INFO 07-23 22:39:08 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=31 reads=8 copies=8 bytes=1811943424 seconds=0.821333 io_mode=preadv read_syscalls=8 read_seconds=0.784468 copy_seconds=0.031218
+(Worker_TP1 pid=174) INFO 07-23 22:39:09 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=32 reads=8 copies=8 bytes=1811943424 seconds=0.807592 io_mode=preadv read_syscalls=8 read_seconds=0.770378 copy_seconds=0.031213
+(Worker_TP1 pid=174) INFO 07-23 22:39:10 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=33 reads=8 copies=8 bytes=1811943424 seconds=0.805428 io_mode=preadv read_syscalls=8 read_seconds=0.768800 copy_seconds=0.031220
+(Worker_TP1 pid=174) INFO 07-23 22:39:11 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=34 reads=8 copies=8 bytes=1811943424 seconds=0.803758 io_mode=preadv read_syscalls=8 read_seconds=0.767161 copy_seconds=0.031133
+(Worker_TP1 pid=174) INFO 07-23 22:39:12 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=35 reads=8 copies=8 bytes=1811943424 seconds=0.809002 io_mode=preadv read_syscalls=8 read_seconds=0.771903 copy_seconds=0.031132
+(Worker_TP1 pid=174) INFO 07-23 22:39:13 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=36 reads=8 copies=8 bytes=1811943424 seconds=0.829307 io_mode=preadv read_syscalls=8 read_seconds=0.791693 copy_seconds=0.031304
+(Worker_TP1 pid=174) INFO 07-23 22:39:14 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=37 reads=8 copies=8 bytes=1811943424 seconds=0.828025 io_mode=preadv read_syscalls=8 read_seconds=0.790747 copy_seconds=0.031230
+(Worker_TP1 pid=174) INFO 07-23 22:39:15 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=38 reads=8 copies=8 bytes=1811943424 seconds=0.827185 io_mode=preadv read_syscalls=8 read_seconds=0.789051 copy_seconds=0.031255
+(Worker_TP1 pid=174) INFO 07-23 22:39:16 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=39 reads=8 copies=8 bytes=1811943424 seconds=0.818708 io_mode=preadv read_syscalls=8 read_seconds=0.781104 copy_seconds=0.031252
+(Worker_TP1 pid=174) INFO 07-23 22:39:18 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=40 reads=8 copies=8 bytes=1811943424 seconds=0.800568 io_mode=preadv read_syscalls=8 read_seconds=0.763241 copy_seconds=0.031215
+(Worker_TP1 pid=174) INFO 07-23 22:39:19 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=41 reads=8 copies=8 bytes=1811943424 seconds=0.798213 io_mode=preadv read_syscalls=8 read_seconds=0.760416 copy_seconds=0.031498
+(Worker_TP1 pid=174) INFO 07-23 22:39:20 [prepared_weight_loading.py:1640] NVFP4_PREPARED event=layer_load layer=42 reads=8 copies=8 bytes=1811943424 seconds=0.907811 io_mode=preadv read_syscalls=8 read_seconds=0.870236 copy_seconds=0.031358
+(Worker_TP1 pid=174) INFO 07-23 22:39:21 [prepared_weight_loading.py:1682] NVFP4_PREPARED event=complete layers=43 reads=344 copies=344 elapsed_seconds=46.860512 io_mode=preadv read_syscalls=344 read_seconds=33.360894 copy_seconds=1.345028
+(Worker_TP1 pid=174) INFO 07-23 22:39:21 [default_loader.py:430] Loading weights took 46.86 seconds
+(Worker_TP1 pid=174) INFO 07-23 22:39:21 [nvfp4.py:556] Using MoEPrepareAndFinalizeNoDPEPModular
+(Worker_TP1 pid=174) INFO 07-23 22:39:22 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:22 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=0 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:22 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:22 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=1 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:23 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:23 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=2 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:24 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:24 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=3 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:24 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:24 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=4 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:25 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:25 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=5 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:25 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:25 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=6 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:26 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:26 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=7 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:26 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:26 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=8 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:27 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:27 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=9 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:27 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:27 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=10 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:28 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:28 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=11 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:29 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:29 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=12 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:29 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:29 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=13 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:30 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:30 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=14 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:30 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:30 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=15 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:31 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:31 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=16 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:31 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:31 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=17 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:32 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:32 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=18 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:32 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:32 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=19 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:33 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:33 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=20 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:33 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:33 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=21 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:34 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:34 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=22 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:34 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:34 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=23 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:35 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:35 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=24 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:36 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:36 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=25 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:36 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:36 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=26 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:37 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:37 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=27 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:37 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:37 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=28 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:38 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:38 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=29 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:38 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:38 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=30 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:39 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:39 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=31 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:40 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:40 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=32 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:40 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:40 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=33 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:41 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:41 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=34 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:41 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:41 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=35 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:42 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:42 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=36 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:42 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:42 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=37 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:43 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:43 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=38 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:43 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:43 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=39 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:44 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:44 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=40 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:44 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:44 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=41 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:45 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+(Worker_TP1 pid=174) INFO 07-23 22:39:45 [prepared_weight_loading.py:1094] NVFP4_PREPARED event=postload layer=42 transforms=e4m3_k16_to_e8m0_k32 backend=FLASHINFER_CUTLASS scale_sidecar_bytes=100665344 duplicate_weight_bytes=0
+(Worker_TP1 pid=174) INFO 07-23 22:39:45 [gpu_model_runner.py:5306] Model loading took 82.14 GiB memory and 74.102258 seconds
+(Worker_TP1 pid=174) INFO 07-23 22:39:45 [breakable_cudagraph.py:288] Breakable CUDA graph enabled
+t by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:246 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:174 [0] NCCL INFO Connected all rings, use ring PXN 0 GDR 0
+gx10-3fe8:174:174 [0] NCCL INFO Connected all trees
+gx10-3fe8:174:174 [0] NCCL INFO Connected binomial trees
+gx10-3fe8:174:174 [0] NCCL INFO threadThresholds 8/8/64 | 16/8/64 | 512 | 512
+gx10-3fe8:174:174 [0] NCCL INFO 64 coll channels, 64 collnet channels, 0 nvls channels, 64 p2p channels, 2 p2p channels per peer
+gx10-3fe8:174:174 [0] NCCL INFO Symmetric memory is not supported. cuMemEnable 0, globalGinSupport 0, cuMemGdrSupport 0
+gx10-3fe8:174:174 [0] NCCL INFO ncclCommInitRank comm 0x3dba6b90 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0xdbac086f3eebe30e - Init COMPLETE
+gx10-3fe8:174:174 [0] NCCL INFO Init timings - ncclCommInitRank: rank 1 nranks 2 total 1.35 (kernels 0.00, alloc 0.00, bootstrap 0.00, allgathers 0.00, topo 0.01, graphs 0.00, connections 1.34, rest 0.00)
+gx10-3fe8:174:174 [0] NCCL INFO Comm config Blocking set to 1
+gx10-3fe8:174:174 [0] NCCL INFO Initialized NET plugin IB
+gx10-3fe8:174:174 [0] NCCL INFO Assigned NET plugin IB to comm
+gx10-3fe8:174:174 [0] NCCL INFO RMA/Plugin: Assigned plugin RMA_IB_PROXY to comm
+gx10-3fe8:174:174 [0] NCCL INFO GIN/Plugin: Assigned plugin GIN_IB_GDAKI type 3 to comm
+gx10-3fe8:174:174 [0] NCCL INFO Using network IB
+gx10-3fe8:174:174 [0] NCCL INFO [Rank 1] ncclCommInitRankConfig comm 0x67dd3f10 rank 1 nranks 2 cudaDev 0 nvmlDev 0 busId f01000 commId 0x25e29af29579c7cf - Init START
+gx10-3fe8:174:174 [0] NCCL INFO Bootstrap timings total 0.001532 (create 0.000040, send 0.000485, recv 0.000584, ring 0.000188, delay 0.000000)
+gx10-3fe8:174:174 [0] NCCL INFO ncclTopoGetCpuAffinity: Affinity for GPU 0 is empty, ignoring. (GPU affinity = ).
+gx10-3fe8:174:174 [0] NCCL INFO Rank 1: 2 Net devices
+gx10-3fe8:174:174 [0] NCCL INFO Rank 1: 0 CollNet devices
+gx10-3fe8:174:174 [0] NCCL INFO comm 0x67dd3f10 rank 1 nRanks 2 nNodes 2 localRanks 1 localRank 0 MNNVL 0
+gx10-3fe8:174:174 [0] NCCL INFO Trees [0] -1/-1/-1->1->0 [1] -1/-1/-1->1->0 [2] -1/-1/-1->1->0 [3] -1/-1/-1->1->0 [4] -1/-1/-1->1->0 [5] -1/-1/-1->1->0 [6] -1/-1/-1->1->0 [7] -1/-1/-1->1->0 [8] -1/-1/-1->1->0 [9] -1/-1/-1->1->0 [10] -1/-1/-1->1->0 [11] -1/-1/-1->1->0 [12] -1/-1/-1->1->0 [13] -1/-1/-1->1->0 [14] -1/-1/-1->1->0 [15] -1/-1/-1->1->0 [16] -1/-1/-1->1->0 [17] -1/-1/-1->1->0 [18] -1/-1/-1->1->0 [19] -1/-1/-1->1->0 [20] -1/-1/-1->1->0 [21] -1/-1/-1->1->0 [22] -1/-1/-1->1->0 [23] -1/-1/-1->1->0 [24] -1/-1/-1->1->0 [25] -1/-1/-1->1->0 [26] -1/-1/-1->1->0 [27] -1/-1/-1->1->0 [28] -1/-1/-1->1->0 [29] -1/-1/-1->1->0 [30] -1/-1/-1->1->0 [31] -1/-1/-1->1->0 [32] 0/-1/-1->1->-1 [33] 0/-1/-1->1->-1 [34] 0/-1/-1->1->-1 [35] 0/-1/-1->1->-1 [36] 0/-1/-1->1->-1 [37] 0/-1/-1->1->-1 [38] 0/-1/-1->1->-1 [39] 0/-1/-1->1->-1 [40] 0/-1/-1->1->-1 [41] 0/-1/-1->1->-1 [42] 0/-1/-1->1->-1 [43] 0/-1/-1->1->-1 [44] 0/-1/-1->1->-1 [45] 0/-1/-1->1->-1 [46] 0/-1/-1->1->-1 [47] 0/-1/-1->1->-1 [48] 0/-1/-1->1->-1 [49] 0/-1/-1->1->-1 [50] 0/-1/-1->1->-1 [51] 0/-1/-
+gx10-3fe8:174:174 [0] NCCL INFO P2P Chunksize set to 262144
+gx10-3fe8:174:174 [0] NCCL INFO Tuning P2P operations with maxP2pPeers = 2
+gx10-3fe8:174:174 [0] NCCL INFO Check P2P Type isAllDirectP2p 1 directMode 0 isAllCudaP2p 1
+gx10-3fe8:174:451 [0] NCCL INFO [Proxy Service] Device 0 CPU core 0
+gx10-3fe8:174:451 [0] NCCL INFO proxy listening socket at 10.200.0.0<44149>
+gx10-3fe8:174:452 [0] NCCL INFO [Proxy Service UDS] Device 0 CPU core 11
+gx10-3fe8:174:453 [0] NCCL INFO [Proxy Progress] Device 0 CPU core 11
+gx10-3fe8:174:174 [0] NCCL INFO Channel 00/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 01/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 02/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 03/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 04/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 05/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 06/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 07/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 08/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 09/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 10/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 11/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 12/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 13/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 14/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 15/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 16/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 17/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 18/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 19/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 20/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 21/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 22/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 23/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 24/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 25/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 26/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 27/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 28/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 29/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 30/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 31/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 32/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 33/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 34/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 35/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 36/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 37/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 38/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 39/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 40/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 41/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 42/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 43/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 44/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 45/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 46/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 47/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 48/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 49/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 50/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 51/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 52/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 53/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 54/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 55/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 56/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 57/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 58/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 59/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 60/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 61/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 62/0 : 0[0] -> 1[0] [receive] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 63/0 : 0[0] -> 1[0] [receive] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 00/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 01/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 02/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 03/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 04/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 05/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 06/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 07/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 08/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 09/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 10/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 11/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 12/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 13/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 14/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 15/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 16/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 17/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 18/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 19/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 20/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 21/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 22/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 23/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 24/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 25/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 26/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 27/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 28/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 29/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 30/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 31/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 32/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 33/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 34/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 35/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 36/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 37/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 38/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 39/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 40/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 41/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 42/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 43/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 44/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 45/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 46/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 47/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 48/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 49/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 50/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 51/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 52/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 53/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 54/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 55/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 56/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 57/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 58/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 59/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 60/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 61/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:174 [0] NCCL INFO Channel 62/0 : 1[0] -> 0[0] [send] via NET/IB/0
+gx10-3fe8:174:174 [0] NCCL INFO Channel 63/0 : 1[0] -> 0[0] [send] via NET/IB/1
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAMILY set by environment to AF_INET
+gx10-3fe8:174:451 [0] NCCL INFO NCCL_IB_ADDR_FAM(Worker_TP1 pid=174) 2026-07-23 22:40:09  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:40:13  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) 2026-07-23 22:40:14  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_post_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:40:16  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_post_tilelang`
+(Worker_TP1 pid=174) 2026-07-23 22:40:28  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `hc_head_fuse_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:40:31  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `hc_head_fuse_tilelang`
+(Worker_TP1 pid=174) INFO 07-23 22:40:36 [gpu_worker.py:459] Initial free memory 111.33 GiB, reserved 10.0 GiB memory for KV Cache as specified by kv_cache_memory_bytes config and skipped memory profiling. This does not respect the gpu_memory_utilization config. Only use kv_cache_memory_bytes config when you want manual control of KV cache memory size. If OOM'ed, check the difference of initial free memory between the current run and the previous run where kv_cache_memory_bytes is suggested and update it correspondingly.
+(Worker_TP1 pid=174) INFO 07-23 22:40:36 [indexer.py:297] DSA indexer decode path: use_flattening=False (next_n=1, use_fp4_indexer_cache=False)
+(Worker_TP1 pid=174) INFO 07-23 22:41:02 [flashinfer_sparse_mla_warmup.py:233] Warming up DeepSeek V4 sparse MLA attention for mixed tokens=16.
+(Worker_TP1 pid=174) 2026-07-23 22:41:18,126 - INFO - autotuner.py:2177 - flashinfer.jit: [Autotuner]: Loaded 18 configs from /cache/huggingface/vllm-cache/flashinfer_autotune_cache/0.6.15/121a/6a2f74418bb3435626b50d761b8b6120d94311c536e94d77bd252f7826483c08/autotune_configs.json
+(Worker_TP1 pid=174) 2026-07-23 22:41:03  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:41:07  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) 2026-07-23 22:41:07  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_fused_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:41:09  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_fused_tilelang`
+(Worker_TP1 pid=174) 2026-07-23 22:41:09  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:41:13  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) INFO 07-23 22:41:18 [flashinfer_sparse_mla_warmup.py:181] FlashInfer SM120 sparse MLA DSv4 decode autotune cache loaded on rank 1 from /cache/huggingface/vllm-cache/flashinfer_autotune_cache/0.6.15/121a/6a2f74418bb3435626b50d761b8b6120d94311c536e94d77bd252f7826483c08/autotune_configs.json.
+(Worker_TP1 pid=174) 2026-07-23 22:41:18,707 - INFO - autotuner.py:757 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+(Worker_TP1 pid=174) 2026-07-23 22:41:19,732 - INFO - autotuner.py:780 - flashinfer.jit: [Autotuner]: Autotuning process ends
+(Worker_TP1 pid=174) INFO 07-23 22:41:19 [cutedsl_warmup.py:97] Skipping CuTeDSL warmup because no compile units were requested.
+(Worker_TP1 pid=174) 2026-07-23 22:41:32,014 - INFO - autotuner.py:1226 - flashinfer.jit: [Autotuner]: Config cache hit for sparse_mla_sm120_decode_dsv4 (runner=SparseMlaDecodeV3Runner, source=config file)
+(Worker_TP1 pid=174) 2026-07-23 22:41:22  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_fused_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:41:23  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_fused_tilelang`
+(Worker_TP1 pid=174) 2026-07-23 22:41:24  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:41:28  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) INFO 07-23 22:41:33 [gpu_model_runner.py:6707] Graph capturing finished in 13 secs, took 1.11 GiB
+(Worker_TP1 pid=174) INFO 07-23 22:41:33 [jit_monitor.py:73] Kernel JIT monitor activated; monitored JIT compilations during inference will use mode=warn.
+(Worker_TP1 pid=174) WARNING 07-23 22:41:52 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _compute_slot_mapping_kernel (constexprs={BLOCK_SIZE=1024, CP_KV_CACHE_INTERLEAVE_SIZE=1, PAD_ID=-1, TOTAL_CP_RANK=0, TOTAL_CP_WORLD_SIZE=1}; signature={BLOCK_SIZE='constexpr', CP_KV_CACHE_INTERLEAVE_SIZE='constexpr', PAD_ID='constexpr', TOTAL_CP_RANK='constexpr', TOTAL_CP_WORLD_SIZE='constexpr', block_size='i32', block_table_ptr='*i32', block_table_stride='i32', max_num_tokens='i32', num_tokens='i32', positions_ptr='*i64', query_start_loc_ptr='*i32', slot_mapping_ptr='*i64'}; extra_compile_info={configs=[{(2,): [['tt.divisibility', 16]], (3,): [['tt.divisibility', 16]], (4,): [['tt.divisibility', 16]], (5,): [], (6,): ..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "vllm.v1.worker.block_table._compute_slot_mapping_kernel", "signature": {"num_tokens": "i32", "max_num_toke...}; key="[('i32', None), ('i32', None), ('*i32', 'D'), ('*i64', 'D'), ('*i32', 'D'), ('i32', ''), ('i32', 'D'), ('*i64', 'D')...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:41:52 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _build_c128a_topk_metadata_kernel (constexprs={BLOCK_SIZE=1024}; signature={BLOCK_SIZE='constexpr', block_size='i32', block_table_ptr='*i32', block_table_stride='i32', compress_ratio='i32', decode_lens_ptr='*i32', global_decode_ptr='*i32', global_decode_stride='i32', max_compressed_tokens='i32', num_decode_tokens='i32', positions_ptr='*i64', prefill_local_ptr='*i32', prefill_local_stride='i32', slot_mapping_ptr='*i64', token_to_req_indices_ptr='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "vllm.models.deepseek_v4.sparse_mla._build_c128a_topk_metadata_kernel", "signature": {"global_decode_ptr": ...}; key="[('*i32', 'D'), ('i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('*i64', 'D'), ('i32', 'D'), ('i32', 'D'),...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:41:52 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_prefix_kernel (constexprs={BLOCK_E=256, BLOCK_SIZE=8, BLOCK_T=256, HAS_EXPERT_MAP=False, NUMEL_CAPACITY=384, NUM_EXPERTS=256}; signature={BLOCK_E='constexpr', BLOCK_SIZE='constexpr', BLOCK_T='constexpr', HAS_EXPERT_MAP='constexpr', NUMEL_CAPACITY='constexpr', NUM_EXPERTS='constexpr', expert_map='*i32', expert_offsets='*i32', live_numel='i32', packed_route_count='*i32', topk_ids='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=8, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_prefix_kernel", "signature": {"topk_ids": "*i32", "exper...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('constexpr', 384), ('constexpr', 8), ('c...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:41:52 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_post_prefix_kernel (constexprs={BLOCK_SIZE=8, BLOCK_T=256, MAX_PACKED_ROUTES=2176, MAX_ROUTE_BLOCKS=272, NUM_EXPERTS=256}; signature={BLOCK_SIZE='constexpr', BLOCK_T='constexpr', MAX_PACKED_ROUTES='constexpr', MAX_ROUTE_BLOCKS='constexpr', NUM_EXPERTS='constexpr', block_expert_ids='*i32', expert_offsets='*i32', live_numel='i32', packed_route_indices='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_post_prefix_kernel", "signature": {"packed_route_indices...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('constexpr', 8), ('constexpr', 256), ('constexpr', 2176...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:41:52 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_prefix_kernel (constexprs={BLOCK_E=256, BLOCK_SIZE=8, BLOCK_T=256, HAS_EXPERT_MAP=False, NUMEL_CAPACITY=384, NUM_EXPERTS=256}; signature={BLOCK_E='constexpr', BLOCK_SIZE='constexpr', BLOCK_T='constexpr', HAS_EXPERT_MAP='constexpr', NUMEL_CAPACITY='constexpr', NUM_EXPERTS='constexpr', expert_map='*i32', expert_offsets='*i32', live_numel='i32', packed_route_count='*i32', topk_ids='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=8, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_prefix_kernel", "signature": {"topk_ids": "*i32", "exper...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', ''), ('constexpr', 384), ('constexpr', 8), ('co...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:41:52 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_post_prefix_kernel (constexprs={BLOCK_SIZE=8, BLOCK_T=256, MAX_PACKED_ROUTES=2176, MAX_ROUTE_BLOCKS=272, NUM_EXPERTS=256}; signature={BLOCK_SIZE='constexpr', BLOCK_T='constexpr', MAX_PACKED_ROUTES='constexpr', MAX_ROUTE_BLOCKS='constexpr', NUM_EXPERTS='constexpr', block_expert_ids='*i32', expert_offsets='*i32', live_numel='i32', packed_route_indices='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): []}], device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_post_prefix_kernel", "signature": {"packed_route_indices...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', ''), ('constexpr', 8), ('constexpr', 256), ('constexpr', 2176)...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:41:52 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _compute_global_topk_indices_and_lens_kernel (constexprs={TRITON_BLOCK_SIZE=1024}; signature={TRITON_BLOCK_SIZE='constexpr', block_size='i32', block_table_ptr='*i32', block_table_stride='i32', global_topk_indices_ptr='*i32', global_topk_indices_stride='i32', is_valid_token_ptr='*u1', token_to_req_indices_ptr='*i32', topk='i32', topk_indices_ptr='*i32', topk_indices_stride='i32', topk_lens_ptr='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "vllm.models.deepseek_v4.common.ops.cache_utils._compute_global_topk_indices_and_lens_kernel", "signature":...}; key="[('*i32', 'D'), ('i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('i32', 'D'), ('*i32', 'D'), ('*i32', 'D')...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) 2026-07-23 22:42:49  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:42:53  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) WARNING 07-23 22:42:54 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_prefix_kernel (constexprs={BLOCK_E=256, BLOCK_SIZE=8, BLOCK_T=256, HAS_EXPERT_MAP=False, NUMEL_CAPACITY=768, NUM_EXPERTS=256}; signature={BLOCK_E='constexpr', BLOCK_SIZE='constexpr', BLOCK_T='constexpr', HAS_EXPERT_MAP='constexpr', NUMEL_CAPACITY='constexpr', NUM_EXPERTS='constexpr', expert_map='*i32', expert_offsets='*i32', live_numel='i32', packed_route_count='*i32', topk_ids='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=8, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_prefix_kernel", "signature": {"topk_ids": "*i32", "exper...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', ''), ('constexpr', 768), ('constexpr', 8), ('co...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:42:54 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_post_prefix_kernel (constexprs={BLOCK_SIZE=8, BLOCK_T=256, MAX_PACKED_ROUTES=2560, MAX_ROUTE_BLOCKS=320, NUM_EXPERTS=256}; signature={BLOCK_SIZE='constexpr', BLOCK_T='constexpr', MAX_PACKED_ROUTES='constexpr', MAX_ROUTE_BLOCKS='constexpr', NUM_EXPERTS='constexpr', block_expert_ids='*i32', expert_offsets='*i32', live_numel='i32', packed_route_indices='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): []}], device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_post_prefix_kernel", "signature": {"packed_route_indices...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', ''), ('constexpr', 8), ('constexpr', 256), ('constexpr', 2560)...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:42:54 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _compute_global_topk_indices_and_lens_kernel (constexprs={TRITON_BLOCK_SIZE=1024}; signature={TRITON_BLOCK_SIZE='constexpr', block_size='i32', block_table_ptr='*i32', block_table_stride='i32', global_topk_indices_ptr='*i32', global_topk_indices_stride='i32', is_valid_token_ptr='*u1', token_to_req_indices_ptr='*i32', topk='i32', topk_indices_ptr='*i32', topk_indices_stride='i32', topk_lens_ptr='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "vllm.models.deepseek_v4.common.ops.cache_utils._compute_global_topk_indices_and_lens_kernel", "signature":...}; key="[('*i32', 'D'), ('i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('i32', 'D'), ('*i32', ''), ('*i32', 'D'),...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:42:54 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _compute_global_topk_indices_and_lens_kernel (constexprs={TRITON_BLOCK_SIZE=1024}; signature={TRITON_BLOCK_SIZE='constexpr', block_size='i32', block_table_ptr='*i32', block_table_stride='i32', global_topk_indices_ptr='*i32', global_topk_indices_stride='i32', is_valid_token_ptr='*u1', token_to_req_indices_ptr='*i32', topk='i32', topk_indices_ptr='*i32', topk_indices_stride='i32', topk_lens_ptr='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "vllm.models.deepseek_v4.common.ops.cache_utils._compute_global_topk_indices_and_lens_kernel", "signature":...}; key="[('*i32', 'D'), ('i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('i32', 'D'), ('*i32', ''), ('*i32', 'D'),...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) 2026-07-23 22:44:39  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:133): TileLang begins to compile kernel `mhc_pre_big_fuse_with_norm_tilelang` with `out_idx=None`
+(Worker_TP1 pid=174) 2026-07-23 22:44:43  [TileLang:tilelang.jit.kernel:INFO] (kernel.py:141): TileLang completes to compile kernel `mhc_pre_big_fuse_with_norm_tilelang`
+(Worker_TP1 pid=174) WARNING 07-23 22:44:43 [jit_monitor.py:126] CuTeDSL JIT compilation during inference: W4A16FusedMoeKernel. This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:44:47 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_prefix_kernel (constexprs={BLOCK_E=256, BLOCK_SIZE=32, BLOCK_T=256, HAS_EXPERT_MAP=False, NUMEL_CAPACITY=6144, NUM_EXPERTS=256}; signature={BLOCK_E='constexpr', BLOCK_SIZE='constexpr', BLOCK_T='constexpr', HAS_EXPERT_MAP='constexpr', NUMEL_CAPACITY='constexpr', NUM_EXPERTS='constexpr', expert_map='*i32', expert_offsets='*i32', live_numel='i32', packed_route_count='*i32', topk_ids='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=8, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_prefix_kernel", "signature": {"topk_ids": "*i32", "exper...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('constexpr', 6144), ('constexpr', 32), (...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:44:47 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_post_prefix_kernel (constexprs={BLOCK_SIZE=32, BLOCK_T=256, MAX_PACKED_ROUTES=14080, MAX_ROUTE_BLOCKS=440, NUM_EXPERTS=256}; signature={BLOCK_SIZE='constexpr', BLOCK_T='constexpr', MAX_PACKED_ROUTES='constexpr', MAX_ROUTE_BLOCKS='constexpr', NUM_EXPERTS='constexpr', block_expert_ids='*i32', expert_offsets='*i32', live_numel='i32', packed_route_indices='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_post_prefix_kernel", "signature": {"packed_route_indices...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('constexpr', 32), ('constexpr', 256), ('constexpr', 140...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:44:48 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_prefix_kernel (constexprs={BLOCK_E=256, BLOCK_SIZE=64, BLOCK_T=256, HAS_EXPERT_MAP=False, NUMEL_CAPACITY=12288, NUM_EXPERTS=256}; signature={BLOCK_E='constexpr', BLOCK_SIZE='constexpr', BLOCK_T='constexpr', HAS_EXPERT_MAP='constexpr', NUMEL_CAPACITY='constexpr', NUM_EXPERTS='constexpr', expert_map='*i32', expert_offsets='*i32', live_numel='i32', packed_route_count='*i32', topk_ids='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=8, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_prefix_kernel", "signature": {"topk_ids": "*i32", "exper...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('constexpr', 12288), ('constexpr', 64), ...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:44:48 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_post_prefix_kernel (constexprs={BLOCK_SIZE=64, BLOCK_T=256, MAX_PACKED_ROUTES=28416, MAX_ROUTE_BLOCKS=444, NUM_EXPERTS=256}; signature={BLOCK_SIZE='constexpr', BLOCK_T='constexpr', MAX_PACKED_ROUTES='constexpr', MAX_ROUTE_BLOCKS='constexpr', NUM_EXPERTS='constexpr', block_expert_ids='*i32', expert_offsets='*i32', live_numel='i32', packed_route_indices='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_post_prefix_kernel", "signature": {"packed_route_indices...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('constexpr', 64), ('constexpr', 256), ('constexpr', 284...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:44:49 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_prefix_kernel (constexprs={BLOCK_E=256, BLOCK_SIZE=64, BLOCK_T=256, HAS_EXPERT_MAP=False, NUMEL_CAPACITY=24576, NUM_EXPERTS=256}; signature={BLOCK_E='constexpr', BLOCK_SIZE='constexpr', BLOCK_T='constexpr', HAS_EXPERT_MAP='constexpr', NUMEL_CAPACITY='constexpr', NUM_EXPERTS='constexpr', expert_map='*i32', expert_offsets='*i32', live_numel='i32', packed_route_count='*i32', topk_ids='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=8, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_prefix_kernel", "signature": {"topk_ids": "*i32", "exper...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('constexpr', 24576), ('constexpr', 64), ...). This causes a latency spike; consider extending warmup to cover this shape/config.
+(Worker_TP1 pid=174) WARNING 07-23 22:44:49 [jit_monitor.py:126] Triton kernel JIT compilation during inference: _pack_topk_routes_post_prefix_kernel (constexprs={BLOCK_SIZE=64, BLOCK_T=256, MAX_PACKED_ROUTES=40704, MAX_ROUTE_BLOCKS=636, NUM_EXPERTS=256}; signature={BLOCK_SIZE='constexpr', BLOCK_T='constexpr', MAX_PACKED_ROUTES='constexpr', MAX_ROUTE_BLOCKS='constexpr', NUM_EXPERTS='constexpr', block_expert_ids='*i32', expert_offsets='*i32', live_numel='i32', packed_route_indices='*i32'}; extra_compile_info={configs=[{(0,): [['tt.divisibility', 16]], (1,): [['tt.divisibility', 16]], (2,): [['tt.divisibility', 16]], (3,): [['tt.divi..., device=0, enable_fp_fusion=True, extern_libs=(('libdevice', '/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/lib/libdevice.10.bc'),), is_warmup=False, launch_cooperative_grid=False, num_ctas=1, num_stages=3, num_warps=4, specialization_data='{"name": "b12x.moe.fused.w4a16.route_pack._pack_topk_routes_post_prefix_kernel", "signature": {"packed_route_indices...}; key="[('*i32', 'D'), ('*i32', 'D'), ('*i32', 'D'), ('i32', 'D'), ('constexpr', 64), ('constexpr', 256), ('constexpr', 407...). This causes a latency spike; consider extending warmup to cover this shape/config.
