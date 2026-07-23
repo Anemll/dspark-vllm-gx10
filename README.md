@@ -239,13 +239,14 @@ show the rejected W4A16 optimization:
 | 1 | **27.40 (27.37) tok/s** | 27.19 (27.12) tok/s | 27.01 tok/s | 27.25 (27.21) tok/s |
 | 4 | **77.49 (76.85) tok/s** | 74.11 (73.66) tok/s | **74.08 (73.86) tok/s** | 70.04 (69.83) tok/s |
 
-FlashInfer B12X with a 40-cluster microkernel cap is the accepted W4A4 target
-decode path. Target-only examples select it directly; W4A4+DSpark keeps global
-backend selection on `auto` so the MXFP4 drafts retain their compatible
-backend, while the prepared target is selected independently. B12X improves
-the fully warmed C4 median by 0.3% over the matched CUTLASS control while
-keeping prefill on its existing selector. The valid W4A16 service branch was
-5.2% slower at C=4 by
+FlashInfer CUTLASS remains the accepted W4A4+DSpark serving default. B12X with
+a 40-cluster microkernel cap remains available as an experimental target-only
+selector. W4A4+DSpark keeps global backend selection on `auto` so the MXFP4
+drafts retain their compatible backend, while the prepared target is selected
+independently. Although B12X improved one target-only fully warmed C4 median
+by 0.3%, the subsequent end-to-end DSpark A/B regressed C4 by 7.8% versus
+CUTLASS and 10.6% versus FP8 by median, so B12X is not promoted as the
+speculative-serving default. The valid W4A16 service branch was 5.2% slower at C=4 by
 median and remains default-off; its balanced-route layer win did not survive
 the correlated routes of the canonical service workload. The remaining
 W4A4-vs-FP8 deficit is already present with the target alone and is not
@@ -255,15 +256,21 @@ above. The exact optimization gates and raw artifacts are documented in
 the [valid dual-decode service gate](benchmarks/results/w4a4-decode-port-20260722/service-dual-dispatch/README.md),
 and the [final weight-stream gates](benchmarks/results/w4a4-decode-port-20260722/final-weight-stream-gates/README.md).
 
-Decode with speculation remains prompt- and acceptance-dependent. A same-prompt
-canonical check with **MTP=5 on both sides**, probabilistic draft sampling, and
-confidence scheduling off put W4A4 within about 3--4% of the preceding
-FP8/B12X v0.25 candidate:
+Decode with speculation remains prompt- and acceptance-dependent. The latest
+same-prompt canonical retry used **MTP=5 on all sides**, probabilistic draft
+sampling, confidence scheduling off, and the same 512-token output limit.
+Values are best aggregate throughput with the median in parentheses:
 
-| Canonical concurrency | FP8/B12X + DSpark (MTP=5) | W4A4 + DSpark (MTP=5) | W4A4 delta |
+| Canonical concurrency | FP8/B12X + DSpark | W4A4/CUTLASS + DSpark | W4A4/B12X + DSpark |
 |---:|---:|---:|---:|
-| 1 | **48.49 tok/s** | 47.13 tok/s | -2.8% |
-| 4 | **103.48 tok/s** | 99.44 tok/s | -3.9% |
+| 1 | **47.94 (47.80) tok/s** | 47.67 (46.95) tok/s | **49.12 (47.53) tok/s** |
+| 4 | **103.98 (101.07) tok/s** | 101.12 (98.08) tok/s | 91.97 (90.40) tok/s |
+
+The B12X C1 best trial had higher draft acceptance and does not establish a
+target-kernel win. At C4, acceptance was comparable and B12X was 9.1% slower
+than CUTLASS by best throughput. Raw trials, hashes, dispatch proof, and the
+full interpretation are archived in
+[`dspark-target-backend-ab`](benchmarks/results/w4a4-decode-port-20260722/dspark-target-backend-ab/README.md).
 
 The high-acceptance `tool_agentic` prompt benefits from longer drafts. The
 following grid uses the exact prompt SHA-256

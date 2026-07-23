@@ -1,0 +1,6 @@
+7d38bbb1b357e802b7308e6ea4b113ab401b420015d677fe1dd6cc713d34a46a  fp8-b12x-dspark-c1-c4.json
+e6a687443f3a883637f7ee82b558cace5eb0497483bc5bb064fce878789df0d7  fp8-b12x-dspark-c4-warmed-recheck.json
+c83412911349ebcfbf3d6edbcc9c95ab3353d311497c88b9c5f82e24355cd625  w4a4-b12x-dspark-c1-c4.json
+3eec77e2f79eece2ff454a9825663d5babc35d4ef596a9c8ec774c84606a4944  w4a4-b12x-dspark-c4-warmed-recheck.json
+c07d65dd65f058c25296fe5584ef21146f1bace40e4b0c159d299861ebf06afc  w4a4-cutlass-dspark-c1-c4.json
+93e11cbfba4ab6facc241f851dd6cc11c2e400b1326c19f9820eda5f9fd72a4e  w4a4-cutlass-dspark-c4-warmed-recheck.json

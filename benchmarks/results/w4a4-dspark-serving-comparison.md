@@ -51,6 +51,23 @@ sources: [`v0251-candidate.json`](v0251-candidate.json),
 [`decode-w4a4-canonical-c1.json`](decode-w4a4-canonical-c1.json), and
 [`decode-w4a4-canonical-c4.json`](decode-w4a4-canonical-c4.json).
 
+### Target-backend retry
+
+A later same-prompt retry compared the prepared W4A4 target under both CUTLASS
+and B12X while keeping the DSpark draft on its native `DEEPGEMM_MXFP4`
+backend. Values are best aggregate throughput with the median in parentheses;
+C=4 uses a separate warmed three-trial recheck:
+
+| C | FP8/B12X + DSpark | W4A4/CUTLASS + DSpark | W4A4/B12X + DSpark |
+|---:|---:|---:|---:|
+| 1 | **47.94 (47.80)** | 47.67 (46.95) | **49.12 (47.53)** |
+| 4 | **103.98 (101.07)** | 101.12 (98.08) | 91.97 (90.40) |
+
+B12X's C1 best trial coincided with higher acceptance. At C4, comparable
+acceptance did not prevent a 9.1% best-throughput regression versus CUTLASS.
+The split-backend proof, raw JSON, and hashes are archived in
+[`w4a4-decode-port-20260722/dspark-target-backend-ab`](w4a4-decode-port-20260722/dspark-target-backend-ab/README.md).
+
 ## Agentic decode
 
 This is the W4A4 path on the exact `tool_agentic` prompt at temperature zero
@@ -87,8 +104,8 @@ TP=2 startup proved 43 layers, 344 reads, 344 copies, zero transforms,
 ## Interpretation
 
 W4A4 consistently improves prefill in this dataset. Decode remains prompt- and
-acceptance-dependent: it is about 3--4% behind the preceding FP8/B12X path on
-the matched canonical checks, while the agentic prompt scales to 244.2
-aggregate tok/s at C=8 with MTP=5. Report prompt identity, concurrency,
-acceptance, token limit, confidence state, overlap state, and timing convention
-with every decode number.
+acceptance-dependent: the latest CUTLASS retry is within 0.6--2.8% of FP8 by
+best throughput, while forcing B12X regresses C4 materially. The agentic prompt
+scales to 244.2 aggregate tok/s at C=8 with MTP=5. Report prompt identity,
+concurrency, target backend, acceptance, token limit, confidence state, overlap
+state, and timing convention with every decode number.
