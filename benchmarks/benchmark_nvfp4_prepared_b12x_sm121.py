@@ -18,6 +18,7 @@ import importlib.machinery
 import importlib.util
 import json
 import math
+import os
 import statistics
 import sys
 import time
@@ -373,6 +374,18 @@ def _time_orders(
 
 
 def run(args: argparse.Namespace) -> int:
+    static_shared_env = "FLASHINFER_B12X_STATIC_TOKEN_SHARED_INPUT"
+    if args.b12x_static_token_shared:
+        if (
+            "flashinfer.fused_moe.cute_dsl.blackwell_sm12x.moe_dispatch"
+            in sys.modules
+        ):
+            raise RuntimeError(
+                "static token-sharing must be selected before importing "
+                "FlashInfer's dispatcher"
+            )
+        os.environ[static_shared_env] = "1"
+
     import torch
     from vllm.models.deepseek_v4.nvidia.prepared_weight_loading import (
         PREPARED_FAMILY_ORDER as RUNTIME_PREPARED_FAMILY_ORDER,
@@ -431,6 +444,11 @@ def run(args: argparse.Namespace) -> int:
     b12x_wrapper, b12x_proof = kernel_bench._make_w4a4_runner(
         torch, weights, shape, runner_args
     )
+    if args.b12x_static_token_shared:
+        # The serving adapter sets this same model-scoped proof after baking
+        # expert globals into block scales. This physical-layer benchmark
+        # prepares the identical all-ones activation-scale contract above.
+        b12x_wrapper._dspark_unit_input_scales = True
     b12x_wrapper_arena = b12x_wrapper._moe_output
     if b12x_wrapper_arena is None:
         raise RuntimeError("graph-enabled B12X wrapper has no output arena")
@@ -734,6 +752,8 @@ def run(args: argparse.Namespace) -> int:
             ),
             "b12x_force_static": args.b12x_force_static,
             "b12x_mac": args.b12x_mac,
+            "b12x_static_token_shared": args.b12x_static_token_shared,
+            "b12x_static_token_shared_env": os.environ.get(static_shared_env),
         },
         "backend_proof": {
             "b12x": {
@@ -778,6 +798,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--b12x-tile-n", type=int)
     parser.add_argument("--b12x-force-static", action="store_true")
     parser.add_argument("--b12x-mac", type=int)
+    parser.add_argument(
+        "--b12x-static-token-shared",
+        action="store_true",
+        help=(
+            "Enable the source-pinned static-kernel one-pack-per-token path; "
+            "requires a patched diagnostic image."
+        ),
+    )
     parser.add_argument(
         "--skip-native",
         action="store_true",

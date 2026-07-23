@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_REVISION=unknown
+
+COPY scripts/patch_flashinfer_b12x_static_token_shared.py \
+  /usr/local/bin/dspark-patch-flashinfer-b12x-static-token-shared
+COPY benchmarks/benchmark_nvfp4_prepared_b12x_sm121.py \
+  /usr/local/bin/dspark-benchmark-nvfp4-prepared-b12x-sm121
+
+RUN python3 /usr/local/bin/dspark-patch-flashinfer-b12x-static-token-shared
+RUN python3 -m py_compile \
+      /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_dispatch.py \
+      /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_static_kernel.py \
+      /usr/local/bin/dspark-benchmark-nvfp4-prepared-b12x-sm121
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.nvfp4-b12x-static-token-shared="v1"
