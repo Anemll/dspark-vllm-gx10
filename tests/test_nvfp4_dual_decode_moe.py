@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import hashlib
 import pathlib
@@ -102,7 +103,9 @@ class Nvfp4DualDecodeTests(unittest.TestCase):
         self.assertIn("source.untyped_storage().data_ptr()", source)
         self.assertIn('source_format="fp4_e8m0_k32"', source)
         self.assertIn('w13_layout="w13"', source)
-        self.assertIn('"modelopt" if weight_layout == "modelopt" else None', source)
+        self.assertIn('if weight_layout == "packed":', source)
+        self.assertIn("from b12x.integration.tp_moe import (", source)
+        self.assertIn('w4a16_weight_layout="modelopt"', source)
         self.assertIn("NVFP4_DUAL_DECODE event=selected", source)
         self.assertIn("uniform_decode=true", source)
 
@@ -118,6 +121,28 @@ class Nvfp4DualDecodeTests(unittest.TestCase):
         self.assertIn("NVFP4_NATIVE_B12X event=prepared", source)
         native_source = source.split("class NvFp4NativeB12xExperts", 1)[1]
         self.assertNotIn("return super().apply(", native_source)
+
+    def test_native_packed_planner_uses_pinned_caps_abi(self) -> None:
+        tree = ast.parse(EXPERT.read_text())
+        caps_calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "TPMoEScratchCaps"
+        ]
+        self.assertEqual(len(caps_calls), 1)
+        keywords = {item.arg for item in caps_calls[0].keywords}
+        self.assertNotIn("w4a16_weight_layout", keywords)
+        self.assertTrue(
+            {
+                "quant_mode",
+                "source_format",
+                "w13_layout",
+                "swiglu_limit",
+                "frozen",
+            }.issubset(keywords)
+        )
 
     def test_scratch_helper_preserves_default_and_forwards_explicit_layout(self) -> None:
         source = B12X_EXPERT.read_text()

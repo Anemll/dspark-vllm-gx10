@@ -308,6 +308,38 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
             raise RuntimeError(
                 f"prepared W4A16 weight layout drifted: {weight_layout!r}"
             )
+        if weight_layout == "packed":
+            # The immutable serving base carries the production B12X planner
+            # whose TPMoEScratchCaps predates the optional modelopt-layout
+            # field.  Native packed storage is that planner's default, so use
+            # its exact ABI instead of passing a newer optional keyword.
+            from b12x.integration.tp_moe import (
+                TPMoEScratchCaps,
+                plan_tp_moe_scratch,
+            )
+
+            return plan_tp_moe_scratch(
+                TPMoEScratchCaps(
+                    max_tokens=max(int(tokens), 1),
+                    weight_E=int(prepared.num_experts),
+                    k=int(k),
+                    n=int(prepared.intermediate_size),
+                    num_topk=int(topk),
+                    device=device,
+                    dtype=dtype,
+                    core_token_counts=(max(int(tokens), 1),),
+                    route_num_experts=0,
+                    quant_mode="w4a16",
+                    activation=_b12x_activation_name(activation),
+                    apply_router_weight_on_input=apply_router_weight_on_input,
+                    swiglu_limit=getattr(
+                        self.quant_config, "gemm1_clamp_limit", None
+                    ),
+                    source_format="fp4_e8m0_k32",
+                    w13_layout="w13",
+                    frozen=True,
+                )
+            )
         return _plan_b12x_moe_fp4_scratch(
             tokens=tokens,
             weight_E=int(prepared.num_experts),
@@ -322,9 +354,7 @@ class NvFp4CutlassW4A16DualExperts(FlashInferExperts):
             w13_layout="w13",
             # The pinned planner's default is native packed storage.  Only the
             # legacy dual-view arm needs the explicit modelopt override.
-            w4a16_weight_layout=(
-                "modelopt" if weight_layout == "modelopt" else None
-            ),
+            w4a16_weight_layout="modelopt",
             apply_router_weight_on_input=apply_router_weight_on_input,
             swiglu_limit=getattr(self.quant_config, "gemm1_clamp_limit", None),
         )
