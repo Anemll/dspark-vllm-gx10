@@ -4,6 +4,7 @@
 from threading import Lock
 from typing import Any
 from weakref import WeakValueDictionary
+import os
 
 import torch
 
@@ -40,6 +41,37 @@ _B12X_WRAPPER_CACHE: WeakValueDictionary[tuple[Any, ...], Any] = (
     WeakValueDictionary()
 )
 _B12X_WRAPPER_CACHE_LOCK = Lock()
+_B12X_MICRO_MAC_ENV = "DSPARK_B12X_MICRO_MAX_ACTIVE_CLUSTERS"
+
+
+def _configure_b12x_micro_max_active_clusters() -> int | None:
+    """Apply an opt-in SM121 decode occupancy cap before kernel compilation.
+
+    The fused micro kernel otherwise occupies all 48 GB10 SMs.  Full TP=2
+    serving can overlap collective/runner work that a single-layer benchmark
+    cannot see, so this narrow knob reserves a few SMs without changing
+    prefill/static/dynamic schedules.
+    """
+
+    raw_value = os.environ.get(_B12X_MICRO_MAC_ENV)
+    if raw_value is None or raw_value == "":
+        return None
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise ValueError(
+            f"{_B12X_MICRO_MAC_ENV} must be a positive integer; got "
+            f"{raw_value!r}"
+        ) from error
+    if value <= 0:
+        raise ValueError(
+            f"{_B12X_MICRO_MAC_ENV} must be a positive integer; got {value}"
+        )
+
+    from flashinfer.fused_moe.cute_dsl.blackwell_sm12x import moe_dispatch
+
+    moe_dispatch._MICRO_MAC_LADDER = ((1 << 30, value),)
+    return value
 
 
 def _resolve_b12x_activation(
@@ -360,6 +392,8 @@ class FlashInferB12xExperts(mk.FusedMoEExpertsModular):
             return bound_wrapper
 
         from flashinfer.fused_moe import B12xMoEWrapper
+
+        _configure_b12x_micro_max_active_clusters()
 
         device_index = torch.cuda.current_device()
         cache_key = (

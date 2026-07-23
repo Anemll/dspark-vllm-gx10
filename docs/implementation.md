@@ -18,6 +18,15 @@ format, plans caller-owned scratch, and rejects allocations during CUDA graph
 capture. The small-M selector override is opt-in/configurable through the
 `VLLM_B12X_W4A16_*` environment variables.
 
+For the ModelOpt NVFP4/W4A4 B12X micro kernel, TP=2 C4 serving uses
+`DSPARK_B12X_MICRO_MAX_ACTIVE_CLUSTERS=40` by default. This reserves eight of
+GB10's 48 SMs for overlapping runner/collective work. On the canonical
+target-only 4-client decode test it improved the warmed median from 72.64 to
+73.86 tok/s without changing C1 materially. Set the value identically on both
+TP ranks; removing it restores FlashInfer's uncapped schedule. The complete
+route-distribution and API evidence is under
+`benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/`.
+
 ## Optional ModelOpt NVFP4 W4A4 target
 
 The NVIDIA DeepSeek V4 Flash NVFP4 checkpoint changes the routed target

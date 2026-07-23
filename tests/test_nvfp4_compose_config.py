@@ -21,6 +21,24 @@ class NvFp4ComposeConfigTests(unittest.TestCase):
             self.compose,
         )
 
+    def test_b12x_micro_occupancy_cap_defaults_to_measured_mac40(self) -> None:
+        self.assertIn(
+            'DSPARK_B12X_MICRO_MAX_ACTIVE_CLUSTERS: '
+            '"${DSPARK_B12X_MICRO_MAX_ACTIVE_CLUSTERS:-40}"',
+            self.compose,
+        )
+        values = []
+        for relative_path in ("config/head.env.example", "config/worker.env.example"):
+            lines = (REPO_ROOT / relative_path).read_text().splitlines()
+            values.extend(
+                line.split("=", 1)[1]
+                for line in lines
+                if line.startswith(
+                    "DSPARK_B12X_MICRO_MAX_ACTIVE_CLUSTERS="
+                )
+            )
+        self.assertEqual(values, ["40", "40"])
+
     def test_flashinfer_version_check_cannot_be_disabled_by_host_env(self) -> None:
         self.assertIn('FLASHINFER_DISABLE_VERSION_CHECK: ""', self.compose)
         self.assertNotIn("${FLASHINFER_DISABLE_VERSION_CHECK", self.compose)

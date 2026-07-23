@@ -79,6 +79,31 @@ def _csv_positive_ints(value: str) -> tuple[int, ...]:
     return result
 
 
+def _load_captured_route_ids(
+    torch: Any,
+    path: Path,
+    *,
+    sample_index: int,
+    m: int,
+    top_k: int,
+) -> Any:
+    import numpy as np
+
+    raw = np.load(path, mmap_mode="r", allow_pickle=False)
+    if raw.ndim < 3 or tuple(raw.shape[-2:]) != (m, top_k):
+        raise RuntimeError(
+            f"captured route shape drifted: {raw.shape}, expected [...,{m},{top_k}]"
+        )
+    samples = raw.reshape(-1, m, top_k)
+    if not 0 <= sample_index < samples.shape[0]:
+        raise RuntimeError(
+            f"route sample {sample_index} outside [0,{samples.shape[0]})"
+        )
+    return torch.from_numpy(np.array(samples[sample_index], copy=True)).to(
+        device="cuda", dtype=torch.int32
+    )
+
+
 def _load_rank(
     torch: Any,
     layer_file: Path,
@@ -376,6 +401,27 @@ def run(args: argparse.Namespace) -> int:
     tensors = _load_rank(torch, args.layer_file, args.tp_rank)
     weights = _prepare_weights(torch, tensors, shape)
     load_seconds = time.perf_counter() - load_started
+    if (
+        args.b12x_tile_m is not None
+        or args.b12x_tile_n is not None
+        or args.b12x_force_static
+        or args.b12x_mac is not None
+    ):
+        from flashinfer.fused_moe.cute_dsl.blackwell_sm12x import moe_dispatch
+
+    if args.b12x_tile_m is not None or args.b12x_tile_n is not None:
+        if args.b12x_tile_m is None or args.b12x_tile_n is None:
+            raise RuntimeError("both --b12x-tile-m and --b12x-tile-n are required")
+
+        forced_tile = (args.b12x_tile_m, args.b12x_tile_n)
+        moe_dispatch._select_moe_mma_tiler_mn = lambda routed_rows, n: forced_tile
+    if args.b12x_force_static:
+        moe_dispatch._MICRO_COMPACT_CUTOVER_PAIRS_MULTI_TOPK = 0
+    if args.b12x_mac is not None:
+        if args.b12x_mac <= 0:
+            raise RuntimeError("--b12x-mac must be positive")
+        moe_dispatch._MICRO_MAC_LADDER = ((1 << 30, args.b12x_mac),)
+        moe_dispatch._STATIC_MAC_LADDER = ((1 << 30, args.b12x_mac),)
     runner_args = SimpleNamespace(
         m=args.m,
         swiglu_alpha=1.0,
@@ -391,14 +437,19 @@ def run(args: argparse.Namespace) -> int:
     cutlass_runner, cutlass_proof = kernel_bench._make_flashinfer_cutlass_runner(
         torch, weights, shape, runner_args
     )
-    native_runner, native_proof = _make_native_b12x_runner(
-        torch, tensors, shape, args.m
-    )
+    native_runner = None
+    native_proof = None
+    if not args.skip_native:
+        native_runner, native_proof = _make_native_b12x_runner(
+            torch, tensors, shape, args.m
+        )
 
     failures: list[dict[str, Any]] = []
     results: list[dict[str, Any]] = []
     speedups_by_m: dict[int, float] = {}
-    keepalive: list[Any] = [b12x_wrapper, cutlass_runner, native_runner]
+    keepalive: list[Any] = [b12x_wrapper, cutlass_runner]
+    if native_runner is not None:
+        keepalive.append(native_runner)
     for m in args.m:
         x, topk_ids, topk_weights = kernel_bench.make_routes(
             torch,
@@ -408,6 +459,14 @@ def run(args: argparse.Namespace) -> int:
             seed=args.seed + m,
             input_rms=1.0,
         )
+        if args.route_ids_npy is not None:
+            topk_ids = _load_captured_route_ids(
+                torch,
+                args.route_ids_npy,
+                sample_index=args.route_sample_index,
+                m=m,
+                top_k=shape.top_k,
+            )
         b12x_launch, b12x_output = _b12x_launch(
             torch,
             b12x_wrapper,
@@ -437,18 +496,19 @@ def run(args: argparse.Namespace) -> int:
             topk_ids,
             topk_weights,
         )
-        native_launch, native_output = _native_b12x_launch(
-            torch,
-            native_runner,
-            x,
-            topk_ids,
-            topk_weights,
-        )
         launches = {
-            "native_b12x": native_launch,
             "b12x": b12x_launch,
             "cutlass": cutlass_launch,
         }
+        if native_runner is not None:
+            native_launch, native_output = _native_b12x_launch(
+                torch,
+                native_runner,
+                x,
+                topk_ids,
+                topk_weights,
+            )
+            launches["native_b12x"] = native_launch
         eager = {}
         activity = {}
         for backend, launch in launches.items():
@@ -463,8 +523,12 @@ def run(args: argparse.Namespace) -> int:
         numeric = kernel_bench.compare_tensors(
             torch, eager["b12x"], eager["cutlass"]
         )
-        native_numeric = kernel_bench.compare_tensors(
-            torch, eager["native_b12x"], eager["cutlass"]
+        native_numeric = (
+            kernel_bench.compare_tensors(
+                torch, eager["native_b12x"], eager["cutlass"]
+            )
+            if "native_b12x" in eager
+            else None
         )
         legacy_output = legacy_b12x_launch()
         torch.cuda.synchronize()
@@ -490,23 +554,32 @@ def run(args: argparse.Namespace) -> int:
         )
         if not numeric_passed:
             failures.append({"kind": "numeric", "m": m, **numeric})
-        native_numeric_passed = kernel_bench.numeric_metrics_pass(
-            native_numeric,
-            min_cosine=args.numeric_min_cosine,
-            max_normalized_rmse=args.numeric_max_nrmse,
+        native_numeric_passed = (
+            kernel_bench.numeric_metrics_pass(
+                native_numeric,
+                min_cosine=args.numeric_min_cosine,
+                max_normalized_rmse=args.numeric_max_nrmse,
+            )
+            if native_numeric is not None
+            else None
         )
-        if not native_numeric_passed:
+        if native_numeric_passed is False:
             failures.append(
                 {"kind": "native_numeric", "m": m, **native_numeric}
             )
 
+        comparison_pair = (
+            ("b12x", "cutlass")
+            if args.skip_native
+            else ("native_b12x", "b12x")
+        )
         eager_timing = _time_orders(
             torch,
-            {"native_b12x": native_launch, "b12x": b12x_launch},
+            {name: launches[name] for name in comparison_pair},
             warmup=args.warmup,
             iters=args.iters,
             repeats=args.repeats,
-            pair=("native_b12x", "b12x"),
+            pair=comparison_pair,
         )
         eager_copy_timing = _time_orders(
             torch,
@@ -548,14 +621,11 @@ def run(args: argparse.Namespace) -> int:
                 )
         graph_timing = _time_orders(
             torch,
-            {
-                "native_b12x": graph_launches["native_b12x"],
-                "b12x": graph_launches["b12x"],
-            },
+            {name: graph_launches[name] for name in comparison_pair},
             warmup=args.warmup,
             iters=args.iters,
             repeats=args.repeats,
-            pair=("native_b12x", "b12x"),
+            pair=comparison_pair,
         )
         graph_copy_timing = _time_orders(
             torch,
@@ -568,10 +638,12 @@ def run(args: argparse.Namespace) -> int:
             repeats=args.repeats,
             pair=("direct_output", "legacy_two_copy"),
         )
-        native_speedup = float(
-            graph_timing["combined"]["speedup_native_b12x_over_b12x"]
+        measured_speedup = float(
+            graph_timing["combined"][
+                f"speedup_{comparison_pair[0]}_over_{comparison_pair[1]}"
+            ]
         )
-        speedups_by_m[m] = native_speedup
+        speedups_by_m[m] = measured_speedup
         results.append(
             {
                 "m": m,
@@ -616,8 +688,13 @@ def run(args: argparse.Namespace) -> int:
         "scope": "decode-only; MTP disabled in the subsequent serving A/B",
         "minimum_geomean_speedup": args.min_geomean_speedup,
         "minimum_per_shape_speedup": args.min_per_shape_speedup,
-        "native_b12x_over_flashinfer_b12x_geomean": decode_geomean,
-        "native_b12x_over_flashinfer_b12x_by_m": {
+        "comparison": (
+            "flashinfer_b12x_over_cutlass"
+            if args.skip_native
+            else "native_b12x_over_flashinfer_b12x"
+        ),
+        "geomean_speedup": decode_geomean,
+        "speedup_by_m": {
             str(m): value for m, value in speedups_by_m.items()
         },
         "passed": decode_passed,
@@ -645,6 +722,18 @@ def run(args: argparse.Namespace) -> int:
             "iters": args.iters,
             "repeats": args.repeats,
             "seed": args.seed,
+            "skip_native": args.skip_native,
+            "route_ids_npy": (
+                str(args.route_ids_npy) if args.route_ids_npy is not None else None
+            ),
+            "route_sample_index": args.route_sample_index,
+            "b12x_forced_tile": (
+                [args.b12x_tile_m, args.b12x_tile_n]
+                if args.b12x_tile_m is not None
+                else None
+            ),
+            "b12x_force_static": args.b12x_force_static,
+            "b12x_mac": args.b12x_mac,
         },
         "backend_proof": {
             "b12x": {
@@ -679,6 +768,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--iters", type=int, default=20)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--seed", type=int, default=4104)
+    parser.add_argument(
+        "--route-ids-npy",
+        type=Path,
+        help="Use one captured [M, top_k] routing sample for every backend.",
+    )
+    parser.add_argument("--route-sample-index", type=int, default=0)
+    parser.add_argument("--b12x-tile-m", type=int)
+    parser.add_argument("--b12x-tile-n", type=int)
+    parser.add_argument("--b12x-force-static", action="store_true")
+    parser.add_argument("--b12x-mac", type=int)
+    parser.add_argument(
+        "--skip-native",
+        action="store_true",
+        help="Compare FlashInfer's resident B12X W4A4 kernel directly with CUTLASS.",
+    )
     parser.add_argument("--numeric-min-cosine", type=float, default=0.98)
     parser.add_argument("--numeric-max-nrmse", type=float, default=0.25)
     parser.add_argument("--min-geomean-speedup", type=float, default=1.01)

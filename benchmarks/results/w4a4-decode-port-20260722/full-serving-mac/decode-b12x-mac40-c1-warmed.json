@@ -1,0 +1,79 @@
+{
+  "base_url": "http://127.0.0.1:8888",
+  "model": "deepseek-v4-flash-nvfp4-b12x-target-only",
+  "max_tokens": 512,
+  "prompt_sha256": "652af3aabacfd4360432d28e0c237e9e445f938d032a604d3a4f7f42a2a7ed38",
+  "spec_decode_metric_source": null,
+  "spec_decode_metric_mode": null,
+  "trials": [
+    {
+      "concurrency": 1,
+      "trial": 1,
+      "wall_s": 18.992584839987103,
+      "total_tokens": 512,
+      "aggregate_token_tps": 26.957889319100584,
+      "mean_ttft_s": 0.19957429598434828,
+      "streams": [
+        {
+          "request": 0,
+          "prompt_tokens": 35,
+          "completion_tokens": 512,
+          "chunks": 508,
+          "ttft_s": 0.19957429598434828,
+          "decode_s": 18.791699866007548,
+          "elapsed_s": 18.99133793800138,
+          "token_tps": 27.246071598140027,
+          "chunk_tps": 27.033211663779557,
+          "finish_reason": "length",
+          "output_sha256": "db1c40b4dc9c821427dc5e75153110b50c054715325b4e6892faabe2517bebae"
+        }
+      ]
+    },
+    {
+      "concurrency": 1,
+      "trial": 2,
+      "wall_s": 18.91640241901041,
+      "total_tokens": 512,
+      "aggregate_token_tps": 27.066457387555655,
+      "mean_ttft_s": 0.17325344300479628,
+      "streams": [
+        {
+          "request": 0,
+          "prompt_tokens": 35,
+          "completion_tokens": 512,
+          "chunks": 510,
+          "ttft_s": 0.17325344300479628,
+          "decode_s": 18.7423527490173,
+          "elapsed_s": 18.915662608022103,
+          "token_tps": 27.317808327284055,
+          "chunk_tps": 27.2110981385056,
+          "finish_reason": "length",
+          "output_sha256": "23dc7cc5184cf5b4c8c1afc7da117d1d285e46065ea201c68e63186e0ae7431c"
+        }
+      ]
+    },
+    {
+      "concurrency": 1,
+      "trial": 3,
+      "wall_s": 18.95710322301602,
+      "total_tokens": 512,
+      "aggregate_token_tps": 27.008345841487817,
+      "mean_ttft_s": 0.17659515398554504,
+      "streams": [
+        {
+          "request": 0,
+          "prompt_tokens": 35,
+          "completion_tokens": 512,
+          "chunks": 506,
+          "ttft_s": 0.17659515398554504,
+          "decode_s": 18.779927330004284,
+          "elapsed_s": 18.956606644991552,
+          "token_tps": 27.263151289301778,
+          "chunk_tps": 26.94366123513027,
+          "finish_reason": "length",
+          "output_sha256": "de2cf2b25792d9963f01b61a4f86148953dff9235df0d38c7e05443643cc1f97"
+        }
+      ]
+    }
+  ]
+}

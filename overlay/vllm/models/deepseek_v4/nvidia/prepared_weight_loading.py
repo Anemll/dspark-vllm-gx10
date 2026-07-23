@@ -81,7 +81,7 @@ PINNED_PREPARATION_SOURCE_SHA256 = {
 # Keep its runtime pin separate and validate it immediately before bypassing
 # the ordinary B12X post-load transform.
 PINNED_B12X_EXPERTS_SHA256 = (
-    "e87c3a6e3a40703a580ecc0b2771d8fd075c04c6da9acfba445fecf3ffd31407"
+    "5cc787c52510e614be63b62d2e49f9b8e0c6fc4494a0e8578e7d72250e3f9058"
 )
 PINNED_DUAL_DECODE_EXPERTS_SHA256 = (
     "7d3beacd52ae30978be04ed21a0a8cafdcc740f63026f60d4f573f76e9d6dcb8"

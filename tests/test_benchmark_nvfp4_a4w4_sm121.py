@@ -57,6 +57,36 @@ def _write_checkpoint_contract(path: pathlib.Path, *, omit: str | None = None) -
 
 
 class Nvfp4A4W4Sm121HarnessTests(unittest.TestCase):
+    def test_cuda_measurement_reports_host_submit_overhead(self) -> None:
+        class Event:
+            def record(self) -> None:
+                pass
+
+            def elapsed_time(self, other: object) -> float:
+                return 1.0
+
+        fake_torch = SimpleNamespace(
+            cuda=SimpleNamespace(
+                Event=lambda **_: Event(),
+                synchronize=lambda: None,
+            )
+        )
+        calls: list[None] = []
+
+        stats = bench.measure_cuda_events(
+            fake_torch,
+            lambda: calls.append(None),
+            warmup=0,
+            iters=2,
+            repeats=1,
+            flush_l2=None,
+        )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(stats["median_ms"], 1.0)
+        self.assertGreaterEqual(stats["host_submit_us"]["median"], 0.0)
+        self.assertEqual(len(stats["host_submit_us"]["repeat_medians"]), 1)
+
     def test_checkpoint_load_predictor_enforces_five_minute_reserve(self) -> None:
         passing = bench.checkpoint_load_prediction(4.0)
         boundary = bench.checkpoint_load_prediction(

@@ -6,6 +6,7 @@ from __future__ import annotations
 import ast
 import importlib.util
 import math
+import os
 import sys
 import unittest
 from enum import Enum
@@ -423,6 +424,60 @@ class B12xClampAdapterTest(unittest.TestCase):
         self.assertIs(first, second)
         self.assertEqual(len(constructed), 1)
         self.assertEqual(len(device_queries), 1)
+
+    def test_micro_max_active_clusters_env_patches_only_micro_ladder(self) -> None:
+        experts = self.module.FlashInferB12xExperts(
+            _moe_config(limit=None),
+            _quant_config(limit=10.0),
+        )
+        constructed = []
+
+        class _Wrapper:
+            def __init__(self, **kwargs) -> None:
+                constructed.append(kwargs)
+
+        flashinfer = _package("flashinfer")
+        fused_moe = _package("flashinfer.fused_moe")
+        cute_dsl = _package("flashinfer.fused_moe.cute_dsl")
+        blackwell = _package(
+            "flashinfer.fused_moe.cute_dsl.blackwell_sm12x"
+        )
+        dispatch = ModuleType(
+            "flashinfer.fused_moe.cute_dsl.blackwell_sm12x.moe_dispatch"
+        )
+        dispatch._MICRO_MAC_LADDER = ((20, 48),)
+        dispatch._STATIC_MAC_LADDER = ((24, 48),)
+        fused_moe.B12xMoEWrapper = _Wrapper
+        blackwell.moe_dispatch = dispatch
+        modules = {
+            "flashinfer": flashinfer,
+            "flashinfer.fused_moe": fused_moe,
+            "flashinfer.fused_moe.cute_dsl": cute_dsl,
+            "flashinfer.fused_moe.cute_dsl.blackwell_sm12x": blackwell,
+            dispatch.__name__: dispatch,
+        }
+        with (
+            patch.dict(sys.modules, modules),
+            patch.dict(
+                os.environ,
+                {"DSPARK_B12X_MICRO_MAX_ACTIVE_CLUSTERS": "40"},
+                clear=False,
+            ),
+        ):
+            experts._ensure_wrapper(4)
+
+        self.assertEqual(len(constructed), 1)
+        self.assertEqual(dispatch._MICRO_MAC_LADDER, ((1 << 30, 40),))
+        self.assertEqual(dispatch._STATIC_MAC_LADDER, ((24, 48),))
+
+    def test_micro_max_active_clusters_env_rejects_invalid_value(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"DSPARK_B12X_MICRO_MAX_ACTIVE_CLUSTERS": "all"},
+            clear=False,
+        ):
+            with self.assertRaisesRegex(ValueError, "positive integer"):
+                self.module._configure_b12x_micro_max_active_clusters()
 
     def test_shared_wrapper_rejects_concurrent_ubatching(self) -> None:
         config = _moe_config(limit=None)

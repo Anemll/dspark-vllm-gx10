@@ -3072,6 +3072,7 @@ def measure_cuda_events(
     flush_l2: Callable[[], None] | None,
 ) -> dict[str, Any]:
     runs: list[list[float]] = []
+    host_submit_runs_us: list[list[float]] = []
     for _ in range(repeats):
         for _ in range(warmup):
             if flush_l2 is not None:
@@ -3080,15 +3081,32 @@ def measure_cuda_events(
         torch.cuda.synchronize()
         starts = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
         ends = [torch.cuda.Event(enable_timing=True) for _ in range(iters)]
+        host_submit_us: list[float] = []
         for start, end in zip(starts, ends, strict=True):
             if flush_l2 is not None:
                 flush_l2()
             start.record()
+            submit_started = time.perf_counter()
             fn()
+            host_submit_us.append((time.perf_counter() - submit_started) * 1.0e6)
             end.record()
         torch.cuda.synchronize()
         runs.append([start.elapsed_time(end) for start, end in zip(starts, ends, strict=True)])
-    return summarize_timing_runs(runs)
+        host_submit_runs_us.append(host_submit_us)
+    stats = summarize_timing_runs(runs)
+    host_stats = summarize_timing_runs(host_submit_runs_us)
+    # ``summarize_timing_runs`` is unit-agnostic. These values are already
+    # microseconds and deliberately exclude CUDA completion. They expose
+    # Python/C++ dispatch and allocator overhead that CUDA events cannot see,
+    # which is material when 43 routed layers launch the same MoE op.
+    stats["host_submit_us"] = {
+        "median": host_stats["median_ms"],
+        "p95": host_stats["p95_ms"],
+        "minimum": host_stats["min_ms"],
+        "maximum": host_stats["max_ms"],
+        "repeat_medians": host_stats["repeat_median_ms"],
+    }
+    return stats
 
 
 def add_derived_performance(
