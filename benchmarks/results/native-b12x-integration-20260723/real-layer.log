@@ -1,0 +1,6 @@
+INFO 07-23 21:42:48 [nvfp4_dual_decode_moe.py:642] NVFP4_NATIVE_B12X event=prepared scale_bytes=100665344 duplicate_weight_bytes=0 weight_layout=packed
+M=  1 native=0.199232 ms cutlass=0.221984 ms
+M= 24 native=4.168240 ms cutlass=4.539288 ms
+M=512 native=7.909712 ms cutlass=8.593496 ms
+Wrote /artifacts/real-layer.json
+PASSED
