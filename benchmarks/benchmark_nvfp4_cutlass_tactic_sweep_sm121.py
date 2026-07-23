@@ -146,6 +146,46 @@ def build_matrix(
     return tuple(candidates)
 
 
+def collect_tactic_inventory(native: Any) -> dict[str, Any]:
+    """Enumerate every native tactic and its device occupancy.
+
+    The native module exposes GEMM2 ids in the combined profile namespace, so
+    those ids begin at ``gemm1_tactic_count``.  Zero-occupancy profiles cannot
+    launch on the current device and are excluded from an exhaustive sweep.
+    """
+
+    gemm1_count = int(native.get_gemm1_tactic_count())
+    gemm2_count = int(native.get_gemm2_tactic_count())
+    rows: dict[str, list[dict[str, int]]] = {GEMM1_OP: [], GEMM2_OP: []}
+    for tactic in range(gemm1_count):
+        rows[GEMM1_OP].append(
+            {
+                "tactic": tactic,
+                "occupancy": int(native.get_tactic_occupancy(tactic)),
+            }
+        )
+    for tactic in range(gemm1_count, gemm1_count + gemm2_count):
+        rows[GEMM2_OP].append(
+            {
+                "tactic": tactic,
+                "occupancy": int(native.get_tactic_occupancy(tactic)),
+            }
+        )
+    return {
+        "gemm1_tactic_count": gemm1_count,
+        "gemm2_tactic_count": gemm2_count,
+        "profiles": rows,
+    }
+
+
+def occupancy_valid_tactics(inventory: dict[str, Any], op: str) -> tuple[int, ...]:
+    return tuple(
+        int(row["tactic"])
+        for row in inventory["profiles"][op]
+        if int(row["occupancy"]) > 0
+    )
+
+
 def _load_prepared_cutlass_weights(
     torch: Any,
     layer_file: Path,
@@ -215,7 +255,11 @@ def _load_prepared_cutlass_weights(
 
 @contextlib.contextmanager
 def force_tactics_and_pdl(
-    *, gemm1_tactic: int, gemm2_tactic: int, enable_pdl: bool
+    *,
+    gemm1_tactic: int,
+    gemm2_tactic: int,
+    enable_pdl: bool,
+    inventory_out: list[dict[str, Any]] | None = None,
 ) -> Iterator[list[dict[str, Any]]]:
     """Override tactic selection in-process; never mutate an autotune cache."""
 
@@ -243,6 +287,8 @@ def force_tactics_and_pdl(
             raise RuntimeError(f"forced {custom_op} expected exactly one runner")
         runner = runners[0]
         native = runner.fused_moe_runner
+        if inventory_out is not None and not inventory_out:
+            inventory_out.append(collect_tactic_inventory(native))
         gemm1_count = int(native.get_gemm1_tactic_count())
         gemm2_count = int(native.get_gemm2_tactic_count())
         tactic = gemm1_tactic if custom_op == GEMM1_OP else gemm2_tactic
@@ -309,11 +355,13 @@ def _time_candidate(
     repeats: int,
     numeric_min_cosine: float,
     numeric_max_nrmse: float,
+    inventory_out: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], Any]:
     with force_tactics_and_pdl(
         gemm1_tactic=gemm1_tactic,
         gemm2_tactic=gemm2_tactic,
         enable_pdl=enable_pdl,
+        inventory_out=inventory_out,
     ) as trace:
         launch, _ = kernel_bench._make_flashinfer_cutlass_launch(
             torch, runner, weights, shape, x, topk_ids, topk_weights
@@ -436,6 +484,43 @@ def run(args: argparse.Namespace) -> int:
 
     results: list[dict[str, Any]] = []
     service_reference = None
+    tactic_inventory: list[dict[str, Any]] = []
+    if args.all_tactics:
+        # One authoritative service launch discovers the native profile ranges
+        # and occupancy.  Reuse its output as the numerical reference, then
+        # measure the full Cartesian product of launchable profiles.
+        service_result, service_reference = _time_candidate(
+            torch,
+            runner=runner,
+            weights=weights,
+            shape=shape,
+            x=x,
+            topk_ids=topk_ids,
+            topk_weights=topk_weights,
+            gemm1_tactic=service_pair[0],
+            gemm2_tactic=service_pair[1],
+            enable_pdl=service_pdl,
+            reference_output=None,
+            warmup=args.warmup,
+            iters=args.iters,
+            repeats=args.repeats,
+            numeric_min_cosine=args.numeric_min_cosine,
+            numeric_max_nrmse=args.numeric_max_nrmse,
+            inventory_out=tactic_inventory,
+        )
+        if len(tactic_inventory) != 1:
+            raise RuntimeError("native CUTLASS tactic inventory was not captured once")
+        gemm1_tactics = occupancy_valid_tactics(tactic_inventory[0], GEMM1_OP)
+        gemm2_tactics = occupancy_valid_tactics(tactic_inventory[0], GEMM2_OP)
+        matrix = build_matrix(
+            gemm1_tactics,
+            gemm2_tactics,
+            _pdl_values(args.pdl),
+            service_pair=service_pair,
+            service_pdl=service_pdl,
+        )
+        results.append(service_result)
+        matrix = matrix[1:]
     for gemm1_tactic, gemm2_tactic, enable_pdl in matrix:
         print(
             f"M=4 gemm1={gemm1_tactic} gemm2={gemm2_tactic} "
@@ -493,12 +578,14 @@ def run(args: argparse.Namespace) -> int:
             "repeats": args.repeats,
             "gemm1_tactics": list(args.gemm1_tactics),
             "gemm2_tactics": list(args.gemm2_tactics),
+            "all_tactics": args.all_tactics,
             "pdl_values": list(_pdl_values(args.pdl)),
             "service_pair": list(service_pair),
             "service_pdl": service_pdl,
             "minimum_material_speedup": args.minimum_material_speedup,
         },
         "cache_proof": cache,
+        "tactic_inventory": tactic_inventory[0] if tactic_inventory else None,
         "prepared_checkpoint_proof": prepared_proof,
         "backend_proof": backend_proof,
         "results": results,
@@ -543,6 +630,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--seed", type=int, default=4104)
     parser.add_argument("--gemm1-tactics", type=_positive_int_csv, default=(16, 18))
     parser.add_argument("--gemm2-tactics", type=_positive_int_csv, default=(58, 59))
+    parser.add_argument(
+        "--all-tactics",
+        action="store_true",
+        help="enumerate every occupancy-valid native GEMM1/GEMM2 pair",
+    )
     parser.add_argument("--pdl", choices=("true", "false", "both"), default="both")
     parser.add_argument("--service-gemm1-tactic", type=int, default=16)
     parser.add_argument("--service-gemm2-tactic", type=int, default=58)

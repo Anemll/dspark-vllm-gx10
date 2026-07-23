@@ -13,7 +13,9 @@ from benchmarks.benchmark_nvfp4_cutlass_tactic_sweep_sm121 import (
     _positive_int_csv,
     build_matrix,
     cache_tactics,
+    collect_tactic_inventory,
     inspect_cache,
+    occupancy_valid_tactics,
 )
 
 
@@ -52,6 +54,24 @@ class CutlassTacticSweepTests(unittest.TestCase):
         self.assertEqual(cache_tactics(inventory, GEMM2_OP), (58,))
         self.assertEqual(len(inventory["malformed_key_sha256"]), 1)
         self.assertEqual(inventory["total_config_entries"], 4)
+
+    def test_native_inventory_uses_combined_gemm2_ids_and_filters_occupancy(self) -> None:
+        class Native:
+            @staticmethod
+            def get_gemm1_tactic_count() -> int:
+                return 2
+
+            @staticmethod
+            def get_gemm2_tactic_count() -> int:
+                return 3
+
+            @staticmethod
+            def get_tactic_occupancy(tactic: int) -> int:
+                return {0: 1, 1: 0, 2: 2, 3: 0, 4: 1}[tactic]
+
+        inventory = collect_tactic_inventory(Native())
+        self.assertEqual(occupancy_valid_tactics(inventory, GEMM1_OP), (0,))
+        self.assertEqual(occupancy_valid_tactics(inventory, GEMM2_OP), (2, 4))
 
 
 if __name__ == "__main__":
