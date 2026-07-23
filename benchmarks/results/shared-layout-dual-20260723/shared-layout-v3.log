@@ -1,0 +1,7 @@
+INFO 07-23 21:10:43 [b12x_mxfp4_moe.py:467] Prewarmed B12X route-pack capacities (1, 2, 4, 8, 16, 32, 64) on cuda:0 (experts=256, topk=6)
+M= 1 shared=0.284896 native=0.199904 cutlass=0.218304 ms shared/native=+42.52% speedup/CUTLASS=0.7663x
+M= 4 shared=1.149136 native=0.707696 cutlass=0.786576 ms shared/native=+62.38% speedup/CUTLASS=0.6845x
+M=24 shared=7.384704 native=4.161632 cutlass=4.548800 ms shared/native=+77.45% speedup/CUTLASS=0.6160x
+M=48 shared=13.159632 native=7.386256 cutlass=8.050624 ms shared/native=+78.16% speedup/CUTLASS=0.6118x
+Wrote /artifacts/shared-layout-v3.json
+FAILED: 4
