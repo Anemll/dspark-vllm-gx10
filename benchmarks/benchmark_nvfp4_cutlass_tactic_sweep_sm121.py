@@ -504,6 +504,26 @@ def run(args: argparse.Namespace) -> int:
         seed=args.seed + 4,
         input_rms=1.0,
     )
+    route_source: dict[str, Any] = {
+        "kind": "synthetic",
+        "routing": args.routing,
+        "seed": args.seed + 4,
+    }
+    if args.route_ids_npy is not None:
+        topk_ids = kernel_bench.load_captured_route_ids(
+            torch,
+            args.route_ids_npy,
+            sample_index=args.route_sample_index,
+            m=4,
+            top_k=shape.top_k,
+        )
+        route_source = {
+            "kind": "captured",
+            "path": str(args.route_ids_npy),
+            "sha256": _sha256(args.route_ids_npy),
+            "sample_index": args.route_sample_index,
+            "ids": topk_ids.cpu().tolist(),
+        }
 
     results: list[dict[str, Any]] = []
     service_reference = None
@@ -618,6 +638,7 @@ def run(args: argparse.Namespace) -> int:
         },
         "settings": {
             "routing": args.routing,
+            "route_source": route_source,
             "seed": args.seed,
             "warmup": args.warmup,
             "iters": args.iters,
@@ -674,6 +695,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--tp-rank", type=int, default=0)
     parser.add_argument("--routing", choices=("balanced", "random", "hot"), default="balanced")
+    parser.add_argument(
+        "--route-ids-npy",
+        type=Path,
+        help=(
+            "Replace synthetic route IDs with one sample from an NPY array whose "
+            "last dimensions are [4, top_k]. Hidden states and route weights remain "
+            "the deterministic matched fixture."
+        ),
+    )
+    parser.add_argument("--route-sample-index", type=int, default=0)
     parser.add_argument("--seed", type=int, default=4104)
     parser.add_argument("--gemm1-tactics", type=_positive_int_csv, default=(16, 18))
     parser.add_argument("--gemm2-tactics", type=_positive_int_csv, default=(58, 59))
@@ -699,6 +730,10 @@ def validate_args(args: argparse.Namespace) -> None:
         raise FileNotFoundError(f"prepared layer does not exist: {args.layer_file}")
     if not args.autotune_cache.is_file():
         raise FileNotFoundError(f"autotune cache does not exist: {args.autotune_cache}")
+    if args.route_ids_npy is not None and not args.route_ids_npy.is_file():
+        raise FileNotFoundError(f"captured route file does not exist: {args.route_ids_npy}")
+    if args.route_sample_index < 0:
+        raise ValueError("route sample index must be non-negative")
     if args.warmup < 0 or args.iters <= 0 or args.repeats <= 0:
         raise ValueError("warmup must be non-negative; iters/repeats must be positive")
     if args.minimum_material_speedup < 1.0:

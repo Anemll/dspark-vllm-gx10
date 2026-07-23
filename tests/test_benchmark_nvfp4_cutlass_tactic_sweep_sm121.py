@@ -17,6 +17,8 @@ from benchmarks.benchmark_nvfp4_cutlass_tactic_sweep_sm121 import (
     inspect_cache,
     occupancy_valid_tactics,
     unsupported_tile_phase,
+    build_parser,
+    validate_args,
 )
 
 
@@ -93,6 +95,37 @@ class CutlassTacticSweepTests(unittest.TestCase):
         self.assertIsNone(
             unsupported_tile_phase(RuntimeError("Unsupported tile shape config without phase"))
         )
+
+    def test_captured_route_arguments_require_existing_file_and_nonnegative_index(self) -> None:
+        parser = build_parser()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            layer = root / "layer.safetensors"
+            cache = root / "autotune_configs.json"
+            routes = root / "routes.npy"
+            for path in (layer, cache, routes):
+                path.write_bytes(b"fixture")
+            args = parser.parse_args(
+                [
+                    "--layer-file",
+                    str(layer),
+                    "--autotune-cache",
+                    str(cache),
+                    "--output",
+                    str(root / "out.json"),
+                    "--route-ids-npy",
+                    str(routes),
+                    "--route-sample-index",
+                    "7",
+                ]
+            )
+            validate_args(args)
+            self.assertEqual(args.route_ids_npy, routes)
+            self.assertEqual(args.route_sample_index, 7)
+
+            args.route_sample_index = -1
+            with self.assertRaisesRegex(ValueError, "non-negative"):
+                validate_args(args)
 
 
 if __name__ == "__main__":
