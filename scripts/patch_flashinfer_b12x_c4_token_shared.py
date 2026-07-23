@@ -11,10 +11,11 @@ means 24 identical-token packs per layer although only four source rows exist.
 This source-pinned overlay preserves compact routing and the existing MMA work:
 
 * route CTAs write their normal compact `(expert, row)` mapping;
-* the first route of each token packs that token into a reserved tail workspace
-  slot; and
+* the first route of each token packs that token into its normal compact
+  `(expert, row)` destination; and
 * after the existing resident-grid barrier, every route CTA fans out the packed
-  bytes and scales into its compact destination before a second barrier.
+  bytes and scales from that first-route destination into the remaining compact
+  destinations before a second barrier.
 
 No host synchronization, allocation, routing policy, weight selection, or
 reduction arithmetic changes.  M=1 and M>4 remain byte-for-byte on the
@@ -167,12 +168,11 @@ MICRO_QUANT_REPLACEMENT = """\
                     packed_local_expert_id = Int32(0)
                     packed_row = Int32(0)
             elif cutlass.const_expr(self.per_token_shared_input):
-                # Tail slots cannot collide with compact local experts: at most
-                # M*top-k routes are active while `num_experts` is state_E.
+                # The first route writes the token's pack into its own normal
+                # compact destination. The post-pack barrier below makes that
+                # source visible before it is fanned out to the other routes.
                 token_route = pair_idx % num_topk
                 should_quantize = Int32(1) if token_route == Int32(0) else Int32(0)
-                packed_local_expert_id = num_experts - num_tokens + token_idx
-                packed_row = Int32(0)
 """
 MICRO_PACK_BARRIER_ANCHOR = """\
         self._resident_grid_barrier(
@@ -194,8 +194,9 @@ MICRO_PACK_BARRIER_REPLACEMENT = """\
 
         if cutlass.const_expr(self.per_token_shared_input):
             # Compact routing selected the destination row for every route in
-            # `token_map`. Copy the one tail-slot pack for this token into that
-            # destination; FC1 therefore retains the existing compact layout.
+            # `token_map`. Copy the first route's normal compact pack into each
+            # destination; this needs no reserved workspace and cannot collide
+            # with a routed expert while FC1 retains the accepted layout.
             pair_idx = Int32(bidz)
             while pair_idx < total_pairs:
                 token_idx = pair_idx // num_topk
@@ -209,12 +210,24 @@ MICRO_PACK_BARRIER_REPLACEMENT = """\
                         compact_row = scan_row
                     scan_row += Int32(1)
 
-                source_expert = num_experts - num_tokens + token_idx
+                source_expert = topk_ids[token_idx * num_topk].to(Int32)
+                source_row_count = row_counts[source_expert]
+                source_row = Int32(0)
+                source_scan_row = Int32(0)
+                while source_scan_row < source_row_count:
+                    source_mapped_token = token_map[
+                        source_expert * max_rows + source_scan_row
+                    ]
+                    if source_mapped_token == token_idx:
+                        source_row = source_scan_row
+                    source_scan_row += Int32(1)
+
                 word_idx = Int32(tidx)
                 words_per_row = output_bytes_per_row // Int32(8)
                 while word_idx < words_per_row:
                     source_offset = (
                         source_expert * max_rows * output_bytes_per_row
+                        + source_row * output_bytes_per_row
                         + word_idx * Int32(8)
                     )
                     dest_offset = (
@@ -230,6 +243,11 @@ MICRO_PACK_BARRIER_REPLACEMENT = """\
 
                 sf_idx = Int32(tidx)
                 while sf_idx < sf_blocks_per_row:
+                    source_m_tile_idx = source_row // Int32(32 * 4)
+                    source_outer_m_idx = source_row % Int32(32)
+                    source_inner_m_idx = (
+                        source_row % Int32(32 * 4)
+                    ) // Int32(32)
                     m_tile_idx = compact_row // Int32(32 * 4)
                     k_tile_idx = sf_idx // Int32(4)
                     outer_m_idx = compact_row % Int32(32)
@@ -245,7 +263,10 @@ MICRO_PACK_BARRIER_REPLACEMENT = """\
                     )
                     source_scale_offset = (
                         source_expert * expert_scale_stride
+                        + source_m_tile_idx * num_k_tiles * Int32(32 * 4 * 4)
                         + k_tile_idx * Int32(32 * 4 * 4)
+                        + source_outer_m_idx * Int32(4 * 4)
+                        + source_inner_m_idx * Int32(4)
                         + inner_k_idx
                     )
                     scale_storage[dest_scale_offset] = scale_storage[source_scale_offset]

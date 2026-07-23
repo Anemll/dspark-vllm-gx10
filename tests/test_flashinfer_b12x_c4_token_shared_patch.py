@@ -25,7 +25,7 @@ class FlashInferB12xC4TokenSharedPatchTest(unittest.TestCase):
         self.assertIn("per_token_shared_input,", patched)
         self.assertNotIn("pairwise_routes = num_tokens <= 4", patched)
 
-    def test_micro_uses_tail_slots_then_restores_compact_rows_before_fc1(self) -> None:
+    def test_micro_reuses_first_route_pack_without_reserved_slots(self) -> None:
         source = (
             token_shared_patch.MICRO_INIT_ARGS_ANCHOR
             + token_shared_patch.MICRO_INIT_ATTRS_ANCHOR
@@ -34,13 +34,22 @@ class FlashInferB12xC4TokenSharedPatchTest(unittest.TestCase):
         )
         patched = token_shared_patch.patch_micro_kernel_source(source)
         self.assertIn("self.per_token_shared_input = per_token_shared_input", patched)
-        self.assertIn("source_expert = num_experts - num_tokens + token_idx", patched)
+        self.assertIn(
+            "source_expert = topk_ids[token_idx * num_topk].to(Int32)", patched
+        )
+        self.assertIn("source_row_count = row_counts[source_expert]", patched)
+        self.assertIn(
+            "source_expert * max_rows * output_bytes_per_row\n"
+            "                        + source_row * output_bytes_per_row",
+            patched,
+        )
+        self.assertNotIn("num_experts - num_tokens", patched)
         self.assertIn("token_map[local_expert_id * max_rows + scan_row]", patched)
         self.assertIn("st_global_u64(", patched)
         self.assertIn("_ld_global_u64(", patched)
         self.assertIn("scale_storage[dest_scale_offset] = scale_storage[source_scale_offset]", patched)
         self.assertLess(
-            patched.index("source_expert = num_experts - num_tokens + token_idx"),
+            patched.index("source_expert = topk_ids[token_idx * num_topk].to(Int32)"),
             patched.index("gA = cute.local_tile"),
         )
 
