@@ -1,4 +1,4 @@
-7e0ac21ea457fa63bde884aa2cef8d1b9f525a935d4cd6b18821e0b60b1f82d9  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/README.md
+5de83f7d4d50af4b401c4dc11bc9f8871414d0ab250d6157554134bf70c1a448  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/README.md
 ecacf88975aac6034c9e41855fe2499d77d070f5f444575e01866c0131391895  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/decode-b12x-canonical-c4-recheck.json
 c035a2a68e69ffb25f74bc62b81815214f4b86ac07469a3621afcb67a1f89d93  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/decode-b12x-mac36-c4-warmed.json
 0154ac94ad06e9ae4d301579eef0ca94f9fe0e9ad0c2f1fe1dfbcc996130ef46  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/decode-b12x-mac40-c1-warmed.json
@@ -6,9 +6,16 @@ c035a2a68e69ffb25f74bc62b81815214f4b86ac07469a3621afcb67a1f89d93  benchmarks/res
 4529db9fdda0fe7e0387681217457de31370b637ec7ea40a7fd2afc99231afc3  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/decode-cutlass-canonical-c4-recheck.json
 88f9deff615b21eb9bc658d081522e9be2551effd04f2496dbdf6b3b68c32e71  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/decode-fp8-control-c1.json
 50511899659be1d58793d7d949aabc1fbc13b190d0c851c216defb12886dba65  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/decode-fp8-control-c4.json
+10bbdb1f499e2545e96e35675e757477bb77858c1de143e2ae30037ee99e9c7a  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/fp8-matched-profiler-rank0.txt
+f658820339c181eb26fd02107415db2be4aef0340002da65abdc40f82ce721de  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/fp8-matched-profiler-rank1.txt
+97ef1503eb7c8ecef2d89f5c2640609c97fbbcb003fc5368cb7496f368f3058e  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/fp8-profiler-rank0.txt
 941590ac23a042889ba0a15ed95d17b68fa0cfad1e7736b1845a296c65eafdfc  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/rank0-all-routes-mac36.json
 7bedf97dc4ad68b93d027d7d1d4171fffbc6ca78fb0dcd0fdc1e8ee2fccd01b0  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/rank0-all-routes-mac40.json
 eca706e1fdd60065248b3d55091e82a0d2d7b114792bac6b868ee91ee003af79  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/rank0-all-routes-mac44.json
 0dfb60cc0a437b39c3b6247a14b167495255e063be6a4b4858912903af726a53  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/rank0-all-routes.json
 29506fd1aa0e9183bc5a1cf8c8747fc4feec54568e6194425b2957aa1de30e0a  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/rank0-s22.json
 560c13c2eb426e9dc958c8bdd2ff9110069427cc155194c7894eddc54ebfdb06  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/rank1-s22.json
+66642225e1d6f149a758c5ce9e9803aa4a623694eabcacca9ced570938ee2265  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/w4a4-b12x-mac40-profiler-rank0.txt
+91a3fc0b7709aa29e33934db867d2a6423195ec5bda8544551e8aa141cd2cd40  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/w4a4-b12x-mac40-profiler-rank1.txt
+dbf2724fa495e08c1572ad093b839412c09320adb8231dd4dfb7d5a4438bdc28  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/w4a4-b12x-profiler-rank0.txt
+825b4bc09e3542a4a1247b2682a14a4846594e7db6d6f694232f2b4438bb11e1  benchmarks/results/w4a4-decode-port-20260722/full-serving-mac/w4a4-cutlass-profiler-rank0.txt

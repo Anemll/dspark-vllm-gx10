@@ -1,0 +1,107 @@
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                   execute_context_0(0)_generation_4(4)         0.00%       0.000us         0.00%       0.000us       0.000us       31.699s       392.89%       31.699s       1.668ms         19000  
+kernel_cutlass_kernel_b12xmoefusedw4a16kernelW4A16Fu...         0.00%       0.000us         0.00%       0.000us       0.000us        2.903s        35.98%        2.903s     519.289us          5590  
+                 execute_context_3(105)_generation_1(1)         0.00%       0.000us         0.00%       0.000us       0.000us     853.133ms        10.57%     853.133ms     170.627ms             5  
+                  execute_context_1(35)_generation_0(0)         0.00%       0.000us         0.00%       0.000us       0.000us     654.701ms         8.11%     654.701ms     130.940ms             5  
+void cutlass::Kernel2<cutlass_80_wmma_tensorop_s1616...         0.00%       0.000us         0.00%       0.000us       0.000us     609.196ms         7.55%     609.196ms      77.368us          7874  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 4u,...         0.00%       0.000us         0.00%       0.000us       0.000us     601.296ms         7.45%     601.296ms      55.054us         10922  
+                   execute_context_0(0)_generation_3(3)         0.00%       0.000us         0.00%       0.000us       0.000us     552.905ms         6.85%     552.905ms       1.819ms           304  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 4u,...         0.00%       0.000us         0.00%       0.000us       0.000us     510.857ms         6.33%     510.857ms      46.773us         10922  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 4u,...         0.00%       0.000us         0.00%       0.000us       0.000us     501.725ms         6.22%     501.725ms      91.874us          5461  
+void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_...         0.00%       0.000us         0.00%       0.000us       0.000us     446.767ms         5.54%     446.767ms      79.937us          5589  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 4u,...         0.00%       0.000us         0.00%       0.000us       0.000us     429.238ms         5.32%     429.238ms      78.601us          5461  
+ncclDevKernel_AllReduce_Sum_bf16_RING_LL(ncclDevKern...         0.00%       0.000us         0.00%       0.000us       0.000us     402.097ms         4.98%     402.097ms      35.552us         11310  
+                                               aten::mm         0.07%       9.206ms         0.10%      12.272ms      32.125us     324.825ms         4.03%     324.825ms     850.327us           382  
+void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_...         0.00%       0.000us         0.00%       0.000us       0.000us     265.239ms         3.29%     265.239ms      99.452us          2667  
+                   execute_context_0(0)_generation_1(1)         0.00%       0.000us         0.00%       0.000us       0.000us     205.195ms         2.54%     205.195ms       1.555ms           132  
+                               vllm::moe_forward_shared         0.59%      75.374ms         0.79%     101.647ms       1.182ms     198.953ms         2.47%     217.793ms       2.532ms            86  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 4u,...         0.00%       0.000us         0.00%       0.000us       0.000us     163.830ms         2.03%     163.830ms      61.428us          2667  
+                              mhc_fused_tilelang_kernel         0.00%       0.000us         0.00%       0.000us       0.000us     149.745ms         1.86%     149.745ms      13.763us         10880  
+void flashinfer::sparse_mla_sm120::sparse_mla_decode...         0.00%       0.000us         0.00%       0.000us       0.000us     128.031ms         1.59%     128.031ms      22.904us          5590  
+                  _pack_topk_routes_small_prefix_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      74.833ms         0.93%      74.833ms      13.596us          5504  
+void cublasLt::splitKreduce_kernel<32, 16, int, __nv...         0.00%       0.000us         0.00%       0.000us       0.000us      63.058ms         0.78%      63.058ms      11.547us          5461  
+                                       vllm::all_reduce         0.04%       4.968ms         0.06%       7.428ms      42.687us      59.368ms         0.74%      59.368ms     341.196us           174  
+             mhc_pre_big_fuse_with_norm_tilelang_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      56.492ms         0.70%      56.492ms       5.053us         11180  
+                            _save_partial_states_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      56.437ms         0.70%      56.437ms       7.002us          8060  
+void per_token_group_quant_8bit_packed_register_kern...         0.00%       0.000us         0.00%       0.000us       0.000us      53.785ms         0.67%      53.785ms       3.207us         16770  
+                          _pack_topk_routes_sort_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      46.696ms         0.58%      46.696ms       8.353us          5590  
+                                   vllm::fp8_gemm_nt_op         0.05%       6.939ms         0.08%      10.025ms      21.239us      44.813ms         0.56%      44.813ms      94.942us           472  
+kernel_cutlass_kernel_vllmmodelsdeepseek_v4nvidiaops...         0.00%       0.000us         0.00%       0.000us       0.000us      44.208ms         0.55%      44.208ms      16.193us          2730  
+void vllm::moe::topkGatingSoftplusSqrt<8, 256, 4, 16...         0.00%       0.000us         0.00%       0.000us       0.000us      41.752ms         0.52%      41.752ms       8.029us          5200  
+void at::native::unrolled_elementwise_kernel<at::nat...         0.00%       0.000us         0.00%       0.000us       0.000us      39.023ms         0.48%      39.023ms       6.822us          5720  
+void vllm::deepseek_v4_fused_ops::fusedDeepseekV4QNo...         0.00%       0.000us         0.00%       0.000us       0.000us      37.562ms         0.47%      37.562ms       6.719us          5590  
+       _fused_kv_compress_norm_rope_insert_indexer_attn         0.00%       0.000us         0.00%       0.000us       0.000us      33.504ms         0.42%      33.504ms      12.272us          2730  
+void per_token_group_quant_8bit_packed_register_kern...         0.00%       0.000us         0.00%       0.000us       0.000us      33.469ms         0.41%      33.469ms       2.406us         13910  
+kernel_cutlass_kernel_vllmmodelsdeepseek_v4nvidiaops...         0.00%       0.000us         0.00%       0.000us       0.000us      32.696ms         0.41%      32.696ms      12.576us          2600  
+void cublasLt::splitKreduce_kernel<32, 16, int, floa...         0.00%       0.000us         0.00%       0.000us       0.000us      23.116ms         0.29%      23.116ms       4.439us          5207  
+void flashinfer::sparse_mla_sm120::sparse_mla_decode...         0.00%       0.000us         0.00%       0.000us       0.000us      19.519ms         0.24%      19.519ms       3.492us          5590  
+                                     record_param_comms         0.13%      16.785ms         0.15%      19.412ms     149.323us      17.981ms         0.22%      17.981ms     138.316us           130  
+ncclDevKernel_AllGather_RING_LL(ncclDevKernelArgsSto...         0.00%       0.000us         0.00%       0.000us       0.000us      17.981ms         0.22%      17.981ms     138.316us           130  
+                                  nccl:_all_gather_base         0.00%       0.000us         0.00%       0.000us       0.000us      17.981ms         0.22%      17.981ms     138.316us           130  
+void vllm::act_and_mul_kernel<c10::BFloat16, __nv_bf...         0.00%       0.000us         0.00%       0.000us       0.000us      16.086ms         0.20%      16.086ms       2.878us          5590  
+kernel_cutlass_kernel_vllmmodelsdeepseek_v4nvidiaops...         0.00%       0.000us         0.00%       0.000us       0.000us      15.847ms         0.20%      15.847ms       6.095us          2600  
+                                  cudaStreamIsCapturing         0.01%       1.243ms         0.01%       1.243ms       0.224us      13.221ms         0.16%      13.221ms       2.386us          5541  
+                     _fused_inv_rope_fp8_quant_per_head         0.00%       0.000us         0.00%       0.000us       0.000us      12.858ms         0.16%      12.858ms       2.300us          5590  
+void deep_gemm::sm120_fp8_paged_mqa_logits<1u, 64u, ...         0.00%       0.000us         0.00%       0.000us       0.000us      12.240ms         0.15%      12.240ms       4.518us          2709  
+kernel_cutlass_kernel_vllmmodelsdeepseek_v4nvidiaops...         0.00%       0.000us         0.00%       0.000us       0.000us      11.610ms         0.14%      11.610ms       4.253us          2730  
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us      11.287ms         0.14%      11.287ms       2.019us          5590  
+                             _fused_q_kv_rmsnorm_kernel         0.00%       0.000us         0.00%       0.000us       0.000us      11.267ms         0.14%      11.267ms       2.016us          5590  
+                                            aten::copy_         0.11%      13.662ms         0.30%      38.231ms       8.072us      11.124ms         0.14%      11.124ms       2.349us          4736  
+           _compute_global_topk_indices_and_lens_kernel         0.00%       0.000us         0.00%       0.000us       0.000us       9.302ms         0.12%       9.302ms       3.333us          2791  
+kernel_cutlass_kernel_b12xmoefusedw4a16kernelW4A16To...         0.00%       0.000us         0.00%       0.000us       0.000us       8.962ms         0.11%       8.962ms       1.603us          5590  
+void vllm::persistent::persistent_topk_kernel<512, 4...         0.00%       0.000us         0.00%       0.000us       0.000us       8.418ms         0.10%       8.418ms       3.107us          2709  
+void deep_gemm::sm120_split_k_reduce_impl<cutlass::b...         0.00%       0.000us         0.00%       0.000us       0.000us       8.184ms         0.10%       8.184ms      47.579us           172  
+std::enable_if<!(false), void>::type internal::gemvx...         0.00%       0.000us         0.00%       0.000us       0.000us       8.122ms         0.10%       8.122ms     123.063us            66  
+                                          memcpy32_post         0.00%       0.000us         0.00%       0.000us       0.000us       6.796ms         0.08%       6.796ms       1.207us          5632  
+                         Memcpy HtoD (Pinned -> Device)         0.00%       0.000us         0.00%       0.000us       0.000us       5.558ms         0.07%       5.558ms       2.667us          2084  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 102...         0.00%       0.000us         0.00%       0.000us       0.000us       5.268ms         0.07%       5.268ms     122.505us            43  
+void at::native::vectorized_elementwise_kernel<4, at...         0.00%       0.000us         0.00%       0.000us       0.000us       5.254ms         0.07%       5.254ms       1.616us          3252  
+                                    cudaStreamWaitEvent         0.01%       1.091ms         0.01%       1.091ms       0.624us       5.204ms         0.06%       5.204ms       2.977us          1748  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 1u,...         0.00%       0.000us         0.00%       0.000us       0.000us       4.986ms         0.06%       4.986ms      57.981us            86  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 163...         0.00%       0.000us         0.00%       0.000us       0.000us       4.970ms         0.06%       4.970ms     115.583us            43  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 409...         0.00%       0.000us         0.00%       0.000us       0.000us       4.678ms         0.06%       4.678ms     108.793us            43  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 163...         0.00%       0.000us         0.00%       0.000us       0.000us       4.620ms         0.06%       4.620ms     107.444us            43  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 409...         0.00%       0.000us         0.00%       0.000us       0.000us       4.549ms         0.06%       4.549ms     105.783us            43  
+                               mhc_post_tilelang_kernel         0.00%       0.000us         0.00%       0.000us       0.000us       4.487ms         0.06%       4.487ms      14.957us           300  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 153...         0.00%       0.000us         0.00%       0.000us       0.000us       4.351ms         0.05%       4.351ms     101.191us            43  
+std::enable_if<!(false), void>::type internal::gemvx...         0.00%       0.000us         0.00%       0.000us       0.000us       4.125ms         0.05%       4.125ms     100.604us            41  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 1u,...         0.00%       0.000us         0.00%       0.000us       0.000us       4.041ms         0.05%       4.041ms      46.984us            86  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 102...         0.00%       0.000us         0.00%       0.000us       0.000us       3.948ms         0.05%       3.948ms      91.803us            43  
+                                       cuLaunchKernelEx         0.14%      17.793ms         0.14%      17.793ms       4.305us       3.924ms         0.05%       3.924ms       0.949us          4133  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 1u,...         0.00%       0.000us         0.00%       0.000us       0.000us       3.775ms         0.05%       3.775ms      87.802us            43  
+void deep_gemm::sm120_tf32_hc_prenorm_gemm_impl<24u,...         0.00%       0.000us         0.00%       0.000us       0.000us       3.711ms         0.05%       3.711ms      17.339us           214  
+                                               memset32         0.00%       0.000us         0.00%       0.000us       0.000us       3.594ms         0.04%       3.594ms       1.347us          2667  
+nvjet_sm121_tss_mma_128x64x64_4_32x64x64_tmaAB_bz_TN...         0.00%       0.000us         0.00%       0.000us       0.000us       3.518ms         0.04%       3.518ms     167.535us            21  
+                               cudaEventRecordWithFlags         0.02%       2.227ms         0.02%       2.228ms       1.104us       3.502ms         0.04%       3.502ms       1.735us          2018  
+nvjet_sm121_tss_mma_64x112x64_4_16x112x64_tmaAB_bz_T...         0.00%       0.000us         0.00%       0.000us       0.000us       3.433ms         0.04%       3.433ms     163.460us            21  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 1u,...         0.00%       0.000us         0.00%       0.000us       0.000us       3.343ms         0.04%       3.343ms      77.733us            43  
+void vllm::moe::topkGatingSoftplusSqrt<8, 256, 4, 16...         0.00%       0.000us         0.00%       0.000us       0.000us       3.339ms         0.04%       3.339ms       8.561us           390  
+                                       cudaLaunchKernel         0.21%      26.544ms         0.21%      26.544ms       6.227us       3.212ms         0.04%       3.212ms       0.754us          4263  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 153...         0.00%       0.000us         0.00%       0.000us       0.000us       2.947ms         0.04%       2.947ms      68.539us            43  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 204...         0.00%       0.000us         0.00%       0.000us       0.000us       2.938ms         0.04%       2.938ms      68.320us            43  
+                                        cudaEventRecord         0.01%     798.420us         0.01%     798.420us       0.800us       2.937ms         0.04%       2.937ms       2.943us           998  
+                   _C::per_token_group_fp8_quant_packed         0.01%       1.686ms         0.03%       3.787ms       8.024us       2.904ms         0.04%       2.904ms       6.153us           472  
+                                           aten::argmax         0.02%       2.961ms         0.03%       4.090ms      30.523us       2.830ms         0.04%       2.830ms      21.117us           134  
+void at::native::reduce_kernel<512, 1, at::native::R...         0.00%       0.000us         0.00%       0.000us       0.000us       2.830ms         0.04%       2.830ms      21.766us           130  
+nvjet_sm121_tst_mma_64x32x64_8_16x32x64_tmaAB_splitK...         0.00%       0.000us         0.00%       0.000us       0.000us       2.416ms         0.03%       2.416ms      28.087us            86  
+nvjet_sm121_tss_mma_64x64x64_6_32x16x64_tmaAB_bz_TNN...         0.00%       0.000us         0.00%       0.000us       0.000us       2.258ms         0.03%       2.258ms     112.903us            20  
+                                   cudaEventSynchronize        88.39%       11.303s        95.49%       12.210s      31.229ms       2.223ms         0.03%     330.890ms     846.265us           391  
+nvjet_sm121_tss_mma_32x32x64_12_16x32x64_tmaAB_bz_TN...         0.00%       0.000us         0.00%       0.000us       0.000us       2.206ms         0.03%       2.206ms     105.041us            21  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 204...         0.00%       0.000us         0.00%       0.000us       0.000us       2.144ms         0.03%       2.144ms      49.859us            43  
+void deep_gemm::sm120_tf32_hc_prenorm_gemm_impl<24u,...         0.00%       0.000us         0.00%       0.000us       0.000us       2.101ms         0.03%       2.101ms      24.431us            86  
+nvjet_sm121_tss_mma_64x32x64_8_16x32x64_tmaAB_bz_TNN...         0.00%       0.000us         0.00%       0.000us       0.000us       2.034ms         0.03%       2.034ms      96.855us            21  
+std::enable_if<!(false), void>::type internal::gemvx...         0.00%       0.000us         0.00%       0.000us       0.000us       1.687ms         0.02%       1.687ms      80.328us            21  
+                        _pack_topk_routes_prefix_kernel         0.00%       0.000us         0.00%       0.000us       0.000us       1.665ms         0.02%       1.665ms      19.360us            86  
+                           _compute_slot_mapping_kernel         0.00%       0.000us         0.00%       0.000us       0.000us       1.616ms         0.02%       1.616ms       2.485us           650  
+nvjet_sm121_tss_mma_32x64x64_8_32x32x64_tmaAB_bz_TNN...         0.00%       0.000us         0.00%       0.000us       0.000us       1.576ms         0.02%       1.576ms      78.776us            20  
+_C::fused_deepseek_v4_qnorm_rope_kv_rope_quant_inser...         0.01%     666.120us         0.01%       1.433ms      16.659us       1.527ms         0.02%       1.527ms      17.757us            86  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 819...         0.00%       0.000us         0.00%       0.000us       0.000us       1.495ms         0.02%       1.495ms      71.190us            21  
+void cublasLt::splitKreduce_kernel<32, 16, int, floa...         0.00%       0.000us         0.00%       0.000us       0.000us       1.493ms         0.02%       1.493ms      11.663us           128  
+void deep_gemm::sm120_fp8_fp4_gemm_1d1d_impl<0u, 409...         0.00%       0.000us         0.00%       0.000us       0.000us       1.476ms         0.02%       1.476ms      34.318us            43  
+                                            aten::fill_         0.03%       4.431ms         0.08%      10.364ms       3.552us       1.391ms         0.02%       1.391ms       0.477us          2918  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 12.787s
+Self CUDA time total: 8.068s
+

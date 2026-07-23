@@ -43,18 +43,39 @@ sample 22 was 1.0364x on TP rank 0 and 1.0414x on TP rank 1. The complete
 distribution is the correct projection and explains why the full-service gain
 is only about one percent.
 
+## Matched full-serving attribution
+
+The profiler control uses the same canonical C4/128-token request and separates
+the fused expert kernel from routing and NCCL.
+
+| Component | W4A4 MAC40 | FP8 native B12X |
+|---|---:|---:|
+| Fused expert, rank 0 | 573.214 us | 519.289 us |
+| Fused expert, rank 1 | 572.494 us | 513.427 us |
+| Route packing/compaction | 1.8 us | 23.6 us |
+| NCCL all-reduce, rank 0 | 31.7 us | 35.6 us |
+| NCCL all-reduce, rank 1 | 32.4 us | 42.8 us |
+
+W4A4 is already better outside the fused expert.  A route-normalized replay
+then showed that the NVIDIA W4A4 checkpoint activates 0.508 more experts per
+layer than the FP8 checkpoint, costing 15.289 us/layer.  A separate 64 MiB L2
+eviction gate adds 45.774 us/layer to MAC40, reproducing the rotating-layer
+profiler penalty.  See `../cold-weight-stream/README.md`.
+
 ## What the result means
 
 - Reserving eight GB10 SMs reduces TP arrival/collective contention enough to
   turn B12X from a small service regression into a repeatable ~1% win over the
   current W4A4 CUTLASS path.
-- The remaining ~3.9% C4 gap to FP8 cannot be recovered by occupancy tuning.
-- Route imbalance, TP-rank weight slices, output copying, route compaction,
-  CUTLASS tactics, W4A16 fallback, and the existing direct/resident kernels
-  have all been ruled out by earlier gates.
+- About 0.657 ms per decode step of the remaining C4 gap is checkpoint-router
+  behavior rather than quantization: the W4A4 checkpoint selects more distinct
+  experts and gets less reuse.
+- The intrinsic residual is the cold layer-to-layer W4A4 weight stream.
+  TP-rank weight slices, output copying, route compaction, CUTLASS tactics,
+  W4A16 fallback, and activation-side gate/up fusion have been ruled out.
 - Closing the residual gap requires a materially better SM121 W4A4 expert
-  schedule or a fused whole-layer path whose gain survives the full CUDA graph;
-  more wrapper/MAC tuning is below the worthwhile threshold.
+  weight-stream schedule whose gain survives the full CUDA graph; more
+  wrapper/MAC tuning is below the worthwhile threshold.
 
 ## Immutable evidence
 
