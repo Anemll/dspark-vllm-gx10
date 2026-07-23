@@ -255,6 +255,7 @@ def _make_exact_b12x_runner(
     max_tokens: int,
     top_k: int,
     swiglu_limit: float,
+    w13_layout: str = "w31",
 ) -> tuple[Any, dict[str, Any]]:
     from vllm.model_executor.layers.fused_moe.experts import b12x_mxfp4_moe as b12x
 
@@ -264,7 +265,7 @@ def _make_exact_b12x_runner(
     unit = torch.ones(num_experts, dtype=torch.float32, device="cuda")
     prepared = b12x._prepare_b12x_fp4_moe_weights(
         source_format="fp4_e8m0_k32",
-        w13_layout="w31",
+        w13_layout=w13_layout,
         w1_fp4=tensors["w13"],
         w1_blockscale=tensors["w13_scale"],
         w1_global_scale=unit,
@@ -302,7 +303,7 @@ def _make_exact_b12x_runner(
         "activation_precision": "BF16",
         "weight_precision": "native MXFP4 E2M1 + E8M0/K32",
         "source_format": "fp4_e8m0_k32",
-        "w13_layout": "w31",
+        "w13_layout": w13_layout,
         "activation": "silu",
         "swiglu_limit": swiglu_limit,
         "num_experts": num_experts,
@@ -320,6 +321,7 @@ def _make_exact_b12x_runner(
             "intermediate_size": intermediate_size,
             "top_k": top_k,
             "swiglu_limit": swiglu_limit,
+            "w13_layout": w13_layout,
         },
         proof,
     )
@@ -345,7 +347,7 @@ def _make_launch(
         activation="silu",
         quant_mode="w4a16",
         source_format="fp4_e8m0_k32",
-        w13_layout="w31",
+        w13_layout=runner["w13_layout"],
         swiglu_limit=runner["swiglu_limit"],
     )
     scratch = torch.empty(
@@ -375,7 +377,7 @@ def _make_launch(
             quant_mode="w4a16",
             unit_scale_contract=True,
             source_format="fp4_e8m0_k32",
-            w13_layout="w31",
+            w13_layout=runner["w13_layout"],
             prepared_w4a16=runner["prepared_w4a16"],
             swiglu_limit=runner["swiglu_limit"],
             plan=plan,

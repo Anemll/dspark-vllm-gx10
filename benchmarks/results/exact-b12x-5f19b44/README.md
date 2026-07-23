@@ -28,21 +28,27 @@ The pre-registered decision shapes M=24 and M=48 pass the ±3% parity gate.
 They also remain within 0.34%, the tighter diagnostic expectation for
 identical representation and kernel dispatch.
 
-Relative to the previously banked W4A4 CUTLASS control from the same seeded
-one-layer shape gate, the converted exact B12X path is approximately:
+Relative to the banked W4A4 CUTLASS controls from the MAC-sweep/DeepGEMM
+control lineage, the converted exact B12X path is:
 
 - **+11.3%** at M=1 (`0.218800 / 0.196560`)
 - **+10.8%** at M=4 (`0.783480 / 0.706928`)
-- **+8.9%** at M=24 (`4.536512 / 4.164192`)
-- **+8.5%** at M=48 (`8.036736 / 7.405936`)
+- **+8.94%** at M=24 (`4.536504 / 4.164192`)
+- **+8.55%** at M=48 (`8.039328 / 7.405936`)
+
+The pre-registered component gate requires at least **+3%** at both DSpark
+verifier shapes. It therefore passes with **+5.94 percentage points** of
+margin at M=24 and **+5.55 points** at M=48. No additional hardware run is
+needed for this decision.
 
 ## Decision
 
 The earlier decode gap is not caused by the NVIDIA FP4 payload or trained
 weights. Once the prepared checkpoint is restored to native MXFP4 scale/layout
 and dispatched through production B12X W4A16, its expert-kernel latency matches
-the abliterated checkpoint. Proceed with serving integration that retains the
-existing W4A4 CUTLASS prefill path and selects native E8M0/K32 B12X W4A16 for
+the abliterated checkpoint and clears the project's component-speed gate over
+W4A4 CUTLASS. Proceed with serving integration that retains the existing W4A4
+CUTLASS prefill path and selects native E8M0/K32 B12X W4A16 for
 decode/verifier-sized batches.
 
 ## Provenance
