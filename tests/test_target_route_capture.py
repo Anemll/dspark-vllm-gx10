@@ -73,38 +73,41 @@ class TargetRouteCaptureTests(unittest.TestCase):
     def test_dedicated_image_bakes_exact_route_runner(self) -> None:
         dockerfile = DOCKERFILE_PATH.read_text()
         dockerignore = DOCKERIGNORE_PATH.read_text()
-        runner_path = ROOT / "overlay/vllm/v1/worker/gpu/model_runner.py"
         helper_path = (
             ROOT / "overlay/vllm/v1/worker/gpu/target_route_capture.py"
         )
-        runner_sha = hashlib.sha256(runner_path.read_bytes()).hexdigest()
+        patcher_path = ROOT / "scripts/patch_target_route_capture_v1.py"
         helper_sha = hashlib.sha256(helper_path.read_bytes()).hexdigest()
+        patcher_sha = hashlib.sha256(patcher_path.read_bytes()).hexdigest()
 
         self.assertIn(
-            "ARG BASE_V2_MODEL_RUNNER_SHA256="
-            "61befb32cdc06e1c58383f9481e805d3b86637c84736f79b904c04a474df34e4",
+            "ARG BASE_V1_MODEL_RUNNER_SHA256="
+            "6c92ded8468f44d6df863a617ce588f132fa6df7031feecc0cc421702a41610e",
             dockerfile,
         )
         self.assertIn(
-            f"ARG ROUTE_V2_MODEL_RUNNER_SHA256={runner_sha}", dockerfile
+            "ARG ROUTE_V1_MODEL_RUNNER_SHA256="
+            "6cdc8c6910ab58f17d1872ea31f00bd1acc1ae8a189f957807a1cb48294dccc1",
+            dockerfile,
         )
         self.assertIn(
             f"ARG TARGET_ROUTE_CAPTURE_SHA256={helper_sha}", dockerfile
         )
+        self.assertIn(f"ARG V1_PATCHER_SHA256={patcher_sha}", dockerfile)
         base_hash_index = dockerfile.index(
-            'echo "${BASE_V2_MODEL_RUNNER_SHA256}'
-        )
-        runner_copy_index = dockerfile.index(
-            "COPY overlay/vllm/v1/worker/gpu/model_runner.py"
+            'echo "${BASE_V1_MODEL_RUNNER_SHA256}'
         )
         helper_copy_index = dockerfile.index(
             "COPY overlay/vllm/v1/worker/gpu/target_route_capture.py"
         )
-        final_hash_index = dockerfile.index(
-            'echo "${ROUTE_V2_MODEL_RUNNER_SHA256}'
+        patcher_copy_index = dockerfile.index(
+            "COPY scripts/patch_target_route_capture_v1.py"
         )
-        self.assertLess(base_hash_index, runner_copy_index)
-        self.assertLess(runner_copy_index, helper_copy_index)
+        final_hash_index = dockerfile.index(
+            'echo "${ROUTE_V1_MODEL_RUNNER_SHA256}'
+        )
+        self.assertLess(base_hash_index, helper_copy_index)
+        self.assertLess(helper_copy_index, patcher_copy_index)
         self.assertLess(helper_copy_index, final_hash_index)
         pycompile_index = dockerfile.index("python3 -m py_compile")
         self.assertIn(
@@ -112,12 +115,10 @@ class TargetRouteCaptureTests(unittest.TestCase):
             dockerfile[pycompile_index:],
         )
         self.assertIn(
-            "!overlay/vllm/v1/worker/gpu/model_runner.py", dockerignore
-        )
-        self.assertIn(
             "!overlay/vllm/v1/worker/gpu/target_route_capture.py",
             dockerignore,
         )
+        self.assertIn("!scripts/patch_target_route_capture_v1.py", dockerignore)
 
     def test_runner_keeps_helper_imports_out_of_module_scope(self) -> None:
         runner_path = ROOT / "overlay/vllm/v1/worker/gpu/model_runner.py"
@@ -381,6 +382,38 @@ class TargetRouteCaptureTests(unittest.TestCase):
                 ["active_expert_histogram"],
                 {"1": 0, "2": 0, "3": 0, "4": 258},
             )
+
+    def test_v1_eligibility_requires_exact_target_only_c4_shape(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            collector = capture.TargetRouteCapture(
+                capture.TargetRouteCaptureConfig(
+                    output_dir=Path(directory), steps=1, warmup_steps=0
+                ),
+                device=torch.device("cpu"),
+                rank=0,
+                world_size=2,
+                layer_names=[
+                    f"model.layers.{layer}.ffn.experts"
+                    for layer in capture.EXPECTED_LAYERS
+                ],
+            )
+            exact = dict(
+                num_reqs=4,
+                num_tokens=4,
+                num_scheduled_tokens=np.ones(4, dtype=np.int32),
+                use_spec_decode=False,
+            )
+            self.assertTrue(collector.begin_v1_step(**exact))
+            collector._step_active = False
+            for key, value in (
+                ("num_reqs", 3),
+                ("num_tokens", 8),
+                ("num_scheduled_tokens", np.array([1, 1, 1, 2])),
+                ("use_spec_decode", True),
+            ):
+                broken = dict(exact)
+                broken[key] = value
+                self.assertFalse(collector.begin_v1_step(**broken), key)
 
 
 if __name__ == "__main__":

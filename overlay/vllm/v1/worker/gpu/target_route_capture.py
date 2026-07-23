@@ -320,6 +320,35 @@ class TargetRouteCapture:
         self._step_active = True
         return True
 
+    def begin_v1_step(
+        self,
+        *,
+        num_reqs: int,
+        num_tokens: int,
+        num_scheduled_tokens: np.ndarray,
+        use_spec_decode: bool,
+    ) -> bool:
+        """Arm one real V1 target-only C=4 single-token decode step."""
+
+        eligible = (
+            not self._finalized
+            and num_reqs == EXPECTED_CONCURRENCY
+            and num_tokens == EXPECTED_CONCURRENCY
+            and not use_spec_decode
+            and num_scheduled_tokens.shape == (EXPECTED_CONCURRENCY,)
+            and bool(np.all(num_scheduled_tokens == 1))
+        )
+        if not eligible:
+            return False
+        if self._step_active:
+            raise RuntimeError("target route capture step re-entered")
+        self._eligible_steps += 1
+        if self._eligible_steps <= self.config.warmup_steps:
+            return False
+        self._current.fill_(-1)
+        self._step_active = True
+        return True
+
     def end_step(self) -> Path | None:
         if not self._step_active:
             return None

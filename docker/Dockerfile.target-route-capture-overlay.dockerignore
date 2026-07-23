@@ -4,5 +4,6 @@
 !overlay/vllm/v1/
 !overlay/vllm/v1/worker/
 !overlay/vllm/v1/worker/gpu/
-!overlay/vllm/v1/worker/gpu/model_runner.py
 !overlay/vllm/v1/worker/gpu/target_route_capture.py
+!scripts/
+!scripts/patch_target_route_capture_v1.py

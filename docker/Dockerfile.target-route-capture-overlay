@@ -3,25 +3,28 @@ ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 ARG SOURCE_REVISION=unknown
-ARG BASE_V2_MODEL_RUNNER_SHA256=61befb32cdc06e1c58383f9481e805d3b86637c84736f79b904c04a474df34e4
-ARG ROUTE_V2_MODEL_RUNNER_SHA256=66e484fc86ed0230fcd5e2b49040b0c388e99c6725ae5d93976cb421f0cd8b1a
-ARG TARGET_ROUTE_CAPTURE_SHA256=12bce7402c3160af8b0116335e174e14cb7217abd4ade8b7b24e4cd8a770b1aa
+ARG BASE_V1_MODEL_RUNNER_SHA256=6c92ded8468f44d6df863a617ce588f132fa6df7031feecc0cc421702a41610e
+ARG ROUTE_V1_MODEL_RUNNER_SHA256=6cdc8c6910ab58f17d1872ea31f00bd1acc1ae8a189f957807a1cb48294dccc1
+ARG TARGET_ROUTE_CAPTURE_SHA256=d3c26b3846c7383a04be6c0ee9f3894cd96f180b8a642d59af4efef4c39c2c5b
+ARG V1_PATCHER_SHA256=61efe409888d63b6d984996880bf4e94c70f0da30e8c6e632d36c7f4f3b2a816
 
-# This diagnostic image intentionally starts from the accepted W4A4 dual-
-# dispatch service image. Refuse a different runner instead of applying the
-# overlay to an unknown serving path.
-RUN echo "${BASE_V2_MODEL_RUNNER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py" | sha256sum -c -
+# Target-only DeepSeek-V4 selects the V1 runner. Refuse a different serving
+# path instead of silently patching the unused DSpark-only V2 runner.
+RUN echo "${BASE_V1_MODEL_RUNNER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py" | sha256sum -c -
 
-COPY overlay/vllm/v1/worker/gpu/model_runner.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py
 COPY overlay/vllm/v1/worker/gpu/target_route_capture.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/target_route_capture.py
+COPY scripts/patch_target_route_capture_v1.py /tmp/patch_target_route_capture_v1.py
 
-RUN echo "${ROUTE_V2_MODEL_RUNNER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py" | sha256sum -c - && \
+RUN echo "${V1_PATCHER_SHA256}  /tmp/patch_target_route_capture_v1.py" | sha256sum -c - && \
     echo "${TARGET_ROUTE_CAPTURE_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/target_route_capture.py" | sha256sum -c - && \
+    python3 /tmp/patch_target_route_capture_v1.py \
+      --target /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py && \
+    echo "${ROUTE_V1_MODEL_RUNNER_SHA256}  /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py" | sha256sum -c - && \
     python3 -m py_compile \
-      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/model_runner.py \
+      /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu_model_runner.py \
       /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/target_route_capture.py
 
 LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
 LABEL org.opencontainers.image.dspark-target-route-capture="target-only-c4-v1"
-LABEL org.opencontainers.image.dspark-target-route-model-runner-sha256="${ROUTE_V2_MODEL_RUNNER_SHA256}"
+LABEL org.opencontainers.image.dspark-target-route-model-runner-sha256="${ROUTE_V1_MODEL_RUNNER_SHA256}"
 LABEL org.opencontainers.image.dspark-target-route-helper-sha256="${TARGET_ROUTE_CAPTURE_SHA256}"
