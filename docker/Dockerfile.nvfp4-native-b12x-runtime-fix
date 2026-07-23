@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG BASE_IMAGE_ID
+ARG SOURCE_REVISION
+
+RUN python3 -c 'import re, sys; assert re.fullmatch(r"[0-9a-f]{40}", sys.argv[1]); assert sys.argv[2] == "sha256:a0beefab75524ab9a386f541a4015cdab15f2245e034b7b76df60da2371a4a2f"' \
+      "${SOURCE_REVISION}" "${BASE_IMAGE_ID}"
+
+COPY overlay/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py
+
+RUN python3 -m py_compile \
+      /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.base.digest="${BASE_IMAGE_ID}" \
+      org.opencontainers.image.nvfp4-native-b12x="packed-w4a16-all-phase-v2"

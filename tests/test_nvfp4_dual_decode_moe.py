@@ -241,6 +241,18 @@ class Nvfp4DualDecodeTests(unittest.TestCase):
         )
         self.assertTrue(callable(method.process_weights_after_loading))
 
+    def test_runtime_validator_keeps_selected_native_class_identity(self) -> None:
+        source = PREPARED.read_text()
+        self.assertIn(
+            'in (\n        "NvFp4CutlassW4A16DualExperts",\n'
+            '        "NvFp4NativeB12xExperts",',
+            source,
+        )
+        self.assertIn(
+            "expert_contract = (\n            experts_cls.__name__,",
+            source,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

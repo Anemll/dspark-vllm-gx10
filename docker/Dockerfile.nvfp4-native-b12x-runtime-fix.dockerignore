@@ -1,0 +1,7 @@
+**
+!overlay/
+!overlay/vllm/
+!overlay/vllm/models/
+!overlay/vllm/models/deepseek_v4/
+!overlay/vllm/models/deepseek_v4/nvidia/
+!overlay/vllm/models/deepseek_v4/nvidia/prepared_weight_loading.py

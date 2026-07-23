@@ -1279,7 +1279,7 @@ def _validate_runtime_transform_sources(routed_layer: Any) -> None:
         "NvFp4NativeB12xExperts",
     ):
         expert_contract = (
-            "NvFp4CutlassW4A16DualExperts",
+            experts_cls.__name__,
             "vllm.model_executor.layers.fused_moe.experts.nvfp4_dual_decode_moe",
             PINNED_DUAL_DECODE_EXPERTS_SHA256,
         )
