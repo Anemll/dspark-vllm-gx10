@@ -1,0 +1,6 @@
+INFO 07-23 21:21:21 [b12x_mxfp4_moe.py:467] Prewarmed B12X route-pack capacities (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048) on cuda:0 (experts=256, topk=6)
+M= 512 native=7.880344 ms cutlass=8.642176 ms delta=-8.82%
+M=1024 native=8.363048 ms cutlass=9.233904 ms delta=-9.43%
+M=2048 native=9.542912 ms cutlass=10.272320 ms delta=-7.10%
+Wrote /artifacts/native-prefill.json
+PASSED
