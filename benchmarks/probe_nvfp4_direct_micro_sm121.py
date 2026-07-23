@@ -245,6 +245,9 @@ def _compile_direct_runner(
     x: Any,
     topk_ids: Any,
     topk_weights: Any,
+    *,
+    expected_scale_format: str = "e4m3_k16",
+    max_active_ctas: int | None = None,
 ) -> DirectRunner:
     import cutlass
     import cutlass.cute as cute
@@ -274,6 +277,7 @@ def _compile_direct_runner(
         shape.intermediate_size_per_rank,
         shape.top_k,
         shape.num_experts,
+        max_active_ctas=max_active_ctas,
         device=x.device,
     )
     if (
@@ -283,7 +287,7 @@ def _compile_direct_runner(
         or kernel.w13_layout != W13_LAYOUT
         or kernel.w13_gate_first
         or kernel.w4a16_mode
-        or kernel.scale_format != "e4m3_k16"
+        or kernel.scale_format != expected_scale_format
     ):
         raise RuntimeError("compiled direct-kernel DeepSeek semantics drifted")
 

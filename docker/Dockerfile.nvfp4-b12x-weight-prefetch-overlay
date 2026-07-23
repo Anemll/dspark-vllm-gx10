@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_REVISION=unknown
+
+COPY scripts/patch_flashinfer_b12x_weight_prefetch.py \
+  /usr/local/bin/dspark-patch-flashinfer-b12x-weight-prefetch
+RUN python3 /usr/local/bin/dspark-patch-flashinfer-b12x-weight-prefetch
+RUN python3 -m py_compile \
+      /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_micro_kernel.py
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.nvfp4-b12x-weight-prefetch="rolling-l2-v1"

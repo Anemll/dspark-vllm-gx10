@@ -1,0 +1,4 @@
+**
+!scripts/
+scripts/*
+!scripts/patch_flashinfer_b12x_weight_prefetch.py

@@ -234,20 +234,26 @@ The standard W4A4 arm used three C=1 trials and five fully warmed C=4 trials;
 the FP8 control used three trials.  The experimental dual arm is included to
 show the rejected W4A16 optimization:
 
-| Target-only concurrency | FP8/B12X, no draft | W4A4/CUTLASS, no draft | Experimental W4A16 dual | W4A4/CUTLASS vs FP8 | W4A16 vs CUTLASS |
-|---:|---:|---:|---:|---:|---:|
-| 1 | **27.40 (27.37) tok/s** | 27.19 (27.12) tok/s | 27.25 (27.21) tok/s | -0.8% / -0.9% | +0.2% / +0.4% |
-| 4 | **77.49 (76.85) tok/s** | 74.11 (73.66) tok/s | 70.04 (69.83) tok/s | -4.4% / -4.2% | **-5.5% / -5.2%** |
+| Target-only concurrency | FP8/B12X, no draft | W4A4/CUTLASS, no draft | W4A4/B12X MAC40 | Experimental W4A16 dual |
+|---:|---:|---:|---:|---:|
+| 1 | **27.40 (27.37) tok/s** | 27.19 (27.12) tok/s | 27.01 tok/s | 27.25 (27.21) tok/s |
+| 4 | **77.49 (76.85) tok/s** | 74.11 (73.66) tok/s | **74.08 (73.86) tok/s** | 70.04 (69.83) tok/s |
 
-Standard FlashInfer CUTLASS is the accepted W4A4 decode path.  The valid
-W4A16 service branch was 5.2% slower at C=4 by median and remains default-off;
-its balanced-route layer win did not survive the correlated routes of the
-canonical service workload.  The remaining W4A4-vs-FP8 deficit is already
-present with the target alone and is not primarily a DSpark acceptance
-difference.  Prefill still favors W4A4, as shown above.  The exact optimization
-gates and raw artifacts are documented in
+FlashInfer B12X with a 40-cluster microkernel cap is the accepted W4A4 target
+decode path. Target-only examples select it directly; W4A4+DSpark keeps global
+backend selection on `auto` so the MXFP4 drafts retain their compatible
+backend, while the prepared target is selected independently. B12X improves
+the fully warmed C4 median by 0.3% over the matched CUTLASS control while
+keeping prefill on its existing selector. The valid W4A16 service branch was
+5.2% slower at C=4 by
+median and remains default-off; its balanced-route layer win did not survive
+the correlated routes of the canonical service workload. The remaining
+W4A4-vs-FP8 deficit is already present with the target alone and is not
+primarily a DSpark acceptance difference. Prefill still favors W4A4, as shown
+above. The exact optimization gates and raw artifacts are documented in
 [decode-w4a4-kernel-optimization-646be4d.md](benchmarks/results/decode-w4a4-kernel-optimization-646be4d.md)
-and the [valid dual-decode service gate](benchmarks/results/w4a4-decode-port-20260722/service-dual-dispatch/README.md).
+the [valid dual-decode service gate](benchmarks/results/w4a4-decode-port-20260722/service-dual-dispatch/README.md),
+and the [final weight-stream gates](benchmarks/results/w4a4-decode-port-20260722/final-weight-stream-gates/README.md).
 
 Decode with speculation remains prompt- and acceptance-dependent. A same-prompt
 canonical check with **MTP=5 on both sides**, probabilistic draft sampling, and
