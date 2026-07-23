@@ -1,0 +1,14 @@
+Loading NVIDIA NVFP4 layer 0, TP rank 0/2 from /model...
+  loaded experts 32/256
+  loaded experts 64/256
+  loaded experts 96/256
+  loaded experts 128/256
+  loaded experts 160/256
+  loaded experts 192/256
+  loaded experts 224/256
+  loaded experts 256/256
+GPU=NVIDIA GB10 capability=(12, 1); K=4096, I/rank=1024, E=256, top-k=6
+Backends: flashinfer_cutlass=vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe.FlashInferExperts
+Activation match: W4A4 swigluoai_uninterleave(alpha=1, beta=0, limit=10); W4A16 silu(limit=10)
+M=    4 decode  flashinfer_cutlass   tactic=flashinfer-cutlass                                  eager=    514.3 us p95=    543.0 us graph=    511.2 us p95=    536.8 us
+Wrote /artifacts/active24-sample-13.json
