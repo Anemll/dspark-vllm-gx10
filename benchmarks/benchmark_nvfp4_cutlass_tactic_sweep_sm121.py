@@ -196,7 +196,11 @@ def unsupported_tile_phase(error: BaseException) -> str | None:
     """
 
     message = str(error)
-    if "Unsupported tile shape config" not in message:
+    native_unsupported = (
+        "Unsupported tile shape config" in message
+        or "Failed to initialize cutlass TMA WS grouped gemm" in message
+    )
+    if not native_unsupported:
         return None
     if "::gemm1(" in message:
         return GEMM1_OP

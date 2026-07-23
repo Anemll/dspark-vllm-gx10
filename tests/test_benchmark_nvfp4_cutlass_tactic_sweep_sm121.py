@@ -81,6 +81,14 @@ class CutlassTacticSweepTests(unittest.TestCase):
             ),
             GEMM2_OP,
         )
+        self.assertEqual(
+            unsupported_tile_phase(
+                RuntimeError(
+                    "Failed to initialize cutlass TMA WS grouped gemm in Foo::gemm1(x)"
+                )
+            ),
+            GEMM1_OP,
+        )
         self.assertIsNone(unsupported_tile_phase(RuntimeError("CUDA illegal access")))
         self.assertIsNone(
             unsupported_tile_phase(RuntimeError("Unsupported tile shape config without phase"))
