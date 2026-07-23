@@ -360,12 +360,12 @@ def run(args: argparse.Namespace) -> int:
     active = int(num_active.item())
     if not (1 <= active <= shape.num_experts):
         raise RuntimeError(f"invalid active expert count: {active}")
-    # SM120 swaps A/B for the TMA warp-specialized kernels.  The unfused
-    # low-latency D buffer is therefore [expert, hidden, token], even though
-    # the public logical shape is [expert, token, hidden].
+    # ``swap_ab`` selects a column-major D for the transposed GEMM problem;
+    # its physical storage remains the public row-major
+    # [expert, token, hidden] contract.
     expert_outputs = expanded.view(
-        shape.num_experts, shape.hidden_size, args.m
-    ).transpose(1, 2)
+        shape.num_experts, args.m, shape.hidden_size
+    )
     active_scores = scores[:active, :, None]
     masked_outputs = torch.where(
         active_scores != 0,
@@ -413,6 +413,12 @@ def run(args: argparse.Namespace) -> int:
             & (active_scores != 0)
         )
         .sum(dim=(0, 2))
+        .cpu()
+        .tolist(),
+        "active_output_nonzero_by_expert_token": (
+            expert_outputs[:active] != 0
+        )
+        .sum(dim=2)
         .cpu()
         .tolist(),
         "reconstructed_nonfinite_per_token": (~torch.isfinite(reconstructed))

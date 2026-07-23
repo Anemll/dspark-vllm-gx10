@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
-"""Restore the removed FlashInfer FP4 low-latency descriptor builder.
+"""Restore and repair FlashInfer's FP4 low-latency CUTLASS path.
 
 FlashInfer commit 20435b4 imported a newer TensorRT-LLM CUTLASS MoE runner and
 replaced the complete low-latency stride builder with an unconditional throw.
 The routing, workspace, GEMM1, and GEMM2 code paths remain present.  This
 source-pinned transform ports the deleted descriptor builder to the current
 ``swap_ab``/``fpX_block_scaling`` layout used by FlashInfer 0.6.15.
+
+The merged runner also retained the normal routed-row count
+(``tokens * top_k``) after building the low-latency expert-major map.  That
+map contains ``tokens * active_experts`` rows, so the smaller count caused the
+activation/FC2 preparation to initialize only the first few active experts.
+The repair uses the fully allocated ``tokens * experts_on_rank`` extent in
+low-latency mode; expert offsets still bound the real active prefix.
+
+Finally, the descriptor setup still pointed GEMM2 at ``fc2_result_`` even
+though that workspace is deliberately allocated with size zero in
+low-latency mode.  The subsequent GEMM2 call passes ``final_output`` as its
+output, but the precomputed TMA descriptor wins.  Point the descriptor at the
+same public output tensor so the kernel does not write into a zero-sized
+internal alias.
 """
 
 from __future__ import annotations
@@ -118,14 +132,14 @@ __global__ void computeStridesTmaWarpSpecializedLowLatencyKernel(
     layout_info1.ptr_act[expert] = in1;
     layout_info2.ptr_act[expert] =
         safe_inc_ptr(in2, num_tokens_before_expert * gemm2_k);
-    // Preserve the original low-latency packed-weight stride.  Both prepared
-    // expert matrices occupy the same packed span despite their logical GEMM
-    // shapes.
-    auto const packed_weight_stride = int64_t(gemm1_n) * gemm2_k;
+    // WeightType is the logical packed element type (FP4 here), so pointer
+    // arithmetic must use each GEMM's own logical N*K expert span.  The
+    // historical low-latency source used one shared stride, which aliases
+    // experts for DSv4's asymmetric W13 and W2 matrices.
     layout_info1.ptr_weight[expert] =
-        safe_inc_ptr(weights1, int64_t(local_expert) * packed_weight_stride);
+        safe_inc_ptr(weights1, int64_t(local_expert) * gemm1_n * gemm1_k);
     layout_info2.ptr_weight[expert] =
-        safe_inc_ptr(weights2, int64_t(local_expert) * packed_weight_stride);
+        safe_inc_ptr(weights2, int64_t(local_expert) * gemm2_n * gemm2_k);
     layout_info1.ptr_d[expert] =
         safe_inc_ptr(output1, num_tokens_before_expert * gemm1_n);
     layout_info2.ptr_d[expert] =
@@ -156,6 +170,29 @@ __global__ void computeStridesTmaWarpSpecializedKernel(
 
 THROW_BODY = """\
   TLLM_THROW("Min latency mode is no longer supported");
+"""
+
+EXPANDED_ROWS_BODY = """\
+  auto expanded_num_rows = num_rows * experts_per_token;
+"""
+
+REPAIRED_EXPANDED_ROWS_BODY = """\
+  // Low-latency routing stores one token row for every active expert rather
+  // than one row for every selected top-k slot.  The active count is produced
+  // on device, so use the allocated full expert-major extent here and let
+  // expert_first_token_offset_ bound the valid prefix.
+  auto expanded_num_rows =
+      num_rows * (min_latency_mode ? num_experts_per_node : experts_per_token);
+"""
+
+FC2_OUTPUT_BODY = """\
+        reinterpret_cast<UnfusedGemmOutputType*>(fc2_result_),
+        min_latency_params.num_active_experts_per_node, min_latency_params.active_expert_global_ids,
+"""
+
+REPAIRED_FC2_OUTPUT_BODY = """\
+        reinterpret_cast<UnfusedGemmOutputType*>(final_output),
+        min_latency_params.num_active_experts_per_node, min_latency_params.active_expert_global_ids,
 """
 
 RESTORED_BODY = r"""  TLLM_CHECK_WITH_INFO(!use_w4_groupwise,
@@ -221,8 +258,14 @@ def patch(payload: bytes) -> bytes:
         raise RuntimeError("low-latency kernel insertion anchor drifted")
     if text.count(THROW_BODY) != 1:
         raise RuntimeError("low-latency throw anchor drifted")
+    if text.count(EXPANDED_ROWS_BODY) != 1:
+        raise RuntimeError("low-latency expanded-row anchor drifted")
+    if text.count(FC2_OUTPUT_BODY) != 1:
+        raise RuntimeError("low-latency GEMM2 output anchor drifted")
     text = text.replace(KERNEL_ANCHOR, LOW_LATENCY_KERNEL, 1)
     text = text.replace(THROW_BODY, RESTORED_BODY, 1)
+    text = text.replace(EXPANDED_ROWS_BODY, REPAIRED_EXPANDED_ROWS_BODY, 1)
+    text = text.replace(FC2_OUTPUT_BODY, REPAIRED_FC2_OUTPUT_BODY, 1)
     if "Min latency mode is no longer supported" in text:
         raise RuntimeError("removed low-latency throw survived patch")
     return text.encode()

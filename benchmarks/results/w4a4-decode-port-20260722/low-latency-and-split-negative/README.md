@@ -26,7 +26,14 @@ The low-latency-specific autotuner selected GEMM1 tactic 17 and GEMM2 tactic
 token column was unwritten and five selected output values were non-finite.
 An earlier tactic pair reached **0.717504 ms** with the same incomplete-output
 failure.  These numbers are not performance wins because they do incomplete
-work.  The path is rejected and must not be integrated.
+work.
+
+This initial diagnosis is now superseded by
+`../repaired-low-latency-negative/`: three historical row-count, output-buffer,
+and asymmetric-stride bugs were repaired. The corrected kernel is numerically
+valid but measures **0.811808 ms** versus **0.792800 ms** for standard CUTLASS
+on the same active-24 route, before its required final reduction. The path is
+rejected and must not be integrated; the complete implementation is slower.
 
 ## Split-stream alternatives
 

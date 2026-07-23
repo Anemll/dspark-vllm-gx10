@@ -1,0 +1,436 @@
+{
+  "active_expert_ids": [
+    4,
+    14,
+    15,
+    41,
+    57,
+    96,
+    122,
+    126,
+    129,
+    144,
+    146,
+    159,
+    178,
+    197,
+    230
+  ],
+  "active_experts": 15,
+  "active_output_nonzero_by_expert_token": [
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4095
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4096,
+      4096,
+      4096,
+      4096
+    ],
+    [
+      4095,
+      4096,
+      4096,
+      4096
+    ]
+  ],
+  "active_score_finite_per_token": [
+    15,
+    15,
+    15,
+    15
+  ],
+  "active_score_nonzero_per_token": [
+    6,
+    6,
+    6,
+    6
+  ],
+  "activity": {
+    "finite": true,
+    "max_abs": 2.453125,
+    "nonfinite_count": 0,
+    "nonzero_count": 16384,
+    "numel": 16384,
+    "passed": true,
+    "rms": 0.5911716434638947
+  },
+  "autotuned_tactics": null,
+  "backend_proof": {
+    "activation": "silu",
+    "activation_precision": "nvfp4",
+    "activation_quantizer": "vllm.model_executor.layers.fused_moe.utils.moe_kernel_quantize_input",
+    "b12x_scale_storage_prepared": false,
+    "checkpoint_input_scale_stats": null,
+    "checkpoint_input_scale_tensor_count": 768,
+    "global_scales_baked_into_block_scales": false,
+    "implementation": "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe.FlashInferExperts",
+    "intermediate_size_per_rank": 1024,
+    "modelopt_activation_scale_contract": {
+      "loaded_from_prepared_checkpoint": true,
+      "runtime_transforms": 0
+    },
+    "normalized_quant_mode": "nvfp4",
+    "oracle_reason": null,
+    "oracle_supported": true,
+    "process_weights_after_loading_algebra_preapplied": true,
+    "quant_config_uses_raw_w13_scale_storage": true,
+    "quant_config_uses_raw_w2_scale_storage": true,
+    "requested": "flashinfer_cutlass",
+    "same_source_w13": true,
+    "same_source_w2": true,
+    "scale_layout": "raw ModelOpt block scales, swizzled",
+    "swiglu_limit": 10.0,
+    "tp_rank": 0,
+    "tp_size": 2,
+    "w13_scale_storage_distinct_from_b12x_baked": null,
+    "w2_scale_storage_distinct_from_b12x_baked": null,
+    "weight_layout": "up_gate (w13: up/w3, gate/w1)"
+  },
+  "capability": [
+    12,
+    1
+  ],
+  "numeric": {
+    "actual_max_abs": 2.453125,
+    "actual_nonfinite_count": 0,
+    "actual_nonzero_count": 16384,
+    "cosine": 0.9999997615814209,
+    "finite": true,
+    "max_abs": 0.0078125,
+    "mean_abs": 3.477558493614197e-05,
+    "nonfinite_count": 0,
+    "nonzero_activity": true,
+    "normalized_rmse": 0.0005845016083103824,
+    "reference_max_abs": 2.453125,
+    "reference_nonfinite_count": 0,
+    "reference_nonzero_count": 16384,
+    "relative_p50": 0.0,
+    "relative_p95": 0.0,
+    "relative_p99": 0.004830917809158564,
+    "rmse": 0.0003455477417446673
+  },
+  "prepared_proof": {
+    "checkpoint_input_scale_tensor_count": 768,
+    "layer_file": "/model/model-layer-00000.safetensors",
+    "layer_file_sha256": "858e642399e79b3da75ecd67cdb6834e4668d883a62c015a4e825b5d7953c189",
+    "modelopt_activation_scale_contract": {
+      "loaded_from_prepared_checkpoint": true,
+      "runtime_transforms": 0
+    },
+    "physical_validation": {
+      "dtypes": {
+        "a1_gscale": "F32",
+        "a2_gscale": "F32",
+        "g1_alphas": "F32",
+        "g2_alphas": "F32",
+        "w13.weight": "U8",
+        "w13.weight_scale": "F8_E4M3",
+        "w2.weight": "U8",
+        "w2.weight_scale": "F8_E4M3"
+      },
+      "families": [
+        "w13.weight",
+        "w2.weight",
+        "w13.weight_scale",
+        "w2.weight_scale",
+        "a1_gscale",
+        "a2_gscale",
+        "g1_alphas",
+        "g2_alphas"
+      ],
+      "file_size": 3623888352,
+      "fingerprints_match": true,
+      "header_metadata": {
+        "dspark_layer": "0",
+        "dspark_loader_contract": "deepseek_v4_nvfp4_tp2_cutlass_prepared_v1",
+        "dspark_namespace": "__dspark_tp2_nvfp4_cutlass_v1__",
+        "dspark_payload_stage": "flashinfer_cutlass_prepared_v1",
+        "dspark_required_backend": "FLASHINFER_CUTLASS",
+        "dspark_schema": "dspark.deepseek_v4.nvfp4.tp2_cutlass_prepared.v1",
+        "dspark_standard_loader_compatible": "false",
+        "format": "pt"
+      },
+      "layer": 0,
+      "ok": true,
+      "path": "/model/model-layer-00000.safetensors",
+      "rank0_fingerprints": {
+        "a1_gscale": "ca75efb8ecb87d5b545fb8e0acdbe4db69c2683b34073738ed3132c7fed8755a",
+        "a2_gscale": "4fe0db93441a8df2f59f74d196fdf5511db258c02dababb9bd9cd95a0b6f2887",
+        "g1_alphas": "42fd9084021adf41c496f6696244ac24c853d114ece6143660b428a5c4a1e193",
+        "g2_alphas": "e67aa7dc665954c5a922e9a74d645ef903240c935e9bc2b09f37770ac5ed0615",
+        "w13.weight": "f02bb1c5778d151fbc210d57fe14c232a3dcb5b3ef213366a466ddf8ce875e55",
+        "w13.weight_scale": "b76d300f85af4d71e6df85b2910cd1f6da319c97d7875d022c08c62e67ae8a0a",
+        "w2.weight": "24b3299b6f60cd66f9b9209294503d7d8c18f5565790c52b1f2b5012270b586d",
+        "w2.weight_scale": "4a2c3041d99597af244183af181d3ca99edf738df4563f2c06a3b65fa67b7156"
+      },
+      "rank_bytes": {
+        "0": 1811943424,
+        "1": 1811943424
+      },
+      "rank_slices_contiguous": {
+        "0": true,
+        "1": true
+      },
+      "reference_json_sha256": "b393a257791c2964d29c6762ad27658ab34b1a4de71d0b9a06a60974a0686ba6",
+      "source_shapes": {
+        "a1_gscale": [
+          2,
+          256
+        ],
+        "a2_gscale": [
+          2,
+          256
+        ],
+        "g1_alphas": [
+          2,
+          256
+        ],
+        "g2_alphas": [
+          2,
+          256
+        ],
+        "w13.weight": [
+          2,
+          256,
+          2048,
+          2048
+        ],
+        "w13.weight_scale": [
+          2,
+          256,
+          2048,
+          256
+        ],
+        "w2.weight": [
+          2,
+          256,
+          4096,
+          512
+        ],
+        "w2.weight_scale": [
+          2,
+          256,
+          4096,
+          64
+        ]
+      },
+      "tensor_count": 8,
+      "tp_size": 2
+    },
+    "source": "prepared-physical-layer0-cutlass-only",
+    "source_weight_data_ptrs": {
+      "w13": 280590750318592,
+      "w2": 280590213447680
+    },
+    "weight_preparation_contract": {
+      "flashinfer_b12x": false,
+      "flashinfer_cutlass": true
+    }
+  },
+  "probe": "nvfp4_cutlass_min_latency_sm121",
+  "reconstructed_nonfinite_per_token": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "reconstructed_nonzero_per_token": [
+    4096,
+    4096,
+    4096,
+    4096
+  ],
+  "selected_output_nonfinite_per_token": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "shape": {
+    "m": 4,
+    "top_k": 6,
+    "tp_rank": 0
+  },
+  "timing_ms": {
+    "median": 0.5266559720039368,
+    "p95": 0.5821760296821594,
+    "samples": [
+      0.5315520167350769,
+      0.5306239724159241,
+      0.5264639854431152,
+      0.530784010887146,
+      0.5549759864807129,
+      0.5272960066795349,
+      0.5258240103721619,
+      0.5249279737472534,
+      0.5271679759025574,
+      0.5261120200157166,
+      0.523967981338501,
+      0.5249279737472534,
+      0.526528000831604,
+      0.525983989238739,
+      0.5231999754905701,
+      0.5240640044212341,
+      0.5232319831848145,
+      0.5271679759025574,
+      0.5223360061645508,
+      0.5507199764251709,
+      0.5377280116081238,
+      0.5284479856491089,
+      0.5273600220680237,
+      0.5233920216560364,
+      0.5223680138587952,
+      0.5289599895477295,
+      0.5266559720039368,
+      0.5274879932403564,
+      0.5276479721069336,
+      0.5254719853401184,
+      0.5344640016555786,
+      0.5215039849281311,
+      0.5242879986763,
+      0.5268480181694031,
+      0.5315520167350769,
+      0.5559999942779541,
+      0.531391978263855,
+      0.52537602186203,
+      0.5251839756965637,
+      0.5243840217590332,
+      0.5244799852371216,
+      0.5208320021629333,
+      0.5244479775428772,
+      0.5263360142707825,
+      0.5244479775428772,
+      0.5263680219650269,
+      0.5253120064735413,
+      0.5264319777488708,
+      0.5244479775428772,
+      0.5286719799041748,
+      0.5540800094604492,
+      0.540992021560669,
+      0.5337920188903809,
+      0.5259199738502502,
+      0.5254080295562744,
+      0.5252799987792969,
+      0.5264639854431152,
+      0.5242559909820557,
+      0.5249279737472534,
+      0.5233920216560364,
+      0.5250239968299866,
+      0.5241919755935669,
+      0.523360013961792,
+      0.5821760296821594,
+      0.529312014579773,
+      0.5347840189933777,
+      0.5809599757194519,
+      0.6589760184288025,
+      0.6786559820175171,
+      0.5252159833908081,
+      0.5286080241203308,
+      0.5298240184783936,
+      0.5325440168380737,
+      0.5241280198097229,
+      0.5305600166320801,
+      0.5273920297622681,
+      0.6873279809951782,
+      0.5311679840087891,
+      0.53302401304245,
+      0.5320320129394531,
+      0.5839359760284424,
+      0.5834239721298218,
+      0.5295680165290833,
+      0.5273600220680237,
+      0.531328022480011,
+      0.5256639719009399,
+      0.5284159779548645,
+      0.5264959931373596,
+      0.5254719853401184,
+      0.525600016117096,
+      0.5255039930343628,
+      0.5296000242233276,
+      0.5264639854431152,
+      0.5224639773368835,
+      0.5233280062675476,
+      0.538815975189209,
+      0.5477120280265808,
+      0.5308160185813904,
+      0.525439977645874,
+      0.527616024017334
+    ]
+  }
+}
