@@ -4093,6 +4093,7 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
             },
             "modes": {},
             "eager_output_activity": {},
+            "eager_output_sha256": {},
         }
         if not input_rms_contract["passed"]:
             report["failures"].append(
@@ -4182,6 +4183,13 @@ def run_benchmark(args: argparse.Namespace, repo_root: pathlib.Path) -> int:
                         }
                     )
                 eager_outputs[mode] = output.clone()
+                # The small [M, hidden] output is cheap to hash after all
+                # timed work.  Separate-process source/JIT A/Bs can therefore
+                # require byte-identical results, not merely similar summary
+                # statistics.
+                row["eager_output_sha256"][mode] = _full_tensor_digest(
+                    torch, eager_outputs[mode]
+                )
 
         if "w4a4" in eager_outputs and "w4a16" in eager_outputs:
             metrics = compare_tensors(

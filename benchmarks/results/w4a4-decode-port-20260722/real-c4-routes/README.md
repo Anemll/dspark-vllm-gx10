@@ -33,8 +33,11 @@ graphs contain route-copy operations.
   `cb732fa978083dfdf2dbbe321bd83a753b24e2f5af34c36edce19def3ea964f7`
 - rank-0 and rank-1 arrays both SHA-256
   `7322bccdd515e0f0c6c35eef1331a04c53d20cf45edbc2b2e91e1d67f9d1dcd6`
+- rank-0 layer-sample view `[64, 43, 4, 6]` SHA-256
+  `2b687fcc275984a37b3c5777bfa73b7f6e3a0de7e38abac38f0390d918449a88`;
+  this is a byte-preserving axis transpose used by the isolated real-layer
+  kernel replay harness
 - diagnostic API JSON SHA-256
   `6dbf72c73a503752933ce0b56f4faa8b4f5c577dff12841fb43af5e09173ba68`
 - capture revision `e22aa1cb8dfe04f198b2f8e3714a6446825f2f50`
 - image `sha256:105cb6b85510c27ad3e772bed971efa30a6847058e1b7263b45b2141626e6726`
-
