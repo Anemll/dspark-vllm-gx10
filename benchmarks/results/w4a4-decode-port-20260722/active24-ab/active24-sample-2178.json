@@ -1,0 +1,472 @@
+{
+  "backend_proof": {
+    "flashinfer_cutlass": {
+      "activation": "silu",
+      "activation_precision": "nvfp4",
+      "activation_quantizer": "vllm.model_executor.layers.fused_moe.utils.moe_kernel_quantize_input",
+      "b12x_scale_storage_prepared": false,
+      "checkpoint_input_scale_stats": {
+        "w13_global_max": 0.0030459449626505375,
+        "w1_max": 0.0030459449626505375,
+        "w1_min": 0.0021042595617473125,
+        "w1_w3_max_abs_difference": 0.0,
+        "w2_global_max": 0.0088355652987957,
+        "w2_max": 0.0088355652987957,
+        "w2_min": 0.0025925408117473125,
+        "w3_max": 0.0030459449626505375,
+        "w3_min": 0.0021042595617473125
+      },
+      "checkpoint_input_scale_tensor_count": 768,
+      "global_scales_baked_into_block_scales": false,
+      "implementation": "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe.FlashInferExperts",
+      "intermediate_size_per_rank": 1024,
+      "modelopt_activation_scale_contract": {
+        "a1_gscale_formula": "1 / w13_input_scale",
+        "a2_gscale_formula": "1 / w2_input_scale",
+        "g1_alpha_formula": "w1.weight_scale_2 * w13_input_scale",
+        "g2_alpha_formula": "w2.weight_scale_2 * w2_input_scale",
+        "loaded_from_checkpoint": true,
+        "prepared": true,
+        "reduction": "max over all experts/projection shards, expanded to E",
+        "w13_input_scale": 0.0030459449626505375,
+        "w2_input_scale": 0.0088355652987957
+      },
+      "normalized_quant_mode": "nvfp4",
+      "oracle_reason": null,
+      "oracle_supported": true,
+      "process_weights_after_loading_algebra_preapplied": true,
+      "quant_config_uses_raw_w13_scale_storage": true,
+      "quant_config_uses_raw_w2_scale_storage": true,
+      "requested": "flashinfer_cutlass",
+      "same_source_w13": true,
+      "same_source_w2": true,
+      "scale_layout": "raw ModelOpt block scales, swizzled",
+      "swiglu_limit": 10.0,
+      "tp_rank": 0,
+      "tp_size": 2,
+      "w13_scale_storage_distinct_from_b12x_baked": null,
+      "w2_scale_storage_distinct_from_b12x_baked": null,
+      "weight_layout": "up_gate (w13: up/w3, gate/w1)"
+    }
+  },
+  "checkpoint": {
+    "benchmark_total_wall_seconds": 23.69586485400214,
+    "checkpoint_cache_evidence": {
+      "advisory_only": true,
+      "layer_idx": 0,
+      "method": "uncontrolled"
+    },
+    "checkpoint_input_scale_stats": {
+      "w13_global_max": 0.0030459449626505375,
+      "w1_max": 0.0030459449626505375,
+      "w1_min": 0.0021042595617473125,
+      "w1_w3_max_abs_difference": 0.0,
+      "w2_global_max": 0.0088355652987957,
+      "w2_max": 0.0088355652987957,
+      "w2_min": 0.0025925408117473125,
+      "w3_max": 0.0030459449626505375,
+      "w3_min": 0.0021042595617473125
+    },
+    "checkpoint_input_scale_tensor_count": 768,
+    "checkpoint_load_profile": {
+      "attribution_notes": {
+        "bulk_device_transfer": "host call duration; completion is the separate sync field",
+        "get_tensor_seconds": "lazy view creation; page faults may occur during copy/stage",
+        "indexed_source_bytes": "full checkpoint tensors before TP slicing"
+      },
+      "destination_staging_bytes": 0,
+      "device_completion_sync_seconds": 6.158399628475308e-05,
+      "indexed_reader": {
+        "families": {
+          "input_scale": {
+            "calls": 768,
+            "get_tensor_seconds": 0.004131578345550224,
+            "source_tensor_bytes": 3072
+          },
+          "weight": {
+            "calls": 768,
+            "get_tensor_seconds": 0.009491109085502103,
+            "source_tensor_bytes": 3221225472
+          },
+          "weight_scale": {
+            "calls": 768,
+            "get_tensor_seconds": 0.03087776221218519,
+            "source_tensor_bytes": 402653184
+          },
+          "weight_scale_2": {
+            "calls": 768,
+            "get_tensor_seconds": 0.026853352173930034,
+            "source_tensor_bytes": 3072
+          }
+        },
+        "get_tensor_calls": 3072,
+        "get_tensor_seconds": 0.07135380181716755,
+        "open_seconds": 0.0024820559774525464,
+        "opened_shards": 1,
+        "source_tensor_bytes": 3623884800
+      },
+      "per_family_copy_or_stage": {
+        "input_scale": {
+          "calls": 768,
+          "seconds": 0.008049683965509757
+        },
+        "weight": {
+          "calls": 768,
+          "seconds": 14.095336544152815
+        },
+        "weight_scale": {
+          "calls": 768,
+          "seconds": 5.228437296726042
+        },
+        "weight_scale_2": {
+          "calls": 768,
+          "seconds": 0.011804319074144587
+        }
+      }
+    },
+    "checkpoint_load_strategy": "per-expert",
+    "config_sha256": "0c5dc7303ff322d73e0cd5caf9cc1b65d6efeff68fab53514531c2e959b1d616",
+    "group_size": 16,
+    "index_sha256": "2d83d58754cff11724f117d20d95e31803a48512d29f8e00463b2501905d6d72",
+    "indexed_shard_count": 46,
+    "indexed_tensor_count": 135235,
+    "input_scales_required": true,
+    "layer_idx": 0,
+    "load_memory_contract": {
+      "contract_applies": true,
+      "cuda_peak_allocated_bytes": 3019905024,
+      "cuda_peak_ceiling_bytes": 3435973836,
+      "mem_available_floor_kib": 2097152,
+      "minimum_mem_available_kib": 115940744,
+      "passed": true,
+      "snapshots": {
+        "after": {
+          "available": true,
+          "mem_available_kib": 115940744,
+          "process_hwm_kib": 3928240,
+          "process_rss_kib": 3928240,
+          "swap_free_kib": 15844268
+        },
+        "before": {
+          "available": true,
+          "mem_available_kib": 121263240,
+          "process_hwm_kib": 800656,
+          "process_rss_kib": 800656,
+          "swap_free_kib": 15844268
+        },
+        "per_expert_device_loaded": {
+          "available": true,
+          "mem_available_kib": 117530312,
+          "process_hwm_kib": 3568336,
+          "process_rss_kib": 3568336,
+          "swap_free_kib": 15844268
+        }
+      },
+      "staged_host_bytes": 0,
+      "swap_growth_kib": 0,
+      "unified_memory_warning": "GB10 host staging and CUDA allocations share system-memory pressure"
+    },
+    "load_seconds": 19.765159844013397,
+    "model_path": "/model",
+    "modelopt_activation_scale_contract": {
+      "a1_gscale_formula": "1 / w13_input_scale",
+      "a2_gscale_formula": "1 / w2_input_scale",
+      "g1_alpha_formula": "w1.weight_scale_2 * w13_input_scale",
+      "g2_alpha_formula": "w2.weight_scale_2 * w2_input_scale",
+      "loaded_from_checkpoint": true,
+      "prepared": true,
+      "reduction": "max over all experts/projection shards, expanded to E",
+      "w13_input_scale": 0.0030459449626505375,
+      "w2_input_scale": 0.0088355652987957
+    },
+    "moe_quant_algo": "NVFP4",
+    "native_cutlass_preparation": false,
+    "producer": {
+      "name": "modelopt",
+      "version": "dsv4-nvfp4-experts"
+    },
+    "prototype_load_screen": {
+      "effective_non_layer_budget_seconds": 90.0,
+      "fixed_budget_allowance_seconds": 60.0,
+      "projected_routed_layer_seconds": 1015.7073414956103,
+      "prototype_budget_passed": false,
+      "prototype_decision_limit_seconds": 270.0,
+      "prototype_only": true,
+      "prototype_screening_total_seconds": 1075.7073414956103,
+      "representative_layer_seconds": 23.621100965014193,
+      "required_layer_seconds": 4.883720930232558,
+      "routed_layers": 43,
+      "serving_loader_integrated": false,
+      "serving_run_authorized": false,
+      "serving_target_seconds": 300.0,
+      "unspent_serving_reserve_seconds": 30.0
+    },
+    "raw_load_seconds": 19.765159844013397,
+    "requested_backend_selection": "flashinfer_cutlass",
+    "same_source_weight_storage": true,
+    "sample_fingerprints": {
+      "cutlass_a1_gscale": "ca75efb8ecb87d5b545fb8e0acdbe4db69c2683b34073738ed3132c7fed8755a",
+      "cutlass_a2_gscale": "4fe0db93441a8df2f59f74d196fdf5511db258c02dababb9bd9cd95a0b6f2887",
+      "cutlass_g1_alphas": "42fd9084021adf41c496f6696244ac24c853d114ece6143660b428a5c4a1e193",
+      "cutlass_g2_alphas": "e67aa7dc665954c5a922e9a74d645ef903240c935e9bc2b09f37770ac5ed0615",
+      "w13": "f02bb1c5778d151fbc210d57fe14c232a3dcb5b3ef213366a466ddf8ce875e55",
+      "w13_scale_modelopt_swizzled": "b76d300f85af4d71e6df85b2910cd1f6da319c97d7875d022c08c62e67ae8a0a",
+      "w2": "24b3299b6f60cd66f9b9209294503d7d8c18f5565790c52b1f2b5012270b586d",
+      "w2_scale_modelopt_swizzled": "4a2c3041d99597af244183af181d3ca99edf738df4563f2c06a3b65fa67b7156"
+    },
+    "scale_preparation_profile": {
+      "completion_sync_seconds": 4.728097701445222e-05,
+      "cutlass_algebra_enqueue_seconds": 0.009197295003104955,
+      "evidence_validation_and_fingerprint_seconds": 0.0011359710188116878,
+      "fingerprints_excluded_from_admission": true,
+      "fingerprints_required_for_correctness": true,
+      "module_import_seconds": 3.833839861006709,
+      "native_cutlass_preparation": false,
+      "native_helper_enqueue_seconds": 0.0,
+      "sample_role": "single-layer",
+      "serving_required_completion_sync": true,
+      "serving_required_seconds": 3.8559411210007966,
+      "timer_includes_import_or_first_call_work_when_incurred": true,
+      "total_observed_seconds": 3.857077588007087
+    },
+    "scale_prepare_seconds": 3.8559411210007966,
+    "source_weight_data_ptrs": {
+      "w13": 260516073177088,
+      "w2": 260518757531648
+    },
+    "swiglu_limit": 10.0,
+    "total_layer_load_seconds": 23.621100965014193,
+    "tp_offset": 0,
+    "w13_input_layout": "prepared [w3/up, w1/gate]",
+    "w13_layout": "w13 (up/w3, gate/w1; B12X up_gate)",
+    "w1_w3_scale2_max_mismatch": 0.0,
+    "weight_preparation_contract": {
+      "flashinfer_b12x": false,
+      "flashinfer_cutlass": true,
+      "required_sample_fingerprints": [
+        "cutlass_a1_gscale",
+        "cutlass_a2_gscale",
+        "cutlass_g1_alphas",
+        "cutlass_g2_alphas",
+        "w13",
+        "w13_scale_modelopt_swizzled",
+        "w2",
+        "w2_scale_modelopt_swizzled"
+      ]
+    }
+  },
+  "created_at": "2026-07-23T03:00:45.836341+00:00",
+  "failures": [],
+  "memory": {
+    "allocated_gib": 1.695502758026123,
+    "peak_allocated_gib": 2.8125057220458984,
+    "reserved_gib": 2.025390625
+  },
+  "provenance": {
+    "backend_symbols": {
+      "flashinfer_cutlass": "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe.FlashInferExperts",
+      "flashinfer_cutlass_apply_signature": "(self, output: torch.Tensor, hidden_states: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor, topk_weights: torch.Tensor, topk_ids: torch.Tensor, activation: vllm.model_executor.layers.fused_moe.activation.MoEActivation, global_num_experts: int, expert_map: torch.Tensor | None, a1q_scale: torch.Tensor | None, a2_scale: torch.Tensor | None, workspace13: torch.Tensor | None, workspace2: torch.Tensor | None, expert_tokens_meta: vllm.model_executor.layers.fused_moe.modular_kernel.ExpertTokensMetadata | None, apply_router_weight_on_input: bool | None)",
+      "flashinfer_cutlass_experts_source": "/usr/local/lib/python3.12/dist-packages/vllm/model_executor/layers/fused_moe/experts/flashinfer_cutlass_moe.py",
+      "nvfp4_input_quantize_symbol": "vllm.model_executor.layers.fused_moe.utils.moe_kernel_quantize_input",
+      "selector": "flashinfer.fused_moe.cute_dsl.blackwell_sm12x.moe_dispatch.select_sm120_moe_backend",
+      "w4a16": "b12x.moe.fused.w4a16.kernel.run_w4a16_moe",
+      "w4a16_kernel_source": "/usr/local/lib/python3.12/dist-packages/b12x/moe/fused/w4a16/kernel.py",
+      "w4a16_run_signature": "(a_input: 'torch.Tensor', prepared, topk_weights: 'torch.Tensor', topk_ids: 'torch.Tensor', *, activation: 'str', intermediate_cache13: 'torch.Tensor', intermediate_cache2: 'torch.Tensor', output: 'torch.Tensor', fc1_c_tmp: 'torch.Tensor | None' = None, fc2_c_tmp: 'torch.Tensor | None' = None, packed_route_indices: 'torch.Tensor | None' = None, block_expert_ids: 'torch.Tensor | None' = None, packed_route_count: 'torch.Tensor | None' = None, expert_offsets: 'torch.Tensor | None' = None, expert_map: 'torch.Tensor | None' = None, apply_router_weight_on_input: 'bool' = False, fast_math: 'bool' = True, swiglu_limit: 'float | None' = None, fused_launch: 'W4A16FusedMoeCompileResult | None' = None, topk_sum_launch: 'W4A16TopKSumCompileResult | None' = None, stream: 'cuda.CUstream | None' = None) -> 'torch.Tensor'",
+      "w4a4": "flashinfer.fused_moe.cute_dsl.b12x_moe.B12xMoEWrapper",
+      "w4a4_run_signature": "(self, x: torch.Tensor, w1_weight: torch.Tensor, w1_weight_sf: torch.Tensor, w2_weight: torch.Tensor, w2_weight_sf: torch.Tensor, token_selected_experts: torch.Tensor, token_final_scales: torch.Tensor, *, w1_alpha: torch.Tensor, w2_alpha: torch.Tensor, fc2_input_scale: Optional[torch.Tensor] = None) -> torch.Tensor",
+      "w4a4_wrapper_source": "/usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/b12x_moe.py"
+    },
+    "cuda": {
+      "capability": [
+        12,
+        1
+      ],
+      "device_count": 1,
+      "device_name": "NVIDIA GB10",
+      "torch_cuda": "13.0"
+    },
+    "expected_pins": {},
+    "packages": {
+      "b12x": {
+        "module": "/usr/local/lib/python3.12/dist-packages/b12x/__init__.py",
+        "version": "0.15.3"
+      },
+      "flashinfer": {
+        "module": "/usr/local/lib/python3.12/dist-packages/flashinfer/__init__.py",
+        "version": "0.6.15"
+      },
+      "torch": {
+        "module": "/usr/local/lib/python3.12/dist-packages/torch/__init__.py",
+        "version": "2.11.0+cu130"
+      },
+      "vllm": {
+        "module": "/usr/local/lib/python3.12/dist-packages/vllm/__init__.py",
+        "version": "0.25.2.dev0+g752a3a504.d20260714"
+      }
+    }
+  },
+  "results": [
+    {
+      "eager_output_activity": {
+        "flashinfer_cutlass": {
+          "finite": true,
+          "max_abs": 2.546875,
+          "nonfinite_count": 0,
+          "nonzero_count": 16384,
+          "numel": 16384,
+          "passed": true,
+          "rms": 0.6279435525648296
+        }
+      },
+      "eager_output_sha256": {
+        "flashinfer_cutlass": "e143868703d074c5fe81eed851d6fd165dcbb260357f135b99ca93c0c70af635"
+      },
+      "input_rms_contract": {
+        "finite": true,
+        "maximum_relative_error": 5.936622619628906e-05,
+        "observed_max": 1.000035285949707,
+        "observed_mean": 0.9999861717224121,
+        "observed_min": 0.9999406337738037,
+        "passed": true,
+        "relative_tolerance": 0.01,
+        "requested": 1.0
+      },
+      "m": 4,
+      "modes": {
+        "flashinfer_cutlass": {
+          "cuda_graph": {
+            "effective_tflops": 2.302032987058743,
+            "max_ms": 0.7334399819374084,
+            "mean_ms": 0.2642381175279617,
+            "median_ms": 0.26236799359321594,
+            "min_ms": 0.25600001215934753,
+            "p95_ms": 0.27581120580434804,
+            "repeat_median_ms": [
+              0.26233598589897156,
+              0.26233598589897156,
+              0.2624320089817047,
+              0.26233598589897156,
+              0.26236799359321594
+            ],
+            "repeat_median_range_ms": [
+              0.26233598589897156,
+              0.2624320089817047
+            ],
+            "repeats": 5,
+            "routed_rows_per_second": 91474.57230324518,
+            "samples": 5000,
+            "tokens_per_second": 15245.762050540863
+          },
+          "cuda_graph_status": "captured",
+          "eager": {
+            "effective_tflops": 2.275116726644384,
+            "max_ms": 0.7129600048065186,
+            "mean_ms": 0.26854029912948607,
+            "median_ms": 0.2654719948768616,
+            "min_ms": 0.2603200078010559,
+            "p95_ms": 0.28172799944877625,
+            "repeat_median_ms": [
+              0.266431987285614,
+              0.2654719948768616,
+              0.2654719948768616,
+              0.2654399871826172,
+              0.2654399871826172
+            ],
+            "repeat_median_range_ms": [
+              0.2654399871826172,
+              0.266431987285614
+            ],
+            "repeats": 5,
+            "routed_rows_per_second": 90405.01620945867,
+            "samples": 5000,
+            "tokens_per_second": 15067.502701576444
+          },
+          "graph_numeric_gate_passed": true,
+          "graph_output_activity": {
+            "finite": true,
+            "max_abs": 2.546875,
+            "nonfinite_count": 0,
+            "nonzero_count": 16384,
+            "numel": 16384,
+            "passed": true,
+            "rms": 0.6279435525648296
+          },
+          "graph_vs_eager": {
+            "actual_max_abs": 2.546875,
+            "actual_nonfinite_count": 0,
+            "actual_nonzero_count": 16384,
+            "cosine": 0.9999999403953552,
+            "finite": true,
+            "max_abs": 0.0,
+            "mean_abs": 0.0,
+            "nonfinite_count": 0,
+            "nonzero_activity": true,
+            "normalized_rmse": 0.0,
+            "reference_max_abs": 2.546875,
+            "reference_nonfinite_count": 0,
+            "reference_nonzero_count": 16384,
+            "relative_p50": 0.0,
+            "relative_p95": 0.0,
+            "relative_p99": 0.0,
+            "rmse": 0.0
+          },
+          "selector": "flashinfer_cutlass",
+          "tactic": "flashinfer-cutlass"
+        }
+      },
+      "phase": "decode",
+      "routed_rows": 24,
+      "shared_input_data_ptrs": {
+        "hidden_states": 13872737792,
+        "topk_ids": 13872660480,
+        "topk_weights": 13872666112
+      }
+    }
+  ],
+  "schema_version": 1,
+  "settings": {
+    "backend_selection": "flashinfer_cutlass",
+    "checkpoint_load_strategy": "per-expert",
+    "correctness_m": [
+      4
+    ],
+    "cuda_graph": true,
+    "fail_fast": true,
+    "fast_math": true,
+    "input_rms": 1.0,
+    "input_rms_relative_tolerance": 0.01,
+    "iters": 1000,
+    "l2_flush_mib": 0,
+    "m": [
+      4
+    ],
+    "modes": [
+      "flashinfer_cutlass"
+    ],
+    "no_correctness_gate": false,
+    "numeric_max_nrmse": 0.25,
+    "numeric_min_cosine": 0.98,
+    "repeats": 5,
+    "require_graphs": true,
+    "route_ids_npy": {
+      "path": "/tmp/routes.npy",
+      "sample_index": 2178,
+      "sha256": "2b687fcc275984a37b3c5777bfa73b7f6e3a0de7e38abac38f0390d918449a88"
+    },
+    "routing": "random",
+    "seed": 4104,
+    "synthetic_fixture": null,
+    "w4a16_weight_layout": "modelopt",
+    "w4a4_order": "b12x-first",
+    "warmup": 50
+  },
+  "shape": {
+    "hidden_size": 4096,
+    "intermediate_size": 2048,
+    "intermediate_size_per_rank": 1024,
+    "num_experts": 256,
+    "top_k": 6,
+    "tp_rank": 0,
+    "tp_size": 2
+  }
+}
