@@ -156,6 +156,12 @@ class TargetRouteCaptureTests(unittest.TestCase):
             )
         )
 
+    def test_filesystem_sentinel_is_reserved_for_live_environment(self) -> None:
+        self.assertEqual(
+            capture.ENABLED_SENTINEL,
+            Path("/tmp/dspark-target-route-capture.enabled"),
+        )
+
     def test_enabled_environment_is_strict_and_bounded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             config = capture.TargetRouteCaptureConfig.from_environment(

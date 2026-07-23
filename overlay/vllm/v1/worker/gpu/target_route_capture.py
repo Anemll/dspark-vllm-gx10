@@ -34,6 +34,7 @@ CAPTURE_ENV = "DSPARK_TARGET_ROUTE_CAPTURE"
 OUTPUT_DIR_ENV = "DSPARK_TARGET_ROUTE_CAPTURE_DIR"
 STEPS_ENV = "DSPARK_TARGET_ROUTE_CAPTURE_STEPS"
 WARMUP_STEPS_ENV = "DSPARK_TARGET_ROUTE_CAPTURE_WARMUP_STEPS"
+ENABLED_SENTINEL = Path("/tmp/dspark-target-route-capture.enabled")
 
 SCHEMA_VERSION = 1
 EXPECTED_LAYERS = tuple(range(43))
@@ -57,6 +58,8 @@ class TargetRouteCaptureConfig:
     ) -> "TargetRouteCaptureConfig | None":
         values = os.environ if environment is None else environment
         enabled = values.get(CAPTURE_ENV, "0")
+        if environment is None and ENABLED_SENTINEL.is_file():
+            enabled = "1"
         if enabled not in ("0", "1"):
             raise ValueError(f"{CAPTURE_ENV} must be exactly 0 or 1, got {enabled!r}")
         if enabled == "0":
@@ -398,6 +401,18 @@ def bind_target_route_capture(
         rank=rank,
         world_size=world_size,
         layer_names=layer_names,
+    )
+    _atomic_write_json(
+        config.output_dir / f"target-routes-armed-rank-{rank}.json",
+        {
+            "schema_version": SCHEMA_VERSION,
+            "status": "armed",
+            "rank": rank,
+            "world_size": world_size,
+            "steps": config.steps,
+            "warmup_steps": config.warmup_steps,
+            "layers": list(EXPECTED_LAYERS),
+        },
     )
     for layer, router in routers.items():
 

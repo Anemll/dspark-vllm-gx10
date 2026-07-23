@@ -19,7 +19,6 @@ instead of embedding feature-specific logic directly.
 
 import functools
 import gc
-import os
 import time
 from copy import deepcopy
 from typing import Any, NamedTuple
@@ -208,14 +207,16 @@ class GPUModelRunner(LoRAModelRunnerMixin):
         # callbacks or allocate capture buffers.
         self.target_route_capture = None
         self._target_route_capture_config = None
-        if os.getenv("DSPARK_TARGET_ROUTE_CAPTURE", "0") != "0":
+        from vllm.v1.worker.gpu.target_route_capture import (
+            TargetRouteCaptureConfig,
+        )
+
+        capture_config = TargetRouteCaptureConfig.from_environment()
+        if capture_config is not None:
             from vllm.v1.worker.gpu.target_route_capture import (
-                TargetRouteCaptureConfig,
                 validate_target_only_runtime,
             )
 
-            capture_config = TargetRouteCaptureConfig.from_environment()
-            assert capture_config is not None
             validate_target_only_runtime(
                 speculative_config=self.speculative_config,
                 speculator=self.speculator,
