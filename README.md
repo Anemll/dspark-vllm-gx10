@@ -268,8 +268,10 @@ Values are best aggregate throughput with the median in parentheses:
 
 The B12X C1 best trial had higher draft acceptance and does not establish a
 target-kernel win. At C4, acceptance was comparable and B12X was 9.1% slower
-than CUTLASS by best throughput. Raw trials, hashes, dispatch proof, and the
-full interpretation are archived in
+than CUTLASS by best throughput. The MAC40 setting was present, but DSpark's
+MTP=5 verifier expanded C4 to 24 target rows / 144 routed rows, selecting the
+static B12X kernel and bypassing the MAC40 micro-kernel path. Raw trials,
+hashes, dispatch proof, and the full interpretation are archived in
 [`dspark-target-backend-ab`](benchmarks/results/w4a4-decode-port-20260722/dspark-target-backend-ab/README.md).
 
 The high-acceptance `tool_agentic` prompt benefits from longer drafts. The

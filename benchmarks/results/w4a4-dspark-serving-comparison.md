@@ -65,6 +65,10 @@ C=4 uses a separate warmed three-trial recheck:
 
 B12X's C1 best trial coincided with higher acceptance. At C4, comparable
 acceptance did not prevent a 9.1% best-throughput regression versus CUTLASS.
+Although MAC40 was configured on both ranks, MTP=5 expanded C4 to 24 target
+rows / 144 routed rows, selecting B12X's static kernel and bypassing the
+MAC40 micro-kernel path. The later C2--C4 activation-pack-sharing probe was
+not in the immutable image and would not apply to this 24-row verifier shape.
 The split-backend proof, raw JSON, and hashes are archived in
 [`w4a4-decode-port-20260722/dspark-target-backend-ab`](w4a4-decode-port-20260722/dspark-target-backend-ab/README.md).
 
