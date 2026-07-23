@@ -1,0 +1,2 @@
+{"comparison": "flashinfer_b12x_over_cutlass", "geomean_speedup": 0.9508809479183492, "minimum_geomean_speedup": 0.01, "minimum_per_shape_speedup": 0.01, "passed": true, "scope": "decode-only; MTP disabled in the subsequent serving A/B", "speedup_by_m": {"24": 0.952172573939102, "48": 0.9495910739936168}}
+Wrote /artifacts/shared-m24-m48-mac48.json

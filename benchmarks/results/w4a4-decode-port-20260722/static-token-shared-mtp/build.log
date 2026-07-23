@@ -1,0 +1,38 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.nvfp4-b12x-static-token-shared-overlay
+#1 transferring dockerfile: 1.16kB done
+#1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${BASE_IMAGE} results in empty or invalid base image name (line 3)
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/dspark-vllm-gx10:dev-w4a4-b12x-mac40-shared
+#2 DONE 0.0s
+
+#3 [1/5] FROM docker.io/library/dspark-vllm-gx10:dev-w4a4-b12x-mac40-shared
+#3 CACHED
+
+#4 [internal] load build context
+#4 transferring context: 202B done
+#4 DONE 0.0s
+
+#5 [2/5] COPY scripts/patch_flashinfer_b12x_static_token_shared.py   /usr/local/bin/dspark-patch-flashinfer-b12x-static-token-shared
+#5 DONE 0.0s
+
+#6 [3/5] COPY benchmarks/benchmark_nvfp4_prepared_b12x_sm121.py   /usr/local/bin/dspark-benchmark-nvfp4-prepared-b12x-sm121
+#6 DONE 0.0s
+
+#7 [4/5] RUN python3 /usr/local/bin/dspark-patch-flashinfer-b12x-static-token-shared
+#7 0.071 patched FlashInfer B12X static token-shared input: dispatch_result=0a9c75feb32118352eab77fd191321f31808c5ddf0787be517c7e51baa7d3d1f static_result=fc277f76e5b9210134dcff91b12794acb6d202a22d72638e4e46e8146fb70d7a
+#7 DONE 0.1s
+
+#8 [5/5] RUN python3 -m py_compile       /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_dispatch.py       /usr/local/lib/python3.12/dist-packages/flashinfer/fused_moe/cute_dsl/blackwell_sm12x/moe_static_kernel.py       /usr/local/bin/dspark-benchmark-nvfp4-prepared-b12x-sm121
+#8 DONE 0.1s
+
+#9 exporting to image
+#9 exporting layers 0.0s done
+#9 writing image sha256:da0ef9bf64df7a6e49e152e0c4f8f8bb82d0752851f975074f182ec635743795 done
+#9 naming to docker.io/library/dspark-vllm-gx10:dev-8f29b90-static-shared done
+#9 DONE 0.0s
+
+ [33m1 warning found (use docker --debug to expand):
+[0m - InvalidDefaultArgInFrom: Default value for ARG ${BASE_IMAGE} results in empty or invalid base image name (line 3)
