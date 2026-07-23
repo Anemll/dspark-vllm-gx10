@@ -1,0 +1,1049 @@
+{
+  "backend_proof": {
+    "cutlass_w4a4": {
+      "activation": "silu",
+      "activation_precision": "nvfp4",
+      "activation_quantizer": "vllm.model_executor.layers.fused_moe.utils.moe_kernel_quantize_input",
+      "b12x_scale_storage_prepared": false,
+      "checkpoint_input_scale_stats": null,
+      "checkpoint_input_scale_tensor_count": 768,
+      "global_scales_baked_into_block_scales": false,
+      "implementation": "vllm.model_executor.layers.fused_moe.experts.flashinfer_cutlass_moe.FlashInferExperts",
+      "intermediate_size_per_rank": 1024,
+      "modelopt_activation_scale_contract": {
+        "loaded_from_prepared_checkpoint": true,
+        "raw_weight_scale_2_recovery": "g_alpha * a_gscale"
+      },
+      "normalized_quant_mode": "nvfp4",
+      "oracle_reason": null,
+      "oracle_supported": true,
+      "process_weights_after_loading_algebra_preapplied": true,
+      "quant_config_uses_raw_w13_scale_storage": true,
+      "quant_config_uses_raw_w2_scale_storage": true,
+      "requested": "flashinfer_cutlass",
+      "same_source_w13": true,
+      "same_source_w2": true,
+      "scale_layout": "raw ModelOpt block scales, swizzled",
+      "swiglu_limit": 10.0,
+      "tp_rank": 0,
+      "tp_size": 2,
+      "w13_scale_storage_distinct_from_b12x_baked": null,
+      "w2_scale_storage_distinct_from_b12x_baked": null,
+      "weight_layout": "up_gate (w13: up/w3, gate/w1)"
+    },
+    "deepgemm_w4a8": {
+      "activation": "swigluoai_uninterleave(alpha=1,beta=0,limit=10)",
+      "activation_precision": "dynamic FP8/K128 (W4A8)",
+      "conversion": {
+        "deepgemm_w13_layout": "gate_up",
+        "passed": true,
+        "scale_layout": "DeepGEMM transformed E8M0/K32",
+        "source_w13_layout": "up_gate",
+        "w13": {
+          "e8m0_maximum_byte": 123,
+          "e8m0_minimum_byte": 119,
+          "exact_exponent_reconstruction": true,
+          "global_scale": {
+            "canonicalization": "nearest FP32 power of two; <=1 ULP",
+            "count": 256,
+            "maximum_exponent": -12,
+            "maximum_ulp_distance": 1,
+            "minimum_exponent": -13,
+            "passed": true
+          },
+          "identical_pair_count": 67108864,
+          "k16_scale_count": 134217728,
+          "k32_scale_count": 67108864,
+          "non_power_of_two_count": 0,
+          "nonidentical_pair_count": 0,
+          "passed": true
+        },
+        "w2": {
+          "e8m0_maximum_byte": 123,
+          "e8m0_minimum_byte": 119,
+          "exact_exponent_reconstruction": true,
+          "global_scale": {
+            "canonicalization": "nearest FP32 power of two; <=1 ULP",
+            "count": 256,
+            "maximum_exponent": -12,
+            "maximum_ulp_distance": 0,
+            "minimum_exponent": -13,
+            "passed": true
+          },
+          "identical_pair_count": 33554432,
+          "k16_scale_count": 67108864,
+          "k32_scale_count": 33554432,
+          "non_power_of_two_count": 0,
+          "nonidentical_pair_count": 0,
+          "passed": true
+        },
+        "weight_payload_transform": "projection-half swap only; no nibble change"
+      },
+      "implementation": "__main__._make_deepgemm_runner.<locals>.DeepGemmW4A8SwiGLUOAIExperts",
+      "weight_precision": "native MXFP4 E2M1 + E8M0/K32"
+    }
+  },
+  "checkpoint": {
+    "layer_file": "/layer.safetensors",
+    "tp_rank": 0
+  },
+  "created_at": "2026-07-23T20:21:10.687370+00:00",
+  "decision": {
+    "passed": false,
+    "shapes": {
+      "24": {
+        "cutlass_graph_ms": 4.536512017250061,
+        "deepgemm_graph_ms": 5.50765597820282,
+        "minimum_speedup": 1.03,
+        "passed": false,
+        "speedup": 0.8236738160850692
+      },
+      "48": {
+        "cutlass_graph_ms": 8.036736011505127,
+        "deepgemm_graph_ms": 9.745063781738281,
+        "minimum_speedup": 1.03,
+        "passed": false,
+        "speedup": 0.8246981437479693
+      }
+    }
+  },
+  "failures": [
+    {
+      "details": {
+        "passed": false,
+        "shapes": {
+          "24": {
+            "cutlass_graph_ms": 4.536512017250061,
+            "deepgemm_graph_ms": 5.50765597820282,
+            "minimum_speedup": 1.03,
+            "passed": false,
+            "speedup": 0.8236738160850692
+          },
+          "48": {
+            "cutlass_graph_ms": 8.036736011505127,
+            "deepgemm_graph_ms": 9.745063781738281,
+            "minimum_speedup": 1.03,
+            "passed": false,
+            "speedup": 0.8246981437479693
+          }
+        }
+      },
+      "kind": "decision_speedup"
+    }
+  ],
+  "passed": false,
+  "rows": [
+    {
+      "cutlass_activity": {
+        "finite": true,
+        "max_abs": 2.125,
+        "nonfinite_count": 0,
+        "nonzero_count": 4096,
+        "numel": 4096,
+        "passed": true,
+        "rms": 0.5674721263349056
+      },
+      "cutlass_graph_ms": 0.21879999712109566,
+      "cutlass_graph_vs_eager": {
+        "actual_max_abs": 2.125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 4096,
+        "cosine": 1.0,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.125,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 4096,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "deepgemm_activity": {
+        "finite": true,
+        "max_abs": 2.234375,
+        "nonfinite_count": 0,
+        "nonzero_count": 4096,
+        "numel": 4096,
+        "passed": true,
+        "rms": 0.5682003600522876
+      },
+      "deepgemm_graph_ms": 0.23259199783205986,
+      "deepgemm_graph_vs_eager": {
+        "actual_max_abs": 2.234375,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 4096,
+        "cosine": 1.0,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.234375,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 4096,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "graph_passed": true,
+      "m": 1,
+      "numeric": {
+        "actual_max_abs": 2.234375,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 4096,
+        "cosine": 0.9858817458152771,
+        "finite": true,
+        "max_abs": 0.3056640625,
+        "mean_abs": 0.07611609250307083,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.16815012215876124,
+        "reference_max_abs": 2.125,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 4096,
+        "relative_p50": 0.16836734116077423,
+        "relative_p95": 2.1291873455047607,
+        "relative_p99": 9.152402877807617,
+        "rmse": 0.09542050736490637
+      },
+      "numeric_passed": true,
+      "timing": {
+        "combined": {
+          "cutlass": {
+            "median_ms": 0.21879999712109566,
+            "order_medians_ms": [
+              0.2192479968070984,
+              0.21835199743509293
+            ]
+          },
+          "deepgemm": {
+            "median_ms": 0.23259199783205986,
+            "order_medians_ms": [
+              0.23263999819755554,
+              0.23254399746656418
+            ]
+          },
+          "deepgemm_speedup_over_cutlass": 0.9407030300289069
+        },
+        "rounds": {
+          "cutlass_first": {
+            "cutlass": {
+              "host_submit_us": {
+                "maximum": 3.936002030968666,
+                "median": 2.976012183353305,
+                "minimum": 2.415996277704835,
+                "p95": 3.521592589095235,
+                "repeat_medians": [
+                  3.064007614739239,
+                  2.968008629977703,
+                  2.9679940780624747
+                ]
+              },
+              "max_ms": 0.2604160010814667,
+              "mean_ms": 0.22231466621160506,
+              "median_ms": 0.21835199743509293,
+              "min_ms": 0.21609599888324738,
+              "p95_ms": 0.252447997033596,
+              "repeat_median_ms": [
+                0.2205599993467331,
+                0.2181440070271492,
+                0.21830399334430695
+              ],
+              "repeat_median_range_ms": [
+                0.2181440070271492,
+                0.2205599993467331
+              ],
+              "repeats": 3,
+              "samples": 60
+            },
+            "deepgemm": {
+              "host_submit_us": {
+                "maximum": 4.191999323666096,
+                "median": 2.8400099836289883,
+                "minimum": 2.2400054149329662,
+                "p95": 3.6263983929529773,
+                "repeat_medians": [
+                  2.98398663289845,
+                  3.0480005079880357,
+                  2.496002707630396
+                ]
+              },
+              "max_ms": 0.24799999594688416,
+              "mean_ms": 0.23395680114626885,
+              "median_ms": 0.23254399746656418,
+              "min_ms": 0.23059199750423431,
+              "p95_ms": 0.24704639613628387,
+              "repeat_median_ms": [
+                0.23254399746656418,
+                0.23240000009536743,
+                0.23259200155735016
+              ],
+              "repeat_median_range_ms": [
+                0.23240000009536743,
+                0.23259200155735016
+              ],
+              "repeats": 3,
+              "samples": 60
+            }
+          },
+          "deepgemm_first": {
+            "cutlass": {
+              "host_submit_us": {
+                "maximum": 4.128000000491738,
+                "median": 2.9520015232264996,
+                "minimum": 2.28799763135612,
+                "p95": 3.6415847716853014,
+                "repeat_medians": [
+                  2.5839981390163302,
+                  2.9520015232264996,
+                  3.200009814463556
+                ]
+              },
+              "max_ms": 0.33670398592948914,
+              "mean_ms": 0.22478613232572872,
+              "median_ms": 0.2192479968070984,
+              "min_ms": 0.2157759964466095,
+              "p95_ms": 0.24542239755392073,
+              "repeat_median_ms": [
+                0.21873600035905838,
+                0.2181599959731102,
+                0.22039999812841415
+              ],
+              "repeat_median_range_ms": [
+                0.2181599959731102,
+                0.22039999812841415
+              ],
+              "repeats": 3,
+              "samples": 60
+            },
+            "deepgemm": {
+              "host_submit_us": {
+                "maximum": 4.943984095007181,
+                "median": 3.1039962777867913,
+                "minimum": 2.3040047381073236,
+                "p95": 4.248792538419366,
+                "repeat_medians": [
+                  3.2800016924738884,
+                  2.6880152290686965,
+                  3.4080003388226032
+                ]
+              },
+              "max_ms": 0.2521600127220154,
+              "mean_ms": 0.23381280153989792,
+              "median_ms": 0.23263999819755554,
+              "min_ms": 0.22934399545192719,
+              "p95_ms": 0.2458448015153408,
+              "repeat_median_ms": [
+                0.23318400233983994,
+                0.23254400491714478,
+                0.23243200033903122
+              ],
+              "repeat_median_range_ms": [
+                0.23243200033903122,
+                0.23318400233983994
+              ],
+              "repeats": 3,
+              "samples": 60
+            }
+          }
+        }
+      }
+    },
+    {
+      "cutlass_activity": {
+        "finite": true,
+        "max_abs": 2.265625,
+        "nonfinite_count": 0,
+        "nonzero_count": 16384,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5953627172857523
+      },
+      "cutlass_graph_ms": 0.7834799885749817,
+      "cutlass_graph_vs_eager": {
+        "actual_max_abs": 2.265625,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16384,
+        "cosine": 1.0000001192092896,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16384,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "deepgemm_activity": {
+        "finite": true,
+        "max_abs": 2.328125,
+        "nonfinite_count": 0,
+        "nonzero_count": 16384,
+        "numel": 16384,
+        "passed": true,
+        "rms": 0.5934394290670753
+      },
+      "deepgemm_graph_ms": 0.9216320067644119,
+      "deepgemm_graph_vs_eager": {
+        "actual_max_abs": 2.328125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16384,
+        "cosine": 0.9999998807907104,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.328125,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16384,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "graph_passed": true,
+      "m": 4,
+      "numeric": {
+        "actual_max_abs": 2.328125,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 16384,
+        "cosine": 0.9865379333496094,
+        "finite": true,
+        "max_abs": 0.416015625,
+        "mean_abs": 0.07774780690670013,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.1638524973608398,
+        "reference_max_abs": 2.265625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 16384,
+        "relative_p50": 0.16435961425304413,
+        "relative_p95": 2.079392671585083,
+        "relative_p99": 10.48758602142334,
+        "rmse": 0.09755166806280613
+      },
+      "numeric_passed": true,
+      "timing": {
+        "combined": {
+          "cutlass": {
+            "median_ms": 0.7834799885749817,
+            "order_medians_ms": [
+              0.7834720015525818,
+              0.7834879755973816
+            ]
+          },
+          "deepgemm": {
+            "median_ms": 0.9216320067644119,
+            "order_medians_ms": [
+              0.9205760061740875,
+              0.9226880073547363
+            ]
+          },
+          "deepgemm_speedup_over_cutlass": 0.8501006723123227
+        },
+        "rounds": {
+          "cutlass_first": {
+            "cutlass": {
+              "host_submit_us": {
+                "maximum": 3.6320125218480825,
+                "median": 2.9759976314380765,
+                "minimum": 2.415996277704835,
+                "p95": 3.383214061614126,
+                "repeat_medians": [
+                  2.9679795261472464,
+                  2.9679940780624747,
+                  2.9919901862740517
+                ]
+              },
+              "max_ms": 0.8213760256767273,
+              "mean_ms": 0.7866608003775278,
+              "median_ms": 0.7834879755973816,
+              "min_ms": 0.7782080173492432,
+              "p95_ms": 0.8152575731277465,
+              "repeat_median_ms": [
+                0.7840159833431244,
+                0.7836959958076477,
+                0.7824639976024628
+              ],
+              "repeat_median_range_ms": [
+                0.7824639976024628,
+                0.7840159833431244
+              ],
+              "repeats": 3,
+              "samples": 60
+            },
+            "deepgemm": {
+              "host_submit_us": {
+                "maximum": 3.6479905247688293,
+                "median": 3.0240043997764587,
+                "minimum": 2.415996277704835,
+                "p95": 3.5552060580812395,
+                "repeat_medians": [
+                  3.096007276326418,
+                  3.0560040613636374,
+                  2.8879876481369138
+                ]
+              },
+              "max_ms": 1.0911359786987305,
+              "mean_ms": 0.9401125341653824,
+              "median_ms": 0.9226880073547363,
+              "min_ms": 0.9149119853973389,
+              "p95_ms": 1.0541056156158446,
+              "repeat_median_ms": [
+                0.9244480133056641,
+                0.9240160286426544,
+                0.9202240109443665
+              ],
+              "repeat_median_range_ms": [
+                0.9202240109443665,
+                0.9244480133056641
+              ],
+              "repeats": 3,
+              "samples": 60
+            }
+          },
+          "deepgemm_first": {
+            "cutlass": {
+              "host_submit_us": {
+                "maximum": 10.640011169016361,
+                "median": 2.9520015232264996,
+                "minimum": 2.320011844858527,
+                "p95": 3.4063938073813906,
+                "repeat_medians": [
+                  2.6719935704022646,
+                  3.1119852792471647,
+                  2.9759976314380765
+                ]
+              },
+              "max_ms": 0.834496021270752,
+              "mean_ms": 0.7881450672944387,
+              "median_ms": 0.7834720015525818,
+              "min_ms": 0.7752640247344971,
+              "p95_ms": 0.8197632014751434,
+              "repeat_median_ms": [
+                0.7827679812908173,
+                0.782480001449585,
+                0.7836959958076477
+              ],
+              "repeat_median_range_ms": [
+                0.782480001449585,
+                0.7836959958076477
+              ],
+              "repeats": 3,
+              "samples": 60
+            },
+            "deepgemm": {
+              "host_submit_us": {
+                "maximum": 7.5360003393143415,
+                "median": 2.9999937396496534,
+                "minimum": 2.4640175979584455,
+                "p95": 3.83041042368859,
+                "repeat_medians": [
+                  3.1440140446648,
+                  2.9279908630996943,
+                  3.007997293025255
+                ]
+              },
+              "max_ms": 1.318079948425293,
+              "mean_ms": 0.9406666666269302,
+              "median_ms": 0.9205760061740875,
+              "min_ms": 0.9145280122756958,
+              "p95_ms": 0.9739408016204831,
+              "repeat_median_ms": [
+                0.9186240136623383,
+                0.9205600023269653,
+                0.9380480051040649
+              ],
+              "repeat_median_range_ms": [
+                0.9186240136623383,
+                0.9380480051040649
+              ],
+              "repeats": 3,
+              "samples": 60
+            }
+          }
+        }
+      }
+    },
+    {
+      "cutlass_activity": {
+        "finite": true,
+        "max_abs": 2.71875,
+        "nonfinite_count": 0,
+        "nonzero_count": 98304,
+        "numel": 98304,
+        "passed": true,
+        "rms": 0.5849955738522112
+      },
+      "cutlass_graph_ms": 4.536512017250061,
+      "cutlass_graph_vs_eager": {
+        "actual_max_abs": 2.71875,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 98304,
+        "cosine": 1.0000001192092896,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.71875,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 98304,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "deepgemm_activity": {
+        "finite": true,
+        "max_abs": 2.65625,
+        "nonfinite_count": 0,
+        "nonzero_count": 98304,
+        "numel": 98304,
+        "passed": true,
+        "rms": 0.5831862147897482
+      },
+      "deepgemm_graph_ms": 5.50765597820282,
+      "deepgemm_graph_vs_eager": {
+        "actual_max_abs": 2.65625,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 98304,
+        "cosine": 1.0000001192092896,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.65625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 98304,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "graph_passed": true,
+      "m": 24,
+      "numeric": {
+        "actual_max_abs": 2.65625,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 98304,
+        "cosine": 0.9861528873443604,
+        "finite": true,
+        "max_abs": 0.52655029296875,
+        "mean_abs": 0.07758127897977829,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.16618752940604872,
+        "reference_max_abs": 2.71875,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 98304,
+        "relative_p50": 0.1666666716337204,
+        "relative_p95": 2.1540513038635254,
+        "relative_p99": 10.943469047546387,
+        "rmse": 0.0972189691319727
+      },
+      "numeric_passed": true,
+      "timing": {
+        "combined": {
+          "cutlass": {
+            "median_ms": 4.536512017250061,
+            "order_medians_ms": [
+              4.536384105682373,
+              4.536639928817749
+            ]
+          },
+          "deepgemm": {
+            "median_ms": 5.50765597820282,
+            "order_medians_ms": [
+              5.505536079406738,
+              5.509775876998901
+            ]
+          },
+          "deepgemm_speedup_over_cutlass": 0.8236738160850692
+        },
+        "rounds": {
+          "cutlass_first": {
+            "cutlass": {
+              "host_submit_us": {
+                "maximum": 4.064000677317381,
+                "median": 3.1520030461251736,
+                "minimum": 2.368004061281681,
+                "p95": 3.472800017334521,
+                "repeat_medians": [
+                  3.087989171035588,
+                  3.231994924135506,
+                  3.1039962777867913
+                ]
+              },
+              "max_ms": 4.590720176696777,
+              "mean_ms": 4.528720537821452,
+              "median_ms": 4.536639928817749,
+              "min_ms": 4.480735778808594,
+              "p95_ms": 4.561105680465698,
+              "repeat_median_ms": [
+                4.539232015609741,
+                4.538464069366455,
+                4.53220796585083
+              ],
+              "repeat_median_range_ms": [
+                4.53220796585083,
+                4.539232015609741
+              ],
+              "repeats": 3,
+              "samples": 60
+            },
+            "deepgemm": {
+              "host_submit_us": {
+                "maximum": 4.0000013541430235,
+                "median": 2.935994416475296,
+                "minimum": 2.4799956008791924,
+                "p95": 3.7767895264551044,
+                "repeat_medians": [
+                  2.8719950933009386,
+                  3.192006261087954,
+                  2.7759961085394025
+                ]
+              },
+              "max_ms": 6.1326398849487305,
+              "mean_ms": 5.538133875528971,
+              "median_ms": 5.509775876998901,
+              "min_ms": 5.455103874206543,
+              "p95_ms": 5.7696575880050665,
+              "repeat_median_ms": [
+                5.5141119956970215,
+                5.511631965637207,
+                5.505024194717407
+              ],
+              "repeat_median_range_ms": [
+                5.505024194717407,
+                5.5141119956970215
+              ],
+              "repeats": 3,
+              "samples": 60
+            }
+          },
+          "deepgemm_first": {
+            "cutlass": {
+              "host_submit_us": {
+                "maximum": 4.111992893740535,
+                "median": 2.9924995033070445,
+                "minimum": 2.2400054149329662,
+                "p95": 3.5375996958464384,
+                "repeat_medians": [
+                  2.7679925551638007,
+                  3.0080118449404836,
+                  3.1360104912891984
+                ]
+              },
+              "max_ms": 4.886655807495117,
+              "mean_ms": 4.5349114815394085,
+              "median_ms": 4.536384105682373,
+              "min_ms": 4.490335941314697,
+              "p95_ms": 4.563063788414001,
+              "repeat_median_ms": [
+                4.53436803817749,
+                4.545759916305542,
+                4.534288167953491
+              ],
+              "repeat_median_range_ms": [
+                4.534288167953491,
+                4.545759916305542
+              ],
+              "repeats": 3,
+              "samples": 60
+            },
+            "deepgemm": {
+              "host_submit_us": {
+                "maximum": 4.336005076766014,
+                "median": 3.0320079531520605,
+                "minimum": 2.28799763135612,
+                "p95": 3.9608086808584626,
+                "repeat_medians": [
+                  2.9840011848136783,
+                  2.9360089683905244,
+                  3.1600065995007753
+                ]
+              },
+              "max_ms": 6.17903995513916,
+              "mean_ms": 5.535130683581034,
+              "median_ms": 5.505536079406738,
+              "min_ms": 5.444767951965332,
+              "p95_ms": 5.7908882141113285,
+              "repeat_median_ms": [
+                5.52180814743042,
+                5.5,
+                5.503695964813232
+              ],
+              "repeat_median_range_ms": [
+                5.5,
+                5.52180814743042
+              ],
+              "repeats": 3,
+              "samples": 60
+            }
+          }
+        }
+      }
+    },
+    {
+      "cutlass_activity": {
+        "finite": true,
+        "max_abs": 2.890625,
+        "nonfinite_count": 0,
+        "nonzero_count": 196608,
+        "numel": 196608,
+        "passed": true,
+        "rms": 0.5809521488845348
+      },
+      "cutlass_graph_ms": 8.036736011505127,
+      "cutlass_graph_vs_eager": {
+        "actual_max_abs": 2.890625,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 196608,
+        "cosine": 1.0000001192092896,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.890625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 196608,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "deepgemm_activity": {
+        "finite": true,
+        "max_abs": 2.84375,
+        "nonfinite_count": 0,
+        "nonzero_count": 196608,
+        "numel": 196608,
+        "passed": true,
+        "rms": 0.5794977517798543
+      },
+      "deepgemm_graph_ms": 9.745063781738281,
+      "deepgemm_graph_vs_eager": {
+        "actual_max_abs": 2.84375,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 196608,
+        "cosine": 0.9999999403953552,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.0,
+        "reference_max_abs": 2.84375,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 196608,
+        "relative_p50": 0.0,
+        "relative_p95": 0.0,
+        "relative_p99": 0.0,
+        "rmse": 0.0
+      },
+      "graph_passed": true,
+      "m": 48,
+      "numeric": {
+        "actual_max_abs": 2.84375,
+        "actual_nonfinite_count": 0,
+        "actual_nonzero_count": 196608,
+        "cosine": 0.9860915541648865,
+        "finite": true,
+        "max_abs": 0.4765625,
+        "mean_abs": 0.07716583460569382,
+        "nonfinite_count": 0,
+        "nonzero_activity": true,
+        "normalized_rmse": 0.1665948851318568,
+        "reference_max_abs": 2.890625,
+        "reference_nonfinite_count": 0,
+        "reference_nonzero_count": 196608,
+        "relative_p50": 0.1666666716337204,
+        "relative_p95": 2.143953561782837,
+        "relative_p99": 11.25,
+        "rmse": 0.09678365651052445
+      },
+      "numeric_passed": true,
+      "timing": {
+        "combined": {
+          "cutlass": {
+            "median_ms": 8.036736011505127,
+            "order_medians_ms": [
+              8.034495830535889,
+              8.038976192474365
+            ]
+          },
+          "deepgemm": {
+            "median_ms": 9.745063781738281,
+            "order_medians_ms": [
+              9.743135929107666,
+              9.746991634368896
+            ]
+          },
+          "deepgemm_speedup_over_cutlass": 0.8246981437479693
+        },
+        "rounds": {
+          "cutlass_first": {
+            "cutlass": {
+              "host_submit_us": {
+                "maximum": 4.064000677317381,
+                "median": 3.007982741110027,
+                "minimum": 2.28799763135612,
+                "p95": 3.6176046705804765,
+                "repeat_medians": [
+                  2.776010660454631,
+                  3.072011168114841,
+                  3.0960218282416463
+                ]
+              },
+              "max_ms": 8.444319725036621,
+              "mean_ms": 8.05383894443512,
+              "median_ms": 8.038976192474365,
+              "min_ms": 7.987552165985107,
+              "p95_ms": 8.10466046333313,
+              "repeat_median_ms": [
+                8.036943912506104,
+                8.038047790527344,
+                8.039839744567871
+              ],
+              "repeat_median_range_ms": [
+                8.036943912506104,
+                8.039839744567871
+              ],
+              "repeats": 3,
+              "samples": 60
+            },
+            "deepgemm": {
+              "host_submit_us": {
+                "maximum": 4.336005076766014,
+                "median": 3.0800001695752144,
+                "minimum": 2.4640175979584455,
+                "p95": 3.8519894587807353,
+                "repeat_medians": [
+                  2.7039932319894433,
+                  3.087989171035588,
+                  3.13599593937397
+                ]
+              },
+              "max_ms": 10.937472343444824,
+              "mean_ms": 9.77622234026591,
+              "median_ms": 9.746991634368896,
+              "min_ms": 9.693440437316895,
+              "p95_ms": 9.798653078079223,
+              "repeat_median_ms": [
+                9.749151706695557,
+                9.745552062988281,
+                9.745951652526855
+              ],
+              "repeat_median_range_ms": [
+                9.745552062988281,
+                9.749151706695557
+              ],
+              "repeats": 3,
+              "samples": 60
+            }
+          },
+          "deepgemm_first": {
+            "cutlass": {
+              "host_submit_us": {
+                "maximum": 3.631983418017626,
+                "median": 3.0480005079880357,
+                "minimum": 2.255983417853713,
+                "p95": 3.4440134186297655,
+                "repeat_medians": [
+                  2.8240028768777847,
+                  3.1919917091727257,
+                  3.0800001695752144
+                ]
+              },
+              "max_ms": 8.470656394958496,
+              "mean_ms": 8.052222394943238,
+              "median_ms": 8.034495830535889,
+              "min_ms": 8.000767707824707,
+              "p95_ms": 8.133244800567628,
+              "repeat_median_ms": [
+                8.039391994476318,
+                8.029215812683105,
+                8.034111976623535
+              ],
+              "repeat_median_range_ms": [
+                8.029215812683105,
+                8.039391994476318
+              ],
+              "repeats": 3,
+              "samples": 60
+            },
+            "deepgemm": {
+              "host_submit_us": {
+                "maximum": 4.57599526271224,
+                "median": 3.0719966161996126,
+                "minimum": 2.415996277704835,
+                "p95": 3.9488018956035367,
+                "repeat_medians": [
+                  3.0239898478612304,
+                  3.1679956009611487,
+                  3.1840027077123523
+                ]
+              },
+              "max_ms": 10.433823585510254,
+              "mean_ms": 9.796751976013184,
+              "median_ms": 9.743135929107666,
+              "min_ms": 9.702495574951172,
+              "p95_ms": 10.263098764419555,
+              "repeat_median_ms": [
+                9.74235200881958,
+                9.735695838928223,
+                9.743840217590332
+              ],
+              "repeat_median_range_ms": [
+                9.735695838928223,
+                9.743840217590332
+              ],
+              "repeats": 3,
+              "samples": 60
+            }
+          }
+        }
+      }
+    }
+  ],
+  "schema_version": 1,
+  "settings": {
+    "decision_m": [
+      24,
+      48
+    ],
+    "input_rms": 1.0,
+    "iters": 20,
+    "m": [
+      1,
+      4,
+      24,
+      48
+    ],
+    "minimum_decision_speedup": 1.03,
+    "repeats": 3,
+    "routing": "balanced",
+    "seed": 4104,
+    "warmup": 3
+  }
+}

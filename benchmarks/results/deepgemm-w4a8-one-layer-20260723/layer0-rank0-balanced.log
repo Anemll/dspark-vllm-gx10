@@ -1,0 +1,9 @@
+INFO 07-23 20:20:45 [deep_gemm.py:175] deep_gemm not found in site-packages, trying vendored vllm.third_party.deep_gemm
+INFO 07-23 20:20:45 [deep_gemm.py:202] DeepGEMM PDL enabled on vllm.third_party.deep_gemm.
+INFO 07-23 20:21:01 [deep_gemm.py:120] DeepGEMM E8M0 enabled on current platform.
+M= 1 DeepGEMM-W4A8=0.232592 ms CUTLASS-W4A4=0.218800 ms speedup=0.9407x cos=0.985882 nrmse=0.168150
+M= 4 DeepGEMM-W4A8=0.921632 ms CUTLASS-W4A4=0.783480 ms speedup=0.8501x cos=0.986538 nrmse=0.163852
+M=24 DeepGEMM-W4A8=5.507656 ms CUTLASS-W4A4=4.536512 ms speedup=0.8237x cos=0.986153 nrmse=0.166188
+M=48 DeepGEMM-W4A8=9.745064 ms CUTLASS-W4A4=8.036736 ms speedup=0.8247x cos=0.986092 nrmse=0.166595
+Wrote /results/layer0-rank0-balanced.json
+FAILED: 1 gate(s)
