@@ -1,0 +1,24 @@
+2026-07-23 04:25:33,084 - INFO - autotuner.py:757 - flashinfer.jit: [Autotuner]: Autotuning process starts ...
+[AutoTuner]: Tuning trtllm::fused_moe::gemm1:   0%|          | 0/1 [00:00<?, ?profile/s]2026-07-23 04:25:33,203 - INFO - autotuner.py:1590 - flashinfer.jit: [Autotuner]: Skipped 4 unsupported tactic(s) for trtllm::fused_moe::gemm1 (enable debug logs to see details)
+[AutoTuner]: Tuning trtllm::fused_moe::gemm1: 100%|██████████| 1/1 [00:00<00:00,  8.66profile/s][AutoTuner]: Tuning trtllm::fused_moe::gemm1: 100%|██████████| 1/1 [00:00<00:00,  8.65profile/s]
+[AutoTuner]: Tuning trtllm::fused_moe::gemm2:   0%|          | 0/1 [00:00<?, ?profile/s]2026-07-23 04:25:33,300 - INFO - autotuner.py:1590 - flashinfer.jit: [Autotuner]: Skipped 4 unsupported tactic(s) for trtllm::fused_moe::gemm2 (enable debug logs to see details)
+[AutoTuner]: Tuning trtllm::fused_moe::gemm2: 100%|██████████| 1/1 [00:00<00:00, 10.32profile/s]
+2026-07-23 04:25:33,300 - INFO - autotuner.py:780 - flashinfer.jit: [Autotuner]: Autotuning process ends
+LOW_LATENCY_CACHE_ENTRY=ProfilingCacheKey(custom_op='trtllm::fused_moe::gemm1', runner_class_name='MoERunner', runner_hash=4902911861957175800, nearest_profile=((4, 2048), (256, 2048, 256), (0,), (256, 4096, 64), (0,)), extras=()) VALUE=(0, 17, OptimizationProfile(shapes=[[DynamicDim(min=4, opt=4, max=inf), StaticDim(val=2048)], [StaticDim(val=256), StaticDim(val=2048), StaticDim(val=256)], [StaticDim(val=0)], [StaticDim(val=256), StaticDim(val=4096), StaticDim(val=64)], [StaticDim(val=0)]], tensor_initializers=[<function _rand_scaled at 0xea059f988220>, None, None, None, None]))
+LOW_LATENCY_CACHE_ENTRY=ProfilingCacheKey(custom_op='trtllm::fused_moe::gemm2', runner_class_name='MoERunner', runner_hash=2465854015216930107, nearest_profile=((4, 2048), (256, 2048, 256), (0,), (256, 4096, 64), (0,)), extras=()) VALUE=(0, 37, OptimizationProfile(shapes=[[DynamicDim(min=4, opt=4, max=inf), StaticDim(val=2048)], [StaticDim(val=256), StaticDim(val=2048), StaticDim(val=256)], [StaticDim(val=0)], [StaticDim(val=256), StaticDim(val=4096), StaticDim(val=64)], [StaticDim(val=0)]], tensor_initializers=[<function _rand_scaled at 0xea059f988220>, None, None, None, None]))
+LOW_LATENCY_AUTOTUNE={'gemm1': 0, 'gemm2': 0}
+Traceback (most recent call last):
+  File "/probe.py", line 339, in <module>
+    raise SystemExit(run(parse_args()))
+                     ^^^^^^^^^^^^^^^^^
+  File "/probe.py", line 230, in run
+    expanded, num_active, scores, active_ids = launch_min_latency()
+                                               ^^^^^^^^^^^^^^^^^^^^
+  File "/probe.py", line 198, in launch_min_latency
+    raw_runner.run_moe_min_latency(
+  File "python/tvm_ffi/cython/function.pxi", line 929, in tvm_ffi.core.Function.__call__
+  File "<unknown>", line 0, in FusedMoeRunner::runMoeMinLantency(tvm::ffi::TensorView, tvm::ffi::TensorView, tvm::ffi::TensorView, tvm::ffi::Optional<tvm::ffi::TensorView, void>, tvm::ffi::TensorView, tvm::ffi::Optional<tvm::ffi::TensorView, void>, tvm::ffi::TensorView, tvm::ffi::Optional<tvm::ffi::TensorView, void>, tvm::ffi::Optional<tvm::ffi::Array<tvm::ffi::Tensor, void>, void>, tvm::ffi::Optional<tvm::ffi::TensorView, void>, tvm::ffi::Optional<tvm::ffi::TensorView, void>, tvm::ffi::Optional<tvm::ffi::TensorView, void>, tvm::ffi::Optional<tvm::ffi::TensorView, void>, bool, tvm::ffi::TensorView, tvm::ffi::TensorView, tvm::ffi::TensorView, long, long, long, long, long, long, bool, bool, tvm::ffi::Optional<tvm::ffi::Array<long, void>, void>, bool, tensorrt_llm::kernels::cutlass_kernels::ActivationType) [clone .isra.0]
+  File "/usr/local/lib/python3.12/dist-packages/flashinfer/data/csrc/fused_moe/cutlass_backend/flashinfer_cutlass_fused_moe_binding.cu", line 850, in void FusedMoeRunner::setRunnerProfiles(tvm::ffi::Optional<tvm::ffi::Array<long int> >)
+    TVM_FFI_ICHECK(id2 >= mGemm1TacticCount && id2 < mGemm1TacticCount + mGemm2TacticCount)
+
+RuntimeError: Check failed: (id2 >= mGemm1TacticCount && id2 < mGemm1TacticCount + mGemm2TacticCount) is false: Invalid gemm2 profile id: 0
