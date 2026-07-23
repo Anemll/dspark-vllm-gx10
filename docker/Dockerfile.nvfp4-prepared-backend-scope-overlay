@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG SOURCE_REVISION=unknown
+
+COPY overlay/vllm/models/deepseek_v4/quant_config.py \
+  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/quant_config.py
+
+RUN python3 -m py_compile \
+  /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/quant_config.py
+
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.nvfp4-prepared-backend-scope="target-only-v1"
