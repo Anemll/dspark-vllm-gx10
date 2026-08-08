@@ -1,3 +1,5 @@
+
+
 # DSpark vLLM for two DGX Spark / ASUS GX10 nodes
 
 This is a tested two-node GB10 port of the DeepSeek V4 Flash DSpark/NVFP4
@@ -41,12 +43,16 @@ you are licensed to use.
 
 ## Install
 
-Clone this repository on both nodes:
+Clone this repository on both nodes. On each machine, run the install command matching its role:
 
 ```bash
 git clone https://github.com/anemll/dspark-vllm-gx10.git
 cd dspark-vllm-gx10
+
+# On the worker node:
 ./scripts/install.sh --role worker
+
+# On the head node:
 ./scripts/install.sh --role head
 ```
 
