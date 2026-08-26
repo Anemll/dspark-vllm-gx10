@@ -20,6 +20,19 @@ jobs:
         run: python -m compileall -q dashboard benchmarks overlay
       - name: Shell syntax
         run: find scripts dashboard -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+      - name: vLLM patch applicability
+        run: |
+          source upstream.lock
+          git clone --filter=blob:none --sparse --no-checkout \
+            "$VLLM_REPOSITORY" .build/vllm
+          git -C .build/vllm sparse-checkout set \
+            vllm/v1/worker/gpu/spec_decode/dflash/speculator.py
+          git -C .build/vllm fetch --depth=1 origin "$VLLM_COMMIT"
+          git -C .build/vllm checkout --detach FETCH_HEAD
+          ./scripts/apply-vllm-patches.sh .build/vllm
+          git -C .build/vllm diff --check
+          python -m py_compile \
+            .build/vllm/vllm/v1/worker/gpu/spec_decode/dflash/speculator.py
       - name: Overlay license markers
         run: |
           missing="$(find overlay/vllm -type f -name '*.py' \

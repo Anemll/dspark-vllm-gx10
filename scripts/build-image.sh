@@ -18,6 +18,7 @@ git -C "$source_dir" fetch --tags origin
 git -C "$source_dir" checkout --detach "$VLLM_COMMIT"
 git -C "$source_dir" reset --hard "$VLLM_COMMIT"
 git -C "$source_dir" clean -fdx
+"$root/scripts/apply-vllm-patches.sh" "$source_dir"
 rsync -a "$root/overlay/vllm/" "$source_dir/vllm/"
 
 # vLLM 0.25 keeps its primary Dockerfile under docker/, not at repository root.
