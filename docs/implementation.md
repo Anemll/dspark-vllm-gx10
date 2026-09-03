@@ -11,6 +11,14 @@ overlay provides the missing integration:
 - pads 256-wide DSpark draft indices to the native 512-wide dispatch using
   `-1` sentinels without changing active lengths;
 - carries the b12x NVFP4 MoE integration used by the validated runtime.
+- `vllm/v1/core/kv_cache_utils.py` and `vllm/models/deepseek_v4/compressor.py`: an
+  opt-in `block_stride_alignment_bytes` contract on `AttentionSpec`, declared as 64 by the
+  compressor state cache and honoured by the packed allocator. The compressor state is a
+  float32 strided view over the packed slab, so its outer stride is the block stride over
+  four, and the CuTeDSL kernels require that to be divisible by sixteen. Under the NVFP4
+  584-byte envelope every page is a multiple of 64 except the C128 main page (1168), so
+  without this the stride is only aligned when a stage owns a multiple of four C128 layers
+  — true with every layer resident, false for most pipeline-parallel splits.
 
 The b12x adapter registers `flashinfer_b12x` with vLLM's modular MXFP4 oracle,
 prepares the checkpoint's native MXFP4 tensors into b12x's W4A16 runtime

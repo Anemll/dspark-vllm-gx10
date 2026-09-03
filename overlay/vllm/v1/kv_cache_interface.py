@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import math
 from collections import Counter
 from dataclasses import dataclass, fields, replace
 from enum import Enum, IntEnum
@@ -168,6 +169,12 @@ class AttentionSpec(KVCacheSpec):
     kv_quant_mode: KVQuantMode = KVQuantMode.NONE
     page_size_padded: int | None = None
     indexes_kv_by_block_stride: bool = False
+    # Byte alignment the packed block stride must satisfy for this layer.
+    # In a packed layout a layer's page is reached through a strided view over
+    # the shared slab, so the slab's block stride is that view's outer stride.
+    # A kernel that requires the stride to be aligned declares it here.
+    # 1 means "no requirement", which leaves the layout exactly as it was.
+    block_stride_alignment_bytes: int = 1
 
     @property
     def page_size_bytes(self) -> int:
@@ -286,6 +293,7 @@ class FullAttentionSpec(AttentionSpec):
             kv_quant_mode=specs[0].kv_quant_mode,
             page_size_padded=specs[0].page_size_padded,
             indexes_kv_by_block_stride=specs[0].indexes_kv_by_block_stride,
+            block_stride_alignment_bytes=specs[0].block_stride_alignment_bytes,
             sliding_window=cls.merge_window_sizes(sliding_window),
             attention_chunk_size=cls.merge_window_sizes(attention_chunk_size),
             # If any layer in the group is non-causal, treat the group as
@@ -425,6 +433,9 @@ class MLAAttentionSpec(FullAttentionSpec):
             kv_quant_mode=specs[0].kv_quant_mode,
             page_size_padded=specs[0].page_size_padded,
             indexes_kv_by_block_stride=block_stride_set.pop(),
+            block_stride_alignment_bytes=math.lcm(
+                *(spec.block_stride_alignment_bytes for spec in specs)
+            ),
             cache_dtype_str=cache_dtype_str_set.pop(),
             compress_ratio=compress_ratio_set.pop(),
             model_version=model_version_set.pop(),
@@ -471,6 +482,7 @@ class RSWASpec(FullAttentionSpec):
             kv_quant_mode=base.kv_quant_mode,
             page_size_padded=base.page_size_padded,
             indexes_kv_by_block_stride=base.indexes_kv_by_block_stride,
+            block_stride_alignment_bytes=base.block_stride_alignment_bytes,
             sliding_window=base.sliding_window,
             attention_chunk_size=base.attention_chunk_size,
             non_causal=base.non_causal,
@@ -653,6 +665,9 @@ class SlidingWindowMLASpec(SlidingWindowSpec):
             dtype=specs[0].dtype,
             page_size_padded=specs[0].page_size_padded,
             indexes_kv_by_block_stride=block_stride_set.pop(),
+            block_stride_alignment_bytes=math.lcm(
+                *(spec.block_stride_alignment_bytes for spec in specs)
+            ),
             sliding_window=sliding_window_set.pop(),
             cache_dtype_str=cache_dtype_str_set.pop(),
             compress_ratio=compress_ratio_set.pop(),
@@ -765,6 +780,7 @@ class SinkFullAttentionSpec(FullAttentionSpec):
             kv_quant_mode=specs[0].kv_quant_mode,
             page_size_padded=specs[0].page_size_padded,
             indexes_kv_by_block_stride=specs[0].indexes_kv_by_block_stride,
+            block_stride_alignment_bytes=specs[0].block_stride_alignment_bytes,
             sliding_window=cls.merge_window_sizes(sliding_window),
             attention_chunk_size=cls.merge_window_sizes(attention_chunk_size),
             non_causal=any(spec.non_causal for spec in specs),
