@@ -93,3 +93,7 @@ The new downstream work is the vLLM 0.25 NVFP4/DSpark bridge, the expanded
 b12x modular-MoE adapter, two-node deployment and update tooling, the live
 dashboard, and the benchmark packaging. Repo-local work is MIT licensed;
 vLLM-derived overlay code remains Apache-2.0.
+
+## Downstream fixes
+
+- Simon Blom — [PR #2](https://github.com/Anemll/dspark-vllm-gx10/pull/2), DSpark SWA prefix-cache hit
