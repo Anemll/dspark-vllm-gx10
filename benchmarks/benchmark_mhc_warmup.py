@@ -22,11 +22,14 @@ import argparse
 from collections import Counter
 from datetime import datetime, timezone
 import hashlib
+import importlib
 import importlib.metadata
 import importlib.util
 import json
 import os
 from pathlib import Path
+import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -86,6 +89,73 @@ def cache_snapshot(root: Path) -> dict:
             "bytes": stat.st_size, "sha256": sha256(path),
         }
     return rows
+
+
+def changed_cache_entries(previous: dict, current: dict) -> list[str]:
+    return sorted(key for key in previous.keys() | current.keys()
+                  if previous.get(key) != current.get(key))
+
+
+def compiler_process_observation(event: str, arguments) -> dict | None:
+    """Separate actual compiler process invocations from compiler discovery.
+
+    Python profile entries such as compile()/cached() are deliberately not
+    inputs: they may only look up an existing compiled kernel.
+    """
+    if event == "subprocess.Popen":
+        command = arguments[1]
+        display = str(arguments[:3])
+    elif event == "os.system":
+        command = arguments[0]
+        display = str(command)
+    else:
+        return None
+    if isinstance(command, bytes):
+        command = os.fsdecode(command)
+    argv = list(command) if isinstance(command, (list, tuple)) else shlex.split(command)
+    argv = [os.fsdecode(value) for value in argv]
+    if argv and Path(argv[0]).name in ("sh", "bash", "dash") and "-c" in argv:
+        position = argv.index("-c") + 1
+        if position < len(argv):
+            argv = shlex.split(argv[position])
+    compiler = re.compile(r"(?:.*-)?(?:nvcc|ptxas|gcc|g\+\+|cc|c\+\+|clang|clang\+\+)(?:-\d+)?$")
+    positions = [index for index, value in enumerate(argv)
+                 if compiler.fullmatch(Path(value).name)]
+    if not positions:
+        return None
+    first = positions[0]
+    options = argv[first + 1:]
+    query = bool(argv and Path(argv[0]).name in ("which", "whereis", "command"))
+    compile_flags = {"-c", "--cubin", "-cubin", "-shared", "--fatbin", "-fatbin",
+                     "--ptx", "-ptx", "-o", "--output-file"}
+    if not any(option in compile_flags for option in options):
+        query = query or any(option in ("--version", "-V", "-dumpmachine", "-dumpversion")
+                             or option.startswith("-print-") for option in options)
+    return {"event": event, "command": display[:4000],
+            "is_compiler_invocation": not query,
+            "observation_kind": "compiler_query" if query else "compiler_invocation"}
+
+
+def verify_post_warmup_probe(probe: dict) -> None:
+    """A bounded no-new-compilation-observed gate, not universal zero-JIT proof."""
+    probe["no_new_compilation_observed"] = False
+    if not probe.get("finite", False):
+        raise RuntimeError("non-finite 294-token normalized pre output")
+    if probe.get("cache_changed"):
+        raise RuntimeError("post-warmup 294-token probe changed the isolated cache")
+    invocations = [row for row in probe.get("compiler_process_observations", [])
+                   if row.get("is_compiler_invocation", True)]
+    if invocations:
+        raise RuntimeError("post-warmup 294-token probe invoked an observed compiler")
+    libraries = probe.get("tilelang_binaries", [])
+    if not libraries or not all(
+        row.get("library_inside_isolated_root", False)
+        and row.get("library_provenance_verified", False)
+        and row.get("library", {}).get("sha256")
+        for row in libraries
+    ):
+        raise RuntimeError("post-warmup probe lost verified library provenance")
+    probe["no_new_compilation_observed"] = True
 
 
 def prepare_environment(output: Path) -> dict[str, str]:
@@ -174,7 +244,65 @@ def load_source(path: Path, name: str):
     return module
 
 
-def tilelang_binary_evidence(kernel_cache, root: Path) -> list[dict]:
+def select_live_tilelang_caches(cache_module) -> dict:
+    """Use the backend instances actually referenced by TileLang's dispatcher.
+
+    TileLang 0.1.9 constructs one singleton per backend subclass. Constructing
+    the base KernelCache makes a separate, unused cache that remains empty even
+    while TVMFFIKernelCache compiles and retains kernels.
+    """
+    dispatch = getattr(cache_module, "_dispatch_map", None)
+    cached = getattr(cache_module, "cached", None)
+    if not isinstance(dispatch, dict) or not dispatch:
+        raise RuntimeError("installed TileLang has no auditable cache dispatcher")
+    if getattr(cached, "__globals__", {}).get("_dispatch_map") is not dispatch:
+        raise RuntimeError("TileLang cached() does not reference the inspected map")
+    for backend, cache in dispatch.items():
+        if (not isinstance(backend, str)
+                or not isinstance(getattr(cache, "_memory_cache", None), dict)
+                or not callable(getattr(cache, "_get_cache_root", None))):
+            raise RuntimeError("unsupported TileLang backend cache contract")
+    return dict(dispatch)
+
+
+def observe_tilelang_executable_exports(caches: dict, root: Path) -> tuple[dict, list]:
+    """Observe the actual TVMFFI live-executable export, without compiling again.
+
+    Fresh TVMFFIKernelAdapter objects have no libpath. The installed cache
+    subclass serializes adapter.executable to executable.so in its staging
+    directory, then atomically renames that directory under the final key.
+    Record object identity and the emitted bytes at that exact export call.
+    """
+    root = root.resolve()
+    observations, restore = {}, []
+    for backend, cache in caches.items():
+        if backend != "tvm_ffi":
+            continue
+        original = cache._save_so_cubin_to_disk
+        restore.append((cache, original))
+
+        def observed(kernel, cache_path, verbose=False, *, _original=original,
+                     _cache=cache):
+            directory = Path(cache_path).resolve()
+            if not directory.is_relative_to(root):
+                raise RuntimeError("TileLang executable export escaped isolated root")
+            adapter = kernel.adapter
+            executable = getattr(adapter, "executable", None)
+            if executable is None:
+                raise RuntimeError("TVMFFI export has no live executable")
+            _original(kernel, cache_path, verbose)
+            path = directory / _cache.kernel_lib_path
+            observations[id(kernel)] = {
+                "kernel": kernel, "adapter": adapter, "executable": executable,
+                "exported_sha256": sha256(path), "staging_path": str(path),
+            }
+
+        cache._save_so_cubin_to_disk = observed
+    return observations, restore
+
+
+def tilelang_binary_evidence(kernel_cache, root: Path, *, backend=None,
+                            exports=None) -> list[dict]:
     """Correlate live JITKernel adapter libraries with exact generated files."""
     root = root.resolve()
     rows = []
@@ -182,15 +310,41 @@ def tilelang_binary_evidence(kernel_cache, root: Path) -> list[dict]:
         adapter = getattr(kernel, "adapter", None)
         libpath = getattr(adapter, "libpath", None)
         row = {"cache_key": key, "adapter_type": type(adapter).__name__}
+        if backend is not None:
+            row["execution_backend"] = backend
         if libpath:
             path = Path(libpath).resolve()
             row["library"] = source_info(path)
             row["library_inside_isolated_root"] = path.is_relative_to(root)
+            row["library_provenance"] = "adapter_libpath"
+            row["library_provenance_verified"] = True
+        elif backend == "tvm_ffi":
+            observation = (exports or {}).get(id(kernel))
+            if (observation is not None and observation["kernel"] is kernel
+                    and observation["adapter"] is adapter
+                    and observation["executable"] is getattr(adapter, "executable", None)):
+                path = (Path(kernel_cache._get_cache_path(key))
+                        / kernel_cache.kernel_lib_path).resolve()
+                row["library"] = source_info(path)
+                row["library_inside_isolated_root"] = path.is_relative_to(root)
+                row["library_provenance"] = "observed_live_executable_export"
+                row["observed_export_sha256"] = observation["exported_sha256"]
+                row["library_provenance_verified"] = (
+                    row["library"]["sha256"] == observation["exported_sha256"]
+                )
         source = getattr(kernel, "kernel_source", None)
         if isinstance(source, str):
             row["generated_source_sha256"] = hashlib.sha256(source.encode()).hexdigest()
         rows.append(row)
     return rows
+
+
+def live_tilelang_binary_evidence(caches: dict, root: Path, exports=None) -> list[dict]:
+    return [
+        row
+        for backend, cache in sorted(caches.items())
+        for row in tilelang_binary_evidence(cache, root, backend=backend, exports=exports)
+    ]
 
 
 def build_synthetic_models(torch, seed: int):
@@ -262,7 +416,7 @@ def worker(args) -> int:
             "TILELANG_CLEAR_CACHE", "TILELANG_CLEANUP_TEMP_FILES",
         )},
         "phases": [], "compiler_process_observations": [],
-        "zero_jit_proven": False,
+        "zero_jit_proven": False, "no_new_compilation_observed": False,
         "limitations": [
             "Synthetic one-layer target and draft contract, not checkpoint validation.",
             "No TP collective, model, MoE, attention, or CUDA graph was executed.",
@@ -271,10 +425,12 @@ def worker(args) -> int:
             "Native compiler calls can bypass Python audit/profile hooks.",
             "Mapped host binaries do not prove which device cubin was launched.",
             "Fresh requested paths alone do not prove every cache honored them.",
+            "No-new-compilation-observed applies only to the two 294-token probes.",
         ],
     }
     phase = "imports"
     compile_entries = Counter()
+    export_restore = []
 
     def save():
         report["elapsed_s"] = time.monotonic() - started
@@ -288,13 +444,9 @@ def worker(args) -> int:
         save()
 
     def audit(name, arguments):
-        if name not in ("subprocess.Popen", "os.system"):
-            return
-        command = str(arguments[:3] if name == "subprocess.Popen" else arguments[0])
-        if any(word in command for word in ("nvcc", "ptxas", "clang", "g++")):
-            report["compiler_process_observations"].append(
-                {"phase": phase, "event": name, "command": command[:4000]}
-            )
+        observation = compiler_process_observation(name, arguments)
+        if observation is not None:
+            report["compiler_process_observations"].append({"phase": phase, **observation})
 
     def profile(frame, event_name, arg):
         if event_name != "call":
@@ -318,7 +470,7 @@ def worker(args) -> int:
         save()
         import torch
         import tilelang
-        from tilelang.cache.kernel_cache import KernelCache
+        tilelang_cache = importlib.import_module("tilelang.cache")
         from vllm.model_executor.kernels.mhc import tilelang as mhc
         from vllm.model_executor.kernels.mhc import tilelang_kernels
         from vllm.utils import deep_gemm
@@ -339,24 +491,34 @@ def worker(args) -> int:
             raise RuntimeError("reported GB10 DeepGEMM path is not enabled")
         deep_gemm._lazy_init()
         dg = deep_gemm._import_deep_gemm()
-        kernel_cache = KernelCache()
+        kernel_caches = select_live_tilelang_caches(tilelang_cache)
+        export_observations, export_restore = observe_tilelang_executable_exports(
+            kernel_caches, cache_root
+        )
         tilelang_env = tilelang.env
         report["tilelang_isolation"] = {
-            "cache_root": str(kernel_cache._get_cache_root()),
+            "cache_roots": {name: str(cache._get_cache_root())
+                            for name, cache in kernel_caches.items()},
+            "cache_types": {name: type(cache).__name__
+                            for name, cache in kernel_caches.items()},
             "temporary_root": tilelang_env.TILELANG_TMP_DIR,
             "cache_enabled": tilelang_env.is_cache_enabled(),
-            "initial_in_memory_entries": len(kernel_cache._memory_cache),
+            "initial_in_memory_entries": {
+                name: len(cache._memory_cache) for name, cache in kernel_caches.items()
+            },
         }
         if not (
-            Path(kernel_cache._get_cache_root()).resolve().is_relative_to(cache_root)
+            all(Path(cache._get_cache_root()).resolve().is_relative_to(cache_root)
+                for cache in kernel_caches.values())
             and Path(tilelang_env.TILELANG_TMP_DIR).resolve().is_relative_to(cache_root)
             and tilelang_env.is_cache_enabled()
-            and not kernel_cache._memory_cache
+            and all(not cache._memory_cache for cache in kernel_caches.values())
         ):
             raise RuntimeError("TileLang did not honor fresh isolated cache contract")
         report["versions"] = {"torch": torch.__version__, "cuda": torch.version.cuda,
                               "tilelang": getattr(tilelang, "__version__", None)}
         for name, module in (("tilelang", tilelang), ("mhc", mhc),
+                             ("tilelang_cache_dispatch", tilelang_cache),
                              ("mhc_kernels", tilelang_kernels),
                              ("deep_gemm_wrapper", deep_gemm), ("deep_gemm", dg)):
             path = getattr(module, "__file__", None)
@@ -438,14 +600,13 @@ def worker(args) -> int:
         if not report["warmup_finite"]:
             raise RuntimeError("non-finite synthetic warmup output")
         current = snapshot("after-warmup")
-        report["warmup_cache_changed"] = sorted(
-            key for key in current if current.get(key) != previous.get(key)
-        )
-        report["warmup_tilelang_binaries"] = tilelang_binary_evidence(
-            kernel_cache, cache_root
+        report["warmup_cache_changed"] = changed_cache_entries(previous, current)
+        report["warmup_tilelang_binaries"] = live_tilelang_binary_evidence(
+            kernel_caches, cache_root, export_observations
         )
         if not report["warmup_tilelang_binaries"] or not all(
             row.get("library_inside_isolated_root", False)
+            and row.get("library_provenance_verified", False)
             for row in report["warmup_tilelang_binaries"]
         ):
             raise RuntimeError("cannot correlate warmup with isolated adapter libraries")
@@ -453,6 +614,7 @@ def worker(args) -> int:
         residual = torch.randn((294, 4, 4096), dtype=torch.bfloat16,
                                device="cuda:0", generator=generator)
         layer = target.layer
+        probe_results = []
         for trial in range(2):
             phase = f"post-warmup-294-{trial + 1}"
             event(phase, status="starting")
@@ -468,15 +630,21 @@ def worker(args) -> int:
             duration = time.monotonic() - begin
             finite = all(bool(torch.isfinite(value).all().item()) for value in result)
             current = snapshot(f"after-probe-{trial + 1}")
-            report["phases"].append({
+            probe = {
                 "name": phase, "wall_s": duration, "finite": finite,
-                "cache_changed": sorted(key for key in current
-                                        if current.get(key) != previous.get(key)),
-                "tilelang_binaries": tilelang_binary_evidence(kernel_cache, cache_root),
-            })
+                "cache_changed": changed_cache_entries(previous, current),
+                "compiler_process_observations": [
+                    row for row in report["compiler_process_observations"]
+                    if row["phase"] == phase
+                ],
+                "tilelang_binaries": live_tilelang_binary_evidence(
+                    kernel_caches, cache_root, export_observations
+                ),
+            }
+            report["phases"].append(probe)
+            verify_post_warmup_probe(probe)
+            probe_results.append(probe)
             previous = current
-            if not finite:
-                raise RuntimeError("non-finite 294-token normalized pre output")
         report["weights_unchanged"] = all(
             torch.equal(value.detach().cpu(), original[name])
             for name, value in target.named_parameters()
@@ -484,6 +652,10 @@ def worker(args) -> int:
         if not report["weights_unchanged"]:
             raise RuntimeError("synthetic parameters changed during canary")
         report["gpu"]["free_bytes_after"] = torch.cuda.mem_get_info()[0]
+        report["no_new_compilation_observed"] = (
+            len(probe_results) == 2
+            and all(probe["no_new_compilation_observed"] for probe in probe_results)
+        )
         report["status"] = "passed"
     except Exception as exc:
         report["status"] = "failed"
@@ -491,6 +663,8 @@ def worker(args) -> int:
         traceback.print_exc()
     finally:
         sys.setprofile(None)
+        for cache, original_export in export_restore:
+            cache._save_so_cubin_to_disk = original_export
         report["compile_entry_observations"] = [
             {"phase": item[0], "source": item[1], "line": item[2],
              "function": item[3], "calls": count}
