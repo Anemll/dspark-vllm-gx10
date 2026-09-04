@@ -1,5 +1,12 @@
 # IFA 2026: applicability and implementation plan
 
+Latest follow-up: actual native-width TP2 integration was measured and rejected
+for speed; the narrower graph backport was blocked by missing pinned-runner
+metadata support. Both nodes are on the validated fixed-10-GiB control with
+DSpark five. See [the current integration report](ifa26-native-integration.md)
+for results, failed attempts and remaining work. The status below records the
+earlier startup-warmup phase, not completion of the serving-speed objective.
+
 Status: first implementation and bounded experiment completed; source review and measured
 results dated 2026-09-04. Branch `IFA26` started at `081fda9`, matching `main`
 when created. Measurement clients, runtime inspection, and regression tests

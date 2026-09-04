@@ -131,6 +131,19 @@ python3 benchmarks/benchmark_prefix_contract.py \
 
 ## Model-free GPU diagnostics
 
+`summarize_cuda_trace.py TRACE.json.gz` summarizes an existing per-rank Torch
+trace without contacting or importing the GPU runtime. It assigns kernels to
+`execute_context_*` forwards by CPU launch correlation, **not** overlapping CPU
+and GPU timestamps: asynchronous execution may lag by several forwards. It
+retains unmatched/ambiguous kernels explicitly. Kernel-duration sums include
+stream overlap and are not request wall time or uninstrumented throughput.
+
+The experimental narrow-graph lifetime canary is blocked by the installed
+constructor on the current pinned runner. Its earlier synthetic replays did
+not exercise the runner's metadata-free PIECEWISE capture. Do not use those
+replays to waive the required real-runner cache-write checks; see the
+[integration report](../docs/ifa26-native-integration.md#graph-integration-blocked).
+
 `benchmark_sparse_mla.py` compares identical active entries with different
 sentinel padding. Eager timings include host enqueue gaps; graph mode captures
 a batch of calls and reports per-call device time. These hot synthetic buffers

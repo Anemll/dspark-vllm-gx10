@@ -36,6 +36,7 @@ SERVING_FLAGS = frozenset({
     "--pipeline-parallel-size", "--kv-cache-dtype", "--block-size",
     "--max-model-len", "--max-num-seqs", "--max-num-batched-tokens",
     "--max-cudagraph-capture-size", "--gpu-memory-utilization",
+    "--kv-cache-memory-bytes",
     "--speculative-config", "--compilation-config", "--attention-backend",
     "--attention-config", "--moe-backend", "--tokenizer-mode",
     "--tool-call-parser", "--reasoning-parser", "--jit-monitor-mode",
@@ -50,9 +51,13 @@ ENV_NAMES = (
     "VLLM_DSPARK_CONFIDENCE_SCHEDULER", "VLLM_DSPARK_LOCAL_ARGMAX",
     "VLLM_DSPARK_SPARSE_DECODE_TOPKS", "FLASHINFER_DISABLE_VERSION_CHECK",
     "VLLM_USE_BREAKABLE_CUDAGRAPH",
+    "VLLM_DSV4_NATIVE_SPARSE_WIDTHS", "DSPARK_NARROW_ATTN_GRAPH",
     "FLASHINFER_CUDA_ARCH_LIST", "TORCH_CUDA_ARCH_LIST", "JIT_MONITOR_MODE",
 )
 SOURCE_FILES = {
+    "attention_preparation": "vllm/models/deepseek_v4/attention.py",
+    "sparse_policy": "vllm/utils/dsv4_sparse_policy.py",
+    "sparse_binary_verifier": "vllm/utils/dsv4_sparse_binary.py",
     "dspark_loader": "vllm/models/deepseek_v4/nvidia/dspark.py",
     "sparse_wrapper": "vllm/models/deepseek_v4/nvidia/flashinfer_sparse.py",
     "sparse_metadata": "vllm/v1/attention/backends/mla/sparse_swa.py",

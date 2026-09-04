@@ -34,6 +34,14 @@ class Value:
 
 
 class GraphBoundaryTests(unittest.TestCase):
+    def test_metadata_free_capture_fails_before_preparation(self):
+        scope = methods()
+        scope["get_forward_context"] = lambda: SimpleNamespace(attn_metadata=None)
+        scope["BreakableCUDAGraphCapture"] = SimpleNamespace(is_active=lambda: True)
+        owner = SimpleNamespace(_narrow_attention_graph=True)
+        with self.assertRaisesRegex(RuntimeError, "stable attention metadata"):
+            scope["_prepare_and_attn"](owner, *[Value() for _ in range(8)])
+
     def test_actual_constructor_guard_and_platform_import(self):
         tree = ast.parse(SOURCE.read_text())
         self.assertTrue(any(
@@ -62,7 +70,7 @@ class GraphBoundaryTests(unittest.TestCase):
                 pass
 
         for enabled, v2, sm12x, dtype, allowed in (
-            (True, True, True, "nvfp4_ds_mla", True),
+            (True, True, True, "nvfp4_ds_mla", False),
             (True, False, True, "nvfp4_ds_mla", False),
             (True, True, False, "nvfp4_ds_mla", False),
             (True, True, True, "fp8", False),

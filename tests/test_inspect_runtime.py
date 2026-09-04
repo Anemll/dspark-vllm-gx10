@@ -22,10 +22,18 @@ class RuntimeInspectionTests(unittest.TestCase):
             "vllm", "serve", "model", "--api-key", "secret", "--max-num-seqs=12",
             "--speculative-config", '{"method":"dspark","num_speculative_tokens":5}',
             "--enable-prefix-caching", "--trust-remote-code",
+            "--kv-cache-memory-bytes", "10737418240",
         ])
         self.assertNotIn("api-key", result)
         self.assertEqual(result["speculative-config"]["num_speculative_tokens"], 5)
         self.assertIs(result["enable-prefix-caching"], True)
+        self.assertEqual(result["kv-cache-memory-bytes"], "10737418240")
+
+    def test_experiment_policy_provenance_is_allowlisted(self):
+        self.assertIn("DSPARK_NARROW_ATTN_GRAPH", runtime.ENV_NAMES)
+        self.assertIn("VLLM_DSV4_NATIVE_SPARSE_WIDTHS", runtime.ENV_NAMES)
+        self.assertEqual(runtime.SOURCE_FILES["attention_preparation"],
+                         "vllm/models/deepseek_v4/attention.py")
 
     def test_source_roots_respect_overlay_precedence(self):
         with tempfile.TemporaryDirectory() as directory:

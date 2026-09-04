@@ -14,7 +14,10 @@ import torch.nn.functional as F
 from transformers import DeepseekV2Config, DeepseekV3Config
 
 import vllm.envs as envs
-from vllm.compilation.breakable_cudagraph import eager_break_during_capture
+from vllm.compilation.breakable_cudagraph import (
+    BreakableCUDAGraphCapture,
+    eager_break_during_capture,
+)
 from vllm.model_executor.layers.linear import (
     ColumnParallelLinear,
     MergedColumnParallelLinear,
@@ -189,6 +192,16 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
         ):
             raise ValueError(
                 "DSPARK_NARROW_ATTN_GRAPH requires V2, SM12x and nvfp4_ds_mla"
+            )
+        if narrow_graph:
+            # The pinned V2 runner captures PIECEWISE with attn_metadata=None.
+            # Reject before checkpoint loading, not after a costly capture.
+            # Removing this guard requires stable metadata-buffer integration
+            # and real runner capture/replay correctness tests first.
+            raise ValueError(
+                "DSPARK_NARROW_ATTN_GRAPH is unavailable on the pinned V2 "
+                "runner: PIECEWISE capture skips attention metadata. Keep it "
+                "disabled until the runner integration is validated."
             )
         self._prepare_and_attn_fn = self._prepare_and_attn
         if not narrow_graph:
@@ -471,6 +484,16 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
     ) -> None:
         forward_context = get_forward_context()
         attn_metadata = forward_context.attn_metadata
+        if (
+            self._narrow_attention_graph
+            and attn_metadata is None
+            and BreakableCUDAGraphCapture.is_active()
+        ):
+            raise RuntimeError(
+                "Narrow attention capture requires stable attention metadata; "
+                "the pinned PIECEWISE runner skips it. Disable "
+                "DSPARK_NARROW_ATTN_GRAPH until runner integration is validated."
+            )
         index_q = index_q_scale = index_weights_out = None
 
         # wq_b + kv_insert (+ MLA compressor when an indexer is present) ride

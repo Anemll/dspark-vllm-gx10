@@ -180,7 +180,9 @@ diagnostic tooling, but **do not perform a full serving FlashInfer backport for
 this experiment**. The component evidence is insufficient to predict the
 predeclared 5% minimum improvement in C4 coding aggregate throughput. Broader
 C4/C128 cache, metadata, and model correctness gates remain necessary before
-any future serving use. No end-to-end native-width A/B result exists.
+any future serving use. No end-to-end native-width A/B result existed at that
+phase; the [later integration](ifa26-native-integration.md) was measured and
+rejected for speed.
 
 ## mHC startup canary: component passed
 

@@ -72,7 +72,7 @@ time ledger are retained under ignored
 `.local/results/ifa26-native-20260904/`. Original models, role environment files,
 production images, and the working 4af/a399 rollback images are preserved.
 
-## Separate next candidate
+## Graph integration: blocked
 
 An opt-in V2 attention graph boundary derived from
 [vLLM #51430](https://github.com/vllm-project/vllm/pull/51430) and
@@ -81,7 +81,8 @@ while retaining eager sparse scoring and attention. It preserves the original
 control's auxiliary-stream overlap, avoids capturing the short-context scoring
 skip, and does not introduce the persistent scratch pool reverted by
 [#52836](https://github.com/vllm-project/vllm/pull/52836).
-`DSPARK_NARROW_ATTN_GRAPH` defaults to 0 and fails closed outside V2/SM12x/NVFP4.
+`DSPARK_NARROW_ATTN_GRAPH` defaults to 0. The latest branch rejects enabling it
+on the pinned runner **before checkpoint loading**, including V2/SM12x/NVFP4.
 Its synthetic GPU lifetime canary is not a model-quality or model-speed test.
 Live acceptance requires separate matched measurements and correctness gates;
 do not combine it with the rejected native-width flag.
@@ -104,3 +105,71 @@ for rollback before retrying. The follow-up adds the missing import, executes
 the actual constructor guard in offline tests, and adds a pinned Ruff F821
 undefined-name check to CI. This failed start is avoidable validation cost,
 not performance progress.
+
+The corrected candidate `60e093fb159d` ran on both ranks with identical image
+ID `sha256:4d8909b47873c76105565162bd757f4e556e4d144a3eb9aaf9d0b3b70270c866`.
+It passed the strengthened synthetic constructor/replay canary, but was
+aborted before any inference benchmark when the full-runner audit exposed a
+missing prerequisite:
+
+- Pinned `vllm/v1/worker/gpu/cudagraph_utils.py` requests `skip_attn=True` for
+  PIECEWISE capture and asserts that its attention metadata is `None`.
+- The breakable wrapper records that startup forward immediately. Q-normalize/
+  KV-insert and compressor paths skip cache work when metadata is absent.
+- Capturing those paths would record the skip, not the operations required
+  during real replay. Supplying a metadata dictionary only in a synthetic
+  canary did not test this contract.
+
+This is a source-proven unsafe integration, **not measured corrupted model
+output**. No graph-candidate serving speed or long-context result exists.
+The modern upstream V2 recommendation does not establish compatibility with
+our older V2 implementation. Changing only `skip_attn` is insufficient: stable
+per-descriptor metadata storage, updates at replay, draft/target ownership,
+padding and stream lifetimes must be integrated and tested together.
+
+The first graph attempt interrupted service for 13m18s; the corrected attempt
+for 18m18s (23:23:51–23:42:09 UTC). Both should have been rejected by a more
+complete pre-deployment check. This **31m36s avoidable outage includes rollback
+loading**, and is not optimization progress. Both failures and raw logs remain.
+
+## Follow-up profiling and final state
+
+The trace summarizer now separates model-forward phases by CUDA launch
+correlation. In the four recorded target decode forwards, rank 0's MoE kernel
+sums are 27.49–27.96 ms, sparse-MLA sums 0.86–0.89 ms, and total GPU spans
+54.36–55.07 ms. Kernel sums can exceed their span because streams overlap.
+Draft and post-forward work outside those annotations remains explicitly
+unattributed; none of these instrumented numbers is a serving TPS measurement.
+
+A five-minute-capped, isolated MoE tile diagnostic attempted to load one real
+0731 expert layer through the installed B12X/vLLM adapter. It exited after
+8.36 seconds with a CUDA allocation error on the first expert buffer, while
+both serving containers stayed unchanged. Host `MemAvailable` was about
+14 GiB, which was not sufficient evidence of allocatable CUDA memory in that
+configuration. No tile timing or parity result was produced. The unvalidated
+diagnostic script and error are retained only with the ignored run artifacts;
+it is not published as a validated benchmark.
+
+DSpark remains at five draft tokens. Coding-window counters accepted positions
+four/five often enough that reducing to three has no established speed benefit:
+observed average emitted tokens per step would drop from roughly 3.93 to 3.08
+before accounting for any compute savings. No three-token trial was run.
+
+Both ranks were restored to the validated `8c97ddf50b07` flag-0 control, with
+10 GiB KV per rank, DSpark five, target PIECEWISE and draft FULL graphs.
+Streaming, automatic tool calls, API and dashboard checks passed after recovery.
+Final logs still show a cold `W4A16FusedMoeKernel` compile warning during the
+first tool-smoke prompt; **zero cold JIT is not achieved**. No new route-pack,
+CUDA, NCCL or engine failure occurred in the restored serving ranks.
+Temporary canary processes/listeners are stopped and the coordinator lock is
+released. The reproducible image-transfer archives were removed after recovery;
+all model weights, candidate/rollback images and failure logs remain.
+
+**No new serving-speed optimization is accepted from this cycle.** Next work
+should prioritize a coherent newer-runner integration with stable metadata,
+then the real MoE bottleneck and missing cold-shape warmup. Rebase the overlay
+deltas against the complete dependency sources; do not copy old full overlay
+files onto a newer vLLM or treat B12X as a drop-in version bump. Before another
+interruption, require a real runner capture/replay cache-write canary and a
+component-memory feasibility check that includes CUDA allocation, not only host
+available memory. Reuse the fixed-capacity control measurements above.
