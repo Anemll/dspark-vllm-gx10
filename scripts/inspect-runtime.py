@@ -49,6 +49,7 @@ ENV_NAMES = (
     "VLLM_B12X_W4A16_FORCE_TILE_CONFIG", "VLLM_DSPARK_CONFIDENCE_THRESHOLD",
     "VLLM_DSPARK_CONFIDENCE_SCHEDULER", "VLLM_DSPARK_LOCAL_ARGMAX",
     "VLLM_DSPARK_SPARSE_DECODE_TOPKS", "FLASHINFER_DISABLE_VERSION_CHECK",
+    "VLLM_USE_BREAKABLE_CUDAGRAPH",
     "FLASHINFER_CUDA_ARCH_LIST", "TORCH_CUDA_ARCH_LIST", "JIT_MONITOR_MODE",
 )
 SOURCE_FILES = {
@@ -59,6 +60,7 @@ SOURCE_FILES = {
     "prefix_manager": "vllm/v1/core/kv_cache_manager.py",
     "scheduler": "vllm/v1/core/sched/scheduler.py",
     "b12x_adapter": "vllm/model_executor/layers/fused_moe/experts/b12x_mxfp4_moe.py",
+    "mhc_warmup": "vllm/model_executor/warmup/deepseek_v4_mhc_warmup.py",
     "flashinfer_dispatch": "flashinfer/mla/_sparse_mla_sm120.py",
     "flashinfer_decode_cuda": "flashinfer/data/csrc/sparse_mla_sm120_decode_dsv4.cu",
     "flashinfer_binding_cuda": "flashinfer/data/csrc/sparse_mla_sm120_jit_binding.cu",
@@ -70,6 +72,7 @@ LOG_PATTERNS = (
     r"DSA indexer decode path:", r"Prewarmed B12X route-pack",
     r"DSpark draft model loaded", r"Capturing CUDA graph", r"cudagraph_mode",
     r"enable_adaptive_verification", r"FLASHINFER_MLA_SPARSE_DSV4",
+    r"mHC TileLang warmup", r"Warming up DeepSeek V4 mHC",
 )
 
 
@@ -178,6 +181,8 @@ def inspect_sources(roots: list[Path]) -> dict:
                 entry["draft_window_recompute_marker"] = "request.num_tokens - 1 - self.dspark_window_size" in source
             elif key == "b12x_adapter":
                 entry["route_pack_warmup_marker"] = "_prewarm_b12x_route_pack" in source
+            elif key == "mhc_warmup":
+                entry["functional_mhc_warmup_marker"] = "def _warmup_functional_layer_mhc(" in source
         result[key] = entry
     return result
 
@@ -197,7 +202,8 @@ def model_manifest(directory: Path) -> dict:
         selected = {key: config[key] for key in (
             "architectures", "model_type", "torch_dtype", "dtype", "sliding_window",
             "n_mtp_layers", "dspark_target_layer_ids", "enable_confidence_head",
-            "max_position_embeddings",
+            "max_position_embeddings", "num_hidden_layers", "num_attention_heads",
+            "hidden_size", "hc_mult", "compress_ratios",
         ) if key in config}
     except json.JSONDecodeError:
         selected = {"error": "invalid config.json"}
@@ -284,6 +290,7 @@ def main() -> None:
         report["gpu"] = gpu_inventory()
     text = json.dumps(report, indent=2, sort_keys=True) + "\n"
     if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(text)
     else:
         sys.stdout.write(text)

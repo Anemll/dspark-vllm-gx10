@@ -31,10 +31,15 @@ def main() -> None:
     parser.add_argument("--trials", type=int, default=3)
     parser.add_argument("--timeout", type=float, default=240)
     parser.add_argument("--min-free-gib", type=float, default=2.0)
+    parser.add_argument("--timing-mode", choices=("eager", "graph"), default="eager")
+    parser.add_argument("--compiled-provenance", type=Path,
+                        help="Reuse a hash-verified library from a successful isolated diagnostic")
     parser.add_argument("--isolate-aot-dir", type=Path,
                         help="Empty diagnostic AOT directory; prevents loading an old packaged kernel")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
+    if args.compiled_provenance and args.isolate_aot_dir:
+        parser.error("choose compiled provenance or an empty AOT directory")
     widths = [int(value) for value in args.widths.split(",")]
     tokens = [int(value) for value in args.tokens.split(",")]
     if (not widths or not tokens or min(tokens) < 1 or max(tokens) > 256
@@ -63,8 +68,13 @@ def main() -> None:
         "kv_format": "DSV4 584-byte FP8 footer, BF16 RoPE, page64",
         "flashinfer_version": importlib.metadata.version("flashinfer-python"),
         "torch_version": torch.__version__, "cuda_version": torch.version.cuda,
+        "client_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "source_sha256": hashlib.sha256(Path(sparse.__file__).read_bytes()).hexdigest(),
-        "timing_mode": "eager public-call CUDA event envelope including enqueue gaps and internal overhead; no autotune context",
+        "timing_mode": (
+            "captured public-call batch, CUDA event envelope per call; no host gaps inside batch"
+            if args.timing_mode == "graph" else
+            "eager public-call CUDA event envelope including enqueue gaps and internal overhead; no autotune context"
+        ),
         "jit_workspace": str(jit_env.FLASHINFER_WORKSPACE_DIR),
         "aot_directory": str(jit_env.FLASHINFER_AOT_DIR),
         "runtime_source_hashes": {},
@@ -93,6 +103,28 @@ def main() -> None:
         free, total = torch.cuda.mem_get_info()
         report["gpu"] = {"name": torch.cuda.get_device_name(), "capability": capability,
                          "free_bytes_before": free, "total_bytes": total}
+        if args.compiled_provenance:
+            provenance = json.loads(args.compiled_provenance.read_text())
+            if provenance["status"] not in ("passed", "compile_only_passed"):
+                raise RuntimeError("reuse requires a successful isolated build")
+            if (provenance["torch_version"] != torch.__version__
+                    or provenance["flashinfer_distribution_version"] != report["flashinfer_version"]
+                    or tuple(provenance["gpu"]["capability"]) != capability):
+                raise RuntimeError("compiled runtime/GPU provenance mismatch")
+            old_hashes = {Path(row["path"]).name: row["sha256"] for row in provenance["runtime_files"]}
+            if old_hashes != report["runtime_source_hashes"]:
+                raise RuntimeError("compiled source hashes differ from this runtime")
+            library = Path(provenance["library"]["path"])
+            if hashlib.sha256(library.read_bytes()).hexdigest() != provenance["library"]["sha256"]:
+                raise RuntimeError("compiled library hash mismatch")
+            jit_env.FLASHINFER_AOT_DIR = library.parent.parent
+            from flashinfer.jit.mla import gen_sparse_mla_sm120_module
+            spec = gen_sparse_mla_sm120_module()
+            if not spec.is_aot or spec.aot_path.resolve() != library.resolve():
+                raise RuntimeError("reused library does not match the resolved AOT path")
+            report["aot_directory"] = str(jit_env.FLASHINFER_AOT_DIR)
+            report["reused_library"] = provenance["library"]
+            report["compiled_provenance_sha256"] = hashlib.sha256(args.compiled_provenance.read_bytes()).hexdigest()
         if free < args.min_free_gib * 1024**3:
             raise RuntimeError("insufficient free GPU memory for isolated component test")
         dispatch = sparse._DECODE_DSV4_DISPATCH
@@ -178,7 +210,23 @@ def main() -> None:
                     run()
                 torch.cuda.synchronize()
                 torch.testing.assert_close(output.squeeze(1), reference, atol=0.05, rtol=0.05)
-                arms[width] = {"run": run, "times_us": [], "max_abs_error": max_error}
+                graph = None
+                if args.timing_mode == "graph":
+                    graph = torch.cuda.CUDAGraph()
+                    with torch.cuda.graph(graph):
+                        for _ in range(args.repetitions):
+                            run()
+                    # Captured buffers must observe changed inputs, not just
+                    # reproduce the values present during capture.
+                    query.neg_()
+                    graph.replay()
+                    torch.cuda.synchronize()
+                    torch.testing.assert_close(output.squeeze(1), negative_reference, atol=0.05, rtol=0.05)
+                    query.neg_()
+                    graph.replay()
+                    torch.cuda.synchronize()
+                    torch.testing.assert_close(output.squeeze(1), reference, atol=0.05, rtol=0.05)
+                arms[width] = {"run": run, "graph": graph, "times_us": [], "max_abs_error": max_error}
                 deadline()
             # Alternate arm order across trials to reduce warm/thermal bias.
             for trial in range(args.trials):
@@ -187,8 +235,11 @@ def main() -> None:
                     deadline()
                     begin, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
                     begin.record()
-                    for _ in range(args.repetitions):
-                        arms[width]["run"]()
+                    if arms[width]["graph"] is not None:
+                        arms[width]["graph"].replay()
+                    else:
+                        for _ in range(args.repetitions):
+                            arms[width]["run"]()
                     end.record()
                     end.synchronize()
                     arms[width]["times_us"].append(begin.elapsed_time(end) * 1000 / args.repetitions)
