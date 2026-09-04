@@ -35,6 +35,9 @@ services:
       # Long-context crash fix kill-switch (see docs/LONG_CONTEXT_CRASH_FIX.md).
       # 1 (default) = clamp stale DSpark draft-KV slot ids; 0 = detect+log only.
       DSPARK_SLOT_CLAMP: "${DSPARK_SLOT_CLAMP:-1}"
+      # Empty/unset preserves the runtime's automatic graph selection.
+      # 0 = regular CUDA graphs; 1 = force breakable CUDA graphs.
+      VLLM_USE_BREAKABLE_CUDAGRAPH: "${VLLM_USE_BREAKABLE_CUDAGRAPH:-}"
       VLLM_HOST_IP: "${VLLM_HOST_IP:-}"
 
       VLLM_ALLOW_LONG_MAX_MODEL_LEN: "${VLLM_ALLOW_LONG_MAX_MODEL_LEN:-1}"
@@ -100,6 +103,7 @@ services:
       - bash
       - -lc
       - >
+        if [ -z "$${VLLM_USE_BREAKABLE_CUDAGRAPH:-}" ]; then unset VLLM_USE_BREAKABLE_CUDAGRAPH; fi;
         export PATH="/usr/local/cuda/bin:$${PATH:-}";
         export CUDA_HOME="$${CUDA_HOME:-/usr/local/cuda}";
         export CUDA_PATH="$${CUDA_PATH:-$${CUDA_HOME}}";
