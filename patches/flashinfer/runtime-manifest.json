@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "description": "Exact official FlashInfer PR4380 runtime backport; five runtime files only",
+  "target_commit": "0472b9b3f2fba11b463f8526f390297d52a8aad7",
+  "target_version": "0.6.15",
+  "upstream_commit": "24d7dfb2639083c5a4d418881099421fc800b7bb",
+  "upstream_parent": "6d4f3095ee429227fb115f4e6fae9e4e5c5c7696",
+  "patch_file": "sm12x-dsv4-native-widths.patch",
+  "patch_sha256": "e982c904e4ab015a10d1d0bfb0d1321f8d6d52b27db4ea750b8061dec3f9191d",
+  "files": [
+    {
+      "source": "flashinfer/mla/_sparse_mla_sm120.py",
+      "installed": "mla/_sparse_mla_sm120.py",
+      "old_sha256": "07c7c236349d7ef82c69fe098d61818abecdf19a4dccfa6757b0500bc6676624",
+      "new_sha256": "a288946eb9cc0d19beda2ea9f548a2ffa3240461b60f85f19fa3d721a8388c22"
+    },
+    {
+      "source": "csrc/sparse_mla_sm120_decode_dsv4.cu",
+      "installed": "data/csrc/sparse_mla_sm120_decode_dsv4.cu",
+      "old_sha256": "d8f22ccabee2cc045b0f9b7da6323b8cdd4e7bf5bef49c43a65e6b474a843f65",
+      "new_sha256": "24e01c243f2bc905c45950689bd404c90febc79874548c233a79ba8d7e9c1bcc"
+    },
+    {
+      "source": "csrc/sparse_mla_sm120_jit_binding.cu",
+      "installed": "data/csrc/sparse_mla_sm120_jit_binding.cu",
+      "old_sha256": "c5f0b225f0c5391c9f11fd25d8883c644c4de46a8db2a60ea9c71ff70c799b1f",
+      "new_sha256": "5f16ffed6a3eda5afd1e527128a3db346cc2ce1f364c3818c74d8f676862ea2d"
+    },
+    {
+      "source": "csrc/sparse_mla_sm120_prefill.cu",
+      "installed": "data/csrc/sparse_mla_sm120_prefill.cu",
+      "old_sha256": "db91ab92b3f69b4cdaad27d495eb4a3f0931fb4b58c7a803eddffdfbf9b0242b",
+      "new_sha256": "f7cb21078f1f6d997a3f96f1513eaa8b923ca57b4d17156952ec476e56d60cad"
+    },
+    {
+      "source": "include/flashinfer/attention/sparse_mla_sm120/prefill_kernel.cuh",
+      "installed": "data/include/flashinfer/attention/sparse_mla_sm120/prefill_kernel.cuh",
+      "old_sha256": "d6ac1a639c0129d980283765a0619be9358d934d894c3cc5625cd96ecaa665ba",
+      "new_sha256": "c126d18452a8f6a010fc07f55bd73a656e2e2f938c4f0e02f732010f16d4004e"
+    }
+  ]
+}

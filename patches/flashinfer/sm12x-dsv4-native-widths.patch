@@ -1,0 +1,718 @@
+diff --git a/benchmarks/bench_sparse_mla_sm120.py b/benchmarks/bench_sparse_mla_sm120.py
+index a1c507c..f27bc7d 100644
+--- a/benchmarks/bench_sparse_mla_sm120.py
++++ b/benchmarks/bench_sparse_mla_sm120.py
+@@ -96,7 +96,9 @@ def quantize_kv_model1(kv_bf16: torch.Tensor) -> torch.Tensor:
+     for tok in range(bs):
+         rope_off = tok * data_stride + d_nope
+         result_flat[:, rope_off : rope_off + d_rope * 2] = rope[:, tok]
+-    return result_flat.view(nb, bs, 1, bpt)
++    # The public DSV4 API defaults to HND. Keep the packed page dimension in
++    # axis 2 so the benchmark exercises the same layout as serving.
++    return result_flat.view(nb, 1, bs, bpt)
+ 
+ 
+ # ── DSv3.2 INLINE pack (656 B/token) ─────────────────────────────────────────
+@@ -385,35 +387,71 @@ if __name__ == "__main__":
+     decode_configs = [
+         (16, 128, 1),
+         (16, 128, 16),
++        (16, 192, 16),
++        (16, 256, 16),
+         (16, 512, 16),
+         (32, 128, 1),
+         (32, 128, 16),
++        (32, 192, 16),
++        (32, 256, 16),
+         (32, 512, 16),
+         (64, 128, 1),
+         (64, 128, 16),
++        (64, 192, 16),
++        (64, 256, 16),
+         (64, 512, 16),
+         (64, 1024, 16),
+         (128, 128, 1),
+         (128, 128, 16),
++        (128, 192, 16),
++        (128, 256, 16),
+         (128, 512, 16),
+         (128, 1024, 16),
+         (128, 128, 32),
++        (128, 192, 32),
++        (128, 256, 32),
+         (128, 512, 32),
+     ]
+     prefill_configs = [
++        (8, 128, 128),
++        (16, 128, 128),
++        (8, 192, 128),
++        (16, 192, 128),
++        (8, 256, 128),
++        (16, 256, 128),
++        (8, 512, 128),
++        (16, 512, 128),
+         (64, 128, 128),
++        (64, 192, 128),
++        (64, 256, 128),
+         (64, 512, 128),
+         (128, 128, 128),
++        (128, 192, 128),
++        (128, 256, 128),
+         (128, 512, 128),
++        (8, 192, 512),
++        (16, 192, 512),
++        (8, 256, 512),
++        (16, 256, 512),
+         (64, 128, 512),
++        (64, 192, 512),
++        (64, 256, 512),
+         (64, 512, 512),
+         (128, 128, 512),
++        (128, 192, 512),
++        (128, 256, 512),
+         (128, 512, 512),
+         (128, 128, 1024),
++        (128, 192, 1024),
++        (128, 256, 1024),
+         (128, 512, 1024),
+     ]
+     dual_prefill_configs = [
+         # (num_heads, extra_topk, num_tokens, extra_page_block_size, extra_topk_length)
++        (8, 512, 256, 64, None),
++        (16, 512, 256, 64, None),
++        (8, 512, 256, 2, None),
++        (16, 512, 256, 2, None),
+         (64, 512, 256, 64, None),
+         (128, 512, 512, 64, None),
+         (128, 512, 512, 2, None),
+diff --git a/csrc/sparse_mla_sm120_decode_dsv4.cu b/csrc/sparse_mla_sm120_decode_dsv4.cu
+index 44af28a..55fc7ec 100644
+--- a/csrc/sparse_mla_sm120_decode_dsv4.cu
++++ b/csrc/sparse_mla_sm120_decode_dsv4.cu
+@@ -133,7 +133,9 @@ static bool launch_decode_dsv4_impl(const bf16* Q, const uint8_t* KV_cache, cons
+ 
+ // Public surface — explicit instantiation switch over the PR-body bench grid.
+ // DSV4 only, page_block_size=64 only. NUM_HEADS ∈ {8, 16, 32, 64, 128},
+-// TOPK ∈ {128, 512, 1024}.
++// TOPK ∈ {128, 192, 256, 512, 1024}. TOPK=192 covers the padded
++// DeepSeek-V4-Flash-0731 DSpark K=5 shape (128 SWA + 5 active draft entries),
++// while TOPK=256 covers wider DSpark configurations.
+ bool launch_sparse_mla_decode_dsv4(ModelType mt, int num_heads, int topk, int page_block_size,
+                                    int num_tokens, int num_splits, const bf16* Q,
+                                    const uint8_t* KV_cache, const int32_t* indices, bf16* mid_out,
+@@ -154,18 +156,28 @@ bool launch_sparse_mla_decode_dsv4(ModelType mt, int num_heads, int topk, int pa
+         stride_kv_block, stream);                                                           \
+   }
+   DSV4_DISPATCH(8, 128)
++  DSV4_DISPATCH(8, 192)
++  DSV4_DISPATCH(8, 256)
+   DSV4_DISPATCH(8, 512)
+   DSV4_DISPATCH(8, 1024)
+   DSV4_DISPATCH(16, 128)
++  DSV4_DISPATCH(16, 192)
++  DSV4_DISPATCH(16, 256)
+   DSV4_DISPATCH(16, 512)
+   DSV4_DISPATCH(16, 1024)
+   DSV4_DISPATCH(32, 128)
++  DSV4_DISPATCH(32, 192)
++  DSV4_DISPATCH(32, 256)
+   DSV4_DISPATCH(32, 512)
+   DSV4_DISPATCH(32, 1024)
+   DSV4_DISPATCH(64, 128)
++  DSV4_DISPATCH(64, 192)
++  DSV4_DISPATCH(64, 256)
+   DSV4_DISPATCH(64, 512)
+   DSV4_DISPATCH(64, 1024)
+   DSV4_DISPATCH(128, 128)
++  DSV4_DISPATCH(128, 192)
++  DSV4_DISPATCH(128, 256)
+   DSV4_DISPATCH(128, 512)
+   DSV4_DISPATCH(128, 1024)
+ #undef DSV4_DISPATCH
+diff --git a/csrc/sparse_mla_sm120_jit_binding.cu b/csrc/sparse_mla_sm120_jit_binding.cu
+index a5e984e..5d59d0a 100644
+--- a/csrc/sparse_mla_sm120_jit_binding.cu
++++ b/csrc/sparse_mla_sm120_jit_binding.cu
+@@ -82,7 +82,8 @@ inline PagedKVLayout parse_paged_kv_layout(const TensorView& kv, int bpt, const
+ 
+ // Thin TVM-FFI wrapper for the decode-dsv4 standalone path. The caller passes
+ // already-sized scratch tensors mid_out + mid_lse plus the output and lse.
+-// Currently only handles DSV4 h=128 topk=512 pbs=64.
++// Handles DSV4 decode with page_block_size=64 and the supported head/top-k
++// instantiation grid in sparse_mla_sm120_decode_dsv4.cu.
+ void SparseMlaSm120DecodeDsv4(TensorView q, TensorView kv_cache, TensorView indices,
+                               TensorView mid_out, TensorView mid_lse, TensorView output,
+                               TensorView out_lse, int64_t num_splits, double sm_scale,
+diff --git a/csrc/sparse_mla_sm120_prefill.cu b/csrc/sparse_mla_sm120_prefill.cu
+index a1e18ad..0c988ca 100644
+--- a/csrc/sparse_mla_sm120_prefill.cu
++++ b/csrc/sparse_mla_sm120_prefill.cu
+@@ -97,8 +97,8 @@ void launch_prefill_sg(const bf16* Q, const uint8_t* KV_cache, const int32_t* in
+   CUDA_CHECK(cudaLaunchKernelExC(&config, (const void*)kernel, args));
+ }
+ 
+-// Single-cache MG dispatcher. MG_N_HG_T: 1 lets NUM_HEADS=16 through MG
+-// (HEADS_PER_CTA=16, same shape as SG); 2 is the default for NH >= 32.
++// Single-cache MG dispatcher. MG_N_HG_T: 1 lets NUM_HEADS=8/16 use a 16-head
++// CTA (NH=8 is internally padded); 2 is the default for NH >= 32.
+ template <ModelType MT, ComputeMode CM, int NUM_HEADS, int TOPK, int PAGE_BLOCK_SIZE,
+           int MG_N_HG_T = MG_N_HG_DEFAULT>
+ void launch_prefill_mg(const bf16* Q, const uint8_t* KV_cache, const int32_t* indices,
+@@ -107,9 +107,9 @@ void launch_prefill_mg(const bf16* Q, const uint8_t* KV_cache, const int32_t* in
+                        cudaStream_t stream) {
+   constexpr size_t smem_bytes = SmemLayoutMG<MT, CM>::TOTAL;
+   constexpr int MG_HEADS_PER_CTA_LOCAL = MG_N_HG_T * HPB;
+-  static_assert(NUM_HEADS % MG_HEADS_PER_CTA_LOCAL == 0,
+-                "NUM_HEADS must be a multiple of MG_N_HG_T * HPB");
+-  constexpr int REPLICATE_H = NUM_HEADS / MG_HEADS_PER_CTA_LOCAL;
++  static_assert(NUM_HEADS % MG_HEADS_PER_CTA_LOCAL == 0 || (MG_N_HG_T == 1 && NUM_HEADS < HPB),
++                "NUM_HEADS must fill the MG head tile, except a padded NH=8 tile");
++  constexpr int REPLICATE_H = (NUM_HEADS + MG_HEADS_PER_CTA_LOCAL - 1) / MG_HEADS_PER_CTA_LOCAL;
+   dim3 grid(num_tokens * REPLICATE_H);
+   dim3 block(BLOCK_THREADS);
+ 
+@@ -143,9 +143,9 @@ void launch_prefill_mg_dual_fulltile(const bf16* Q, const uint8_t* KV_cache, con
+                                      cudaStream_t stream) {
+   constexpr size_t smem_bytes = SmemLayoutMG<MT, ComputeMode::BF16>::TOTAL;
+   constexpr int MG_HEADS_PER_CTA_LOCAL = MG_N_HG_T * HPB;
+-  static_assert(NUM_HEADS % MG_HEADS_PER_CTA_LOCAL == 0,
+-                "NUM_HEADS must be a multiple of MG_N_HG_T * HPB");
+-  constexpr int REPLICATE_H = NUM_HEADS / MG_HEADS_PER_CTA_LOCAL;
++  static_assert(NUM_HEADS % MG_HEADS_PER_CTA_LOCAL == 0 || (MG_N_HG_T == 1 && NUM_HEADS < HPB),
++                "NUM_HEADS must fill the MG head tile, except a padded NH=8 tile");
++  constexpr int REPLICATE_H = (NUM_HEADS + MG_HEADS_PER_CTA_LOCAL - 1) / MG_HEADS_PER_CTA_LOCAL;
+   dim3 grid(num_tokens * REPLICATE_H);
+   dim3 block(BLOCK_THREADS);
+ 
+@@ -185,9 +185,9 @@ void launch_prefill_mg_dual(const bf16* Q, const uint8_t* KV_cache, const int32_
+                             const int* topk_length_extra_ptr, cudaStream_t stream) {
+   constexpr size_t smem_bytes = SmemLayoutMG<MT, CM>::TOTAL;
+   constexpr int MG_HEADS_PER_CTA_LOCAL = MG_N_HG_T * HPB;
+-  static_assert(NUM_HEADS % MG_HEADS_PER_CTA_LOCAL == 0,
+-                "NUM_HEADS must be a multiple of MG_N_HG_T * HPB");
+-  constexpr int REPLICATE_H = NUM_HEADS / MG_HEADS_PER_CTA_LOCAL;
++  static_assert(NUM_HEADS % MG_HEADS_PER_CTA_LOCAL == 0 || (MG_N_HG_T == 1 && NUM_HEADS < HPB),
++                "NUM_HEADS must fill the MG head tile, except a padded NH=8 tile");
++  constexpr int REPLICATE_H = (NUM_HEADS + MG_HEADS_PER_CTA_LOCAL - 1) / MG_HEADS_PER_CTA_LOCAL;
+   dim3 grid(num_tokens * REPLICATE_H);
+   dim3 block(BLOCK_THREADS);
+ 
+@@ -267,11 +267,14 @@ inline bool dispatch_dsv4_single(int num_heads, int topk, const bf16* Q, const u
+       Q, KV, indices, attn_sink, output, out_lse, sm_scale, num_tokens, stride_kv_block, \
+       topk_length_ptr, stream)
+ 
+-// NH=16 routes through MG with MG_N_HG_T=1 to avoid SG BF16-QK smem aliasing
+-// between Q staging and FP8 weight staging at multi-wave launches.
++// NH=8 and NH=16 share the MG_N_HG_T=1 kernel. NH=8 zero-pads the upper half
++// of the 16-head tile and gates all global Q/sink/output/LSE accesses.
+ #define DISPATCH_BY_NH_CM(CM, TK)       \
+   do {                                  \
+     switch (num_heads) {                \
++      case 8:                           \
++        DISPATCH_MG_CM(CM, 8, TK, 1);   \
++        return true;                    \
+       case 16:                          \
+         DISPATCH_MG_CM(CM, 16, TK, 1);  \
+         return true;                    \
+@@ -293,6 +296,10 @@ inline bool dispatch_dsv4_single(int num_heads, int topk, const bf16* Q, const u
+   // amortises FP8's higher Tensor-Core throughput.
+   if (topk == 128)
+     DISPATCH_BY_NH_CM(BF16, 128);
++  else if (topk == 192)
++    DISPATCH_BY_NH_CM(BF16, 192);
++  else if (topk == 256)
++    DISPATCH_BY_NH_CM(BF16, 256);
+   else if (topk == 512)
+     DISPATCH_BY_NH_CM(FP8, 512);
+   else if (topk == 1024)
+@@ -324,6 +331,9 @@ inline bool dispatch_dsv4_dual(int num_heads, int topk, int topk_extra, int extr
+ #define DISPATCH_FULLTILE_BY_NH_PBSX(PBSX)            \
+   do {                                                \
+     switch (num_heads) {                              \
++      case 8:                                         \
++        DISPATCH_DUAL_MG_FULLTILE(8, 128, PBSX, 1);   \
++        return true;                                  \
+       case 16:                                        \
+         DISPATCH_DUAL_MG_FULLTILE(16, 128, PBSX, 1);  \
+         return true;                                  \
+@@ -351,7 +361,7 @@ inline bool dispatch_dsv4_dual(int num_heads, int topk, int topk_extra, int extr
+   }
+ 
+ // topk_extra is runtime; extra_page_block_size stays template because it
+-// changes the KV stride. NH=16 uses MG_N_HG_T=1.
++// changes the KV stride. NH=8/16 use MG_N_HG_T=1; NH=8 is padded internally.
+ #define DISPATCH_DUAL_MG_CM(CM, NH, TK, PBSX, NHG)                                                \
+   launch_prefill_mg_dual<ModelType::DSV4, ComputeMode::CM, NH, TK, 64, PBSX, NHG>(                \
+       Q, KV, indices, KV_extra, idx_extra, attn_sink, output, out_lse, sm_scale, num_tokens,      \
+@@ -361,6 +371,9 @@ inline bool dispatch_dsv4_dual(int num_heads, int topk, int topk_extra, int extr
+ #define DISPATCH_BY_NH_PBSX(PBSX)                     \
+   do {                                                \
+     switch (num_heads) {                              \
++      case 8:                                         \
++        DISPATCH_DUAL_MG_CM(BF16, 8, 128, PBSX, 1);   \
++        return true;                                  \
+       case 16:                                        \
+         DISPATCH_DUAL_MG_CM(BF16, 16, 128, PBSX, 1);  \
+         return true;                                  \
+diff --git a/flashinfer/mla/_sparse_mla_sm120.py b/flashinfer/mla/_sparse_mla_sm120.py
+index 3e18d99..67849b9 100644
+--- a/flashinfer/mla/_sparse_mla_sm120.py
++++ b/flashinfer/mla/_sparse_mla_sm120.py
+@@ -73,24 +73,33 @@ _BI = 64  # KV partition tile size in candidates (BLOCK_SIZE_N)
+ # prefill orchestrator; otherwise to the standalone decode kernels.
+ _DECODE_MAX_TOKENS = 64
+ 
+-# decode-dsv4 instantiation set. Shapes outside this table fall through to
+-# decode-dsv3_2 / prefill. NH=8 is the small-TP corner case; the kernel pads
+-# the head tile to HPB=16 with zero-Q rows and gates writes by NUM_HEADS.
++# decode-dsv4 instantiation set. NH=8 is the small-TP corner case; the kernel
++# pads the head tile to HPB=16 with zero-Q rows and gates writes by NUM_HEADS.
+ _DECODE_DSV4_DISPATCH = frozenset(
+     {
+         (8, 128),
++        (8, 192),
++        (8, 256),
+         (8, 512),
+         (8, 1024),
+         (16, 128),
++        (16, 192),
++        (16, 256),
+         (16, 512),
+         (16, 1024),
+         (32, 128),
++        (32, 192),
++        (32, 256),
+         (32, 512),
+         (32, 1024),
+         (64, 128),
++        (64, 192),
++        (64, 256),
+         (64, 512),
+         (64, 1024),
+         (128, 128),
++        (128, 192),
++        (128, 256),
+         (128, 512),
+         (128, 1024),
+     }
+@@ -377,6 +386,19 @@ def get_sparse_mla_sm120_module():
+             )
+             return
+ 
++        # The paged orchestrator is prefill-only and asserts num_tokens > 64 in
++        # C++. Reaching it with a decode-sized request means that no standalone
++        # decode specialization matched, so fail in Python instead of aborting
++        # the process in the kernel.
++        if num_tokens <= _DECODE_MAX_TOKENS:
++            raise ValueError(
++                "SM120 sparse-MLA has no decode kernel for this shape: "
++                f"num_tokens={num_tokens}, num_heads={num_heads}, topk={topk}, "
++                f"d_qk={d_qk}, page_block_size={kv_pbs}, model_type={model_type}, "
++                f"extra_topk={extra_topk}. Supported decode shapes are enumerated "
++                "in _DECODE_DSV4_DISPATCH and _DECODE_DSV3_2_DISPATCH."
++            )
++
+         module.sparse_mla_sm120_paged_attention(
+             q,
+             kv_cache,
+@@ -1228,8 +1250,8 @@ def sparse_mla_sm120_decode_dsv4(
+     kv_cache : torch.Tensor
+         Paged FP8 cache, shape ``[num_blocks, page_bytes]`` uint8.
+     indices : torch.Tensor
+-        ``[T, topk]`` int32. ``topk`` must be one of {128, 512, 1024}; ``-1``
+-        marks invalid slots.
++        ``[T, topk]`` int32. ``topk`` must be one of
++        {128, 192, 256, 512, 1024}; ``-1`` marks invalid slots.
+     mid_out : torch.Tensor
+         Scratch, ``[T, num_heads, num_splits, d_v]`` bf16. ``num_splits =
+         ceil(topk / 64) + ceil(extra_topk / 64)``.
+diff --git a/include/flashinfer/attention/sparse_mla_sm120/prefill_kernel.cuh b/include/flashinfer/attention/sparse_mla_sm120/prefill_kernel.cuh
+index 0628e6f..1d2b344 100644
+--- a/include/flashinfer/attention/sparse_mla_sm120/prefill_kernel.cuh
++++ b/include/flashinfer/attention/sparse_mla_sm120/prefill_kernel.cuh
+@@ -55,8 +55,8 @@
+ // Template params (all constexpr):
+ //   MT:              ModelType (DSV3_2 / DSV4)
+ //   CM:              ComputeMode (FP8 / BF16) for the QK MMA; XV is always FP8
+-//   NUM_HEADS:       8, 16, 64, 128 (NUM_HEADS < HPB=16 zero-pads + gates)
+-//   TOPK:            128, 512, 1024, 2048
++//   NUM_HEADS:       8, 16, 32, 64, 128 (NUM_HEADS < HPB=16 zero-pads + gates)
++//   TOPK:            128, 192, 256, 512, 1024, 2048
+ //   PAGE_BLOCK_SIZE: 64 (DSV3_2 and DSV4 both use the 64-token page layout)
+ // ============================================================================
+ 
+@@ -626,8 +626,8 @@ __global__ void __launch_bounds__(BLOCK_THREADS, 1)
+ //
+ // MG_N_HG_T = 2 (HEADS_PER_CTA=32): NUM_HEADS in {32,64,128}, KV reused across
+ //             both groups (2× reuse, deferred row_sum, higher MMA utilization).
+-// MG_N_HG_T = 1 (HEADS_PER_CTA=16): NUM_HEADS=16, used wherever SG cannot
+-//             apply (e.g. dual-cache, which SG doesn't support).
++// MG_N_HG_T = 1 (HEADS_PER_CTA=16): NUM_HEADS in {8,16}; NH=8 zero-pads the
++//             upper 8 rows and gates all global reads/writes.
+ // ============================================================================
+ 
+ // SmemLayoutMG / SmemPtrsMG are parameterised on the default MG_N_HG=2 layout;
+@@ -677,9 +677,10 @@ __device__ __forceinline__ void prefill_mg_impl(
+   using SMG = SmemPtrsMG<MT, CM>;
+ 
+   static constexpr int NI = TOPK / BI;
+-  static_assert(NUM_HEADS % MG_HEADS_PER_CTA == 0,
+-                "NUM_HEADS must be a multiple of MG_HEADS_PER_CTA = MG_N_HG_T * HPB");
+-  static constexpr int REPLICATE_H = NUM_HEADS / MG_HEADS_PER_CTA;
++  static_assert(NUM_HEADS % MG_HEADS_PER_CTA == 0 || (MG_N_HG_T == 1 && NUM_HEADS < HPB),
++                "NUM_HEADS must fill MG_HEADS_PER_CTA, except a single padded head group");
++  static constexpr int REPLICATE_H = (NUM_HEADS + MG_HEADS_PER_CTA - 1) / MG_HEADS_PER_CTA;
++  static constexpr int VALID_HPB = (NUM_HEADS < HPB) ? NUM_HEADS : HPB;
+   static constexpr int QK_NOPE_KSTEPS = KV::QUANT_TILE / 32;
+   static constexpr bool USE_WFP8_ROW_XOR = DUAL_CACHE && (PAGE_BLOCK_SIZE_EXTRA == 2);
+ 
+@@ -847,11 +848,11 @@ __device__ __forceinline__ void prefill_mg_impl(
+           Q + (size_t)s_i * NUM_HEADS * KV::D_QK + (size_t)(h_start + g * HPB) * KV::D_QK;
+       if constexpr (CM == ComputeMode::BF16) {
+         load_q_bf16_to_smem<MT, MATH_THREADS>(sm.q_nope_bf16(g), sm.q_rope() + g * HPB * D_ROPE,
+-                                              q_base_g);
++                                              q_base_g, VALID_HPB);
+       } else {
+         quantize_q_to_smem<MT, MATH_THREADS>(sm.q_nope_fp8(g), sm.q_nope_sc(g),
+                                              sm.q_rope() + g * HPB * D_ROPE, q_base_g,
+-                                             sm.reduce_buf());
++                                             sm.reduce_buf(), VALID_HPB);
+       }
+     }
+ 
+@@ -1554,22 +1555,30 @@ __device__ __forceinline__ void prefill_mg_impl(
+       // See SG epilogue for full derivation.
+       float il0, il1;
+       if (cold.attn_sink != nullptr) {
+-        int h0 = h_start + g * HPB + gid, h1 = h0 + 8;
++        int h0 = h_start + g * HPB + gid;
+         float s0 = __ldg(cold.attn_sink + h0) * LOG2E;
+-        float s1 = __ldg(cold.attn_sink + h1) * LOG2E;
+         float d0 = sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid] +
+                    exp2f(s0 - sm.m_smem()[g * SMG::ML_GRP_STRIDE + gid]);
+-        float d1 = sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid + 8] +
+-                   exp2f(s1 - sm.m_smem()[g * SMG::ML_GRP_STRIDE + gid + 8]);
+         il0 = (d0 > 0.f) ? (1.f / d0) : 0.f;
+-        il1 = (d1 > 0.f) ? (1.f / d1) : 0.f;
++        if constexpr (VALID_HPB > 8) {
++          float s1 = __ldg(cold.attn_sink + h0 + 8) * LOG2E;
++          float d1 = sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid + 8] +
++                     exp2f(s1 - sm.m_smem()[g * SMG::ML_GRP_STRIDE + gid + 8]);
++          il1 = (d1 > 0.f) ? (1.f / d1) : 0.f;
++        } else {
++          il1 = 0.f;
++        }
+       } else {
+         il0 = (sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid] > 0.f)
+                   ? (1.f / sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid])
+                   : 0.f;
+-        il1 = (sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid + 8] > 0.f)
+-                  ? (1.f / sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid + 8])
+-                  : 0.f;
++        if constexpr (VALID_HPB > 8) {
++          il1 = (sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid + 8] > 0.f)
++                    ? (1.f / sm.l_smem()[g * SMG::ML_GRP_STRIDE + gid + 8])
++                    : 0.f;
++        } else {
++          il1 = 0.f;
++        }
+       }
+ 
+ #pragma unroll
+@@ -1601,7 +1610,7 @@ __device__ __forceinline__ void prefill_mg_impl(
+         const size_t out_base = (size_t)s_i * token_stride + (size_t)g_h_start * h_stride;
+         constexpr int BF16_PER_STORE = 8;
+         constexpr int STORES_PER_HEAD = D_V / BF16_PER_STORE;
+-        for (int idx = threadIdx.x; idx < HPB * STORES_PER_HEAD; idx += MATH_THREADS) {
++        for (int idx = threadIdx.x; idx < VALID_HPB * STORES_PER_HEAD; idx += MATH_THREADS) {
+           int h = idx / STORES_PER_HEAD;
+           int d8 = (idx - h * STORES_PER_HEAD) * BF16_PER_STORE;
+           uint4 v = *reinterpret_cast<const uint4*>(&staging_bf16[h * BF16_STAGING_STRIDE + d8]);
+@@ -1610,7 +1619,7 @@ __device__ __forceinline__ void prefill_mg_impl(
+       }
+ 
+       // Write LSE for this group (merged with attn_sink if present)
+-      if (threadIdx.x < HPB) {
++      if (threadIdx.x < VALID_HPB) {
+         int h = threadIdx.x;
+         float lse = softmax_lse(sm.m_smem()[g * SMG::ML_GRP_STRIDE + h],
+                                 sm.l_smem()[g * SMG::ML_GRP_STRIDE + h]);
+diff --git a/tests/attention/test_sparse_mla_sm120.py b/tests/attention/test_sparse_mla_sm120.py
+index ba96062..cc55d98 100644
+--- a/tests/attention/test_sparse_mla_sm120.py
++++ b/tests/attention/test_sparse_mla_sm120.py
+@@ -292,11 +292,21 @@ def _make_decode_scratch(
+ 
+ _DSV4_DECODE_CONFIGS = [
+     (8, 128),
++    (8, 192),
++    (8, 256),
+     (8, 512),
+     (8, 1024),
+     (16, 128),
++    (16, 192),
++    (16, 256),
++    (32, 192),
++    (32, 256),
+     (32, 512),
++    (64, 192),
++    (64, 256),
+     (64, 1024),
++    (128, 192),
++    (128, 256),
+     (128, 1024),
+ ]
+ 
+@@ -368,12 +378,15 @@ def test_sparse_mla_sm120_decode_dsv4(
+     torch.testing.assert_close(out_lse, ref_lse, atol=5e-2, rtol=5e-2)
+ 
+ 
+-def test_sparse_mla_sm120_decode_dsv4_topk_length_truncation() -> None:
++@pytest.mark.parametrize("num_heads", [8, 32])
++@pytest.mark.parametrize("topk,topk_len", [(192, 133), (256, 133), (512, 128)])
++def test_sparse_mla_sm120_decode_dsv4_topk_length_truncation(
++    num_heads: int, topk: int, topk_len: int
++) -> None:
+     """DSv4 decode honors topk_length."""
+     torch.manual_seed(0)
+     device = torch.device("cuda")
+-    num_heads, topk, num_tokens = 32, 512, 16
+-    topk_len = 128
++    num_tokens = 16
+     d_qk, d_v = 512, 512
+     page_block_size = 64
+     num_blocks = 64
+@@ -425,10 +438,50 @@ def test_sparse_mla_sm120_decode_dsv4_topk_length_truncation() -> None:
+     torch.testing.assert_close(out_lse, ref_lse, atol=5e-2, rtol=5e-2)
+ 
+ 
+-def test_sparse_mla_sm120_decode_dsv4_public_api() -> None:
++def test_sparse_mla_sm120_decode_unsupported_shape_fails_before_prefill() -> None:
++    """An unsupported decode shape raises instead of entering prefill."""
++    device = torch.device("cuda")
++    num_tokens, num_heads, topk = 1, 16, 384
++    d_qk = d_v = 512
++
++    q = torch.empty((num_tokens, num_heads, d_qk), dtype=torch.bfloat16, device=device)
++    kv_cache = torch.empty((1, 64, 1, 584), dtype=torch.uint8, device=device)
++    indices = torch.zeros((num_tokens, topk), dtype=torch.int32, device=device)
++    output = torch.empty(
++        (num_tokens, num_heads, d_v), dtype=torch.bfloat16, device=device
++    )
++    out_lse = torch.empty((num_tokens, num_heads), dtype=torch.float32, device=device)
++
++    with pytest.raises(
++        ValueError,
++        match=r"no decode kernel.*num_tokens=1, num_heads=16, topk=384",
++    ):
++        sparse_mla_sm120_paged_attention(
++            q,
++            kv_cache,
++            indices,
++            output,
++            out_lse,
++            d_qk**-0.5,
++            d_v=d_v,
++        )
++
++
++@pytest.mark.parametrize(
++    "num_heads,topk,num_tokens,kv_layout",
++    [
++        (32, 128, 7, "NHD"),
++        (32, 192, 7, "HND"),
++        (32, 256, 7, "HND"),
++        (8, 192, 128, "HND"),
++        (8, 256, 128, "HND"),
++    ],
++)
++def test_sparse_mla_sm120_dsv4_public_api(
++    num_heads: int, topk: int, num_tokens: int, kv_layout: str
++) -> None:
+     torch.manual_seed(0)
+     device = torch.device("cuda")
+-    num_tokens, num_heads, topk = 16, 32, 128
+     d_qk, d_v = 512, 512
+     page_block_size = 64
+     num_blocks = 32
+@@ -452,30 +505,51 @@ def test_sparse_mla_sm120_decode_dsv4_public_api() -> None:
+     )
+     sm_scale = d_qk**-0.5
+     ref_out, _ = _ref_sparse_attn(q, kv_dequant, indices, sm_scale, d_v)
++    workspace_buffer = torch.empty(64 * 1024 * 1024, dtype=torch.uint8, device=device)
++    swa_topk_lens = torch.full((num_tokens,), topk, device=device, dtype=torch.int32)
++    seq_lens = torch.full((num_tokens,), s_kv, device=device, dtype=torch.int32)
++    kv_cache = (
++        kv_packed if kv_layout == "NHD" else kv_packed.transpose(1, 2).contiguous()
++    )
+ 
+     out = flashinfer.mla.trtllm_batch_decode_sparse_mla_dsv4(
+         query=q.unsqueeze(1),
+-        swa_kv_cache=kv_packed,
+-        workspace_buffer=torch.empty(1, dtype=torch.int8, device=device),
++        swa_kv_cache=kv_cache,
++        workspace_buffer=workspace_buffer,
+         sparse_indices=indices,
+-        swa_topk_lens=torch.full((num_tokens,), topk, device=device, dtype=torch.int32),
++        seq_lens=seq_lens,
++        swa_topk_lens=swa_topk_lens,
+         bmm1_scale=sm_scale,
+-        kv_layout="NHD",
++        kv_layout=kv_layout,
+     )
+ 
+     torch.testing.assert_close(out.squeeze(1), ref_out, atol=5e-2, rtol=5e-2)
+ 
++    out_buffer = torch.empty_like(out)
++    returned = flashinfer.mla.trtllm_batch_decode_sparse_mla_dsv4(
++        query=q.unsqueeze(1),
++        swa_kv_cache=kv_cache,
++        workspace_buffer=workspace_buffer,
++        sparse_indices=indices,
++        seq_lens=seq_lens,
++        out=out_buffer,
++        swa_topk_lens=swa_topk_lens,
++        bmm1_scale=sm_scale,
++        kv_layout=kv_layout,
++    )
++    assert returned.data_ptr() == out_buffer.data_ptr()
++    torch.testing.assert_close(out_buffer.squeeze(1), ref_out, atol=5e-2, rtol=5e-2)
++
+     with pytest.raises(ValueError, match="only supports BF16 query"):
+         flashinfer.mla.trtllm_batch_decode_sparse_mla_dsv4(
+             query=q.to(torch.float8_e4m3fn).unsqueeze(1),
+-            swa_kv_cache=kv_packed,
+-            workspace_buffer=torch.empty(1, dtype=torch.int8, device=device),
++            swa_kv_cache=kv_cache,
++            workspace_buffer=workspace_buffer,
+             sparse_indices=indices,
+-            swa_topk_lens=torch.full(
+-                (num_tokens,), topk, device=device, dtype=torch.int32
+-            ),
++            seq_lens=seq_lens,
++            swa_topk_lens=swa_topk_lens,
+             bmm1_scale=sm_scale,
+-            kv_layout="NHD",
++            kv_layout=kv_layout,
+         )
+ 
+ 
+@@ -889,15 +963,29 @@ def test_sparse_mla_sm120_prefill_glm_nsa_arbitrary_fp32(num_heads: int) -> None
+ 
+ 
+ _DSV4_PREFILL_CONFIGS = [
++    (8, 128),
++    (8, 192),
++    (8, 256),
++    (8, 512),
++    (8, 1024),
++    (8, 2048),
+     (16, 128),
++    (16, 192),
++    (16, 256),
++    (32, 192),
++    (32, 256),
+     (32, 512),
++    (64, 192),
++    (64, 256),
+     (64, 1024),
++    (128, 192),
++    (128, 256),
+     (128, 1024),
+ ]
+ 
+ 
+ @pytest.mark.parametrize("num_heads,topk", _DSV4_PREFILL_CONFIGS)
+-@pytest.mark.parametrize("num_tokens", [128, 256])
++@pytest.mark.parametrize("num_tokens", [65, 128, 256])
+ @pytest.mark.parametrize("with_sink", [False, True])
+ def test_sparse_mla_sm120_prefill_dsv4(
+     num_heads: int, topk: int, num_tokens: int, with_sink: bool
+@@ -960,13 +1048,68 @@ def test_sparse_mla_sm120_prefill_dsv4(
+     torch.testing.assert_close(out_lse, ref_lse, atol=5e-2, rtol=5e-2)
+ 
+ 
++@pytest.mark.parametrize("num_heads", [8, 32])
++@pytest.mark.parametrize("topk", [192, 256])
++def test_sparse_mla_sm120_prefill_dsv4_topk_length_truncation(
++    num_heads: int, topk: int
++) -> None:
++    torch.manual_seed(0)
++    device = torch.device("cuda")
++    topk_len, num_tokens = 133, 128
++    d_qk, d_v = 512, 512
++    page_block_size = 64
++    num_blocks = 64
++    s_kv = num_blocks * page_block_size
++
++    kv_bf16 = (
++        torch.randn(
++            num_blocks, page_block_size, 1, d_qk, device=device, dtype=torch.bfloat16
++        )
++        / 10.0
++    ).clamp(-1, 1)
++    kv_packed = quantize_kv_dsv4(kv_bf16)
++    kv_dequant = dequantize_kv_dsv4(kv_packed)
++
++    q = (
++        torch.randn(num_tokens, num_heads, d_qk, device=device, dtype=torch.bfloat16)
++        / 10.0
++    ).clamp(-1, 1)
++    indices = torch.randint(
++        0, s_kv, (num_tokens, topk), device=device, dtype=torch.int32
++    )
++    topk_length = torch.full((num_tokens,), topk_len, dtype=torch.int32, device=device)
++
++    sm_scale = d_qk**-0.5
++    ref_indices = indices.clone()
++    ref_indices[:, topk_len:] = -1
++    ref_out, ref_lse = _ref_sparse_attn(q, kv_dequant, ref_indices, sm_scale, d_v)
++
++    output = torch.zeros(
++        (num_tokens, num_heads, d_v), dtype=torch.bfloat16, device=device
++    )
++    out_lse = torch.zeros((num_tokens, num_heads), dtype=torch.float32, device=device)
++    sparse_mla_sm120_paged_attention(
++        q,
++        kv_packed,
++        indices,
++        output,
++        out_lse,
++        sm_scale,
++        d_v=d_v,
++        topk_length=topk_length,
++    )
++
++    torch.testing.assert_close(output, ref_out, atol=5e-2, rtol=5e-2)
++    torch.testing.assert_close(out_lse, ref_lse, atol=5e-2, rtol=5e-2)
++
++
+ _DSV4_PREFILL_DUAL_CONFIGS = [
+     (128, 64),
+     (512, 64),
+     (512, 2),
+ ]
+ 
+-_DSV4_PREFILL_DUAL_HEADS = [16, 32, 64, 128]
++_DSV4_PREFILL_DUAL_HEADS = [8, 16, 32, 64, 128]
+ 
+ 
+ @pytest.mark.parametrize("num_heads", _DSV4_PREFILL_DUAL_HEADS)
+@@ -1126,14 +1269,15 @@ def test_sparse_mla_sm120_prefill_dsv4_dual_accepts_singleton_s_q_indices() -> N
+     torch.testing.assert_close(lse_3d, lse_2d, atol=0, rtol=0)
+ 
+ 
++@pytest.mark.parametrize("num_heads", [8, 64])
+ @pytest.mark.parametrize("extra_topk_len", [0, 128, 768])
+ def test_sparse_mla_sm120_prefill_dsv4_dual_extra_topk_length_truncation(
+-    extra_topk_len: int,
++    num_heads: int, extra_topk_len: int
+ ) -> None:
+     """DSv4 dual-cache prefill honors extra_topk_length."""
+     torch.manual_seed(0)
+     device = torch.device("cuda")
+-    num_heads, num_tokens = 64, 128
++    num_tokens = 128
+     d_qk, d_v = 512, 512
+     topk = 128
+     main_pbs = 64

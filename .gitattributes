@@ -1,0 +1,3 @@
+# Unified diff context uses a single space for an empty source line. Preserve
+# the exact upstream patch bytes and still check other whitespace errors.
+patches/flashinfer/*.patch whitespace=-blank-at-eol
