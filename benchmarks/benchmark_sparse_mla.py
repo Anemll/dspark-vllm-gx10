@@ -105,7 +105,9 @@ def main() -> None:
         blocks, page, dimension = 32, 64, 512
         count = blocks * page
         # Quantize each 64-value non-RoPE group using power-of-two FP8 scales.
-        original = torch.randn(blocks, page, dimension, device=device) * 0.1
+        # Unit-scale inputs keep the reference well above the absolute tolerance;
+        # tiny Q/K values could let an all-zero or stale output pass by accident.
+        original = torch.randn(blocks, page, dimension, device=device)
         groups = original[..., :448].reshape(blocks, page, 7, 64)
         scales = torch.pow(2.0, torch.ceil(torch.log2(groups.abs().amax(-1).clamp_min(1e-4) / 448.0)))
         quantized = (groups / scales[..., None]).clamp(-448, 448).to(torch.float8_e4m3fn)
@@ -125,7 +127,7 @@ def main() -> None:
         scale = dimension**-0.5
         for num_tokens in tokens:
             deadline()
-            query = (torch.randn(num_tokens, args.heads, dimension, device=device) * 0.1).to(torch.bfloat16)
+            query = torch.randn(num_tokens, args.heads, dimension, device=device).to(torch.bfloat16)
             live_indices = torch.randint(count, (num_tokens, args.active_entries), device=device, dtype=torch.int32)
             lengths = torch.full((num_tokens,), args.active_entries, device=device, dtype=torch.int32)
             # Exercise both padding and partially populated context rows.
@@ -144,6 +146,10 @@ def main() -> None:
 
             reference = reference_for_query()
             negative_reference = reference_for_query(-1)
+            if reference.float().abs().max().item() <= 0.05:
+                raise RuntimeError("reference has insufficient signal to reject a zero output")
+            if (reference.float() - negative_reference.float()).abs().max().item() <= 0.1:
+                raise RuntimeError("query replay has insufficient signal to reject a stale output")
             arms = {}
             for width in widths:
                 indices = torch.full((num_tokens, width), -1, device=device, dtype=torch.int32)
@@ -190,6 +196,7 @@ def main() -> None:
                 arm = arms[width]
                 report["results"].append({"tokens": num_tokens, "width": width,
                                           "max_abs_error": arm["max_abs_error"], "correct": True,
+                                          "reference_rms": reference.float().square().mean().sqrt().item(),
                                           "trials_us": arm["times_us"],
                                           "median_us": statistics.median(arm["times_us"])})
             save()
