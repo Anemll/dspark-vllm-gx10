@@ -1,19 +1,20 @@
-# syntax=docker/dockerfile:1
 # SPDX-License-Identifier: MIT
-# Diagnostic only: derive from an exact already-tested image ID/digest.
+# Diagnostic only: use a digest or a local tag verified against the tested ID.
 ARG TESTED_IMAGE
 FROM ${TESTED_IMAGE}
 ARG TESTED_IMAGE
+ARG TESTED_IMAGE_ID
 ARG SOURCE_REVISION
 LABEL org.opencontainers.image.description="DSV4 sparse-width component diagnostic; not a serving candidate" \
       org.opencontainers.image.revision="${SOURCE_REVISION}" \
       ai.anemll.diagnostic.base-image="${TESTED_IMAGE}" \
+      ai.anemll.diagnostic.base-image-id="${TESTED_IMAGE_ID}" \
       ai.anemll.diagnostic.flashinfer-patch="e982c904e4ab015a10d1d0bfb0d1321f8d6d52b27db4ea750b8061dec3f9191d"
 COPY patches/flashinfer/ /opt/ifa26/flashinfer-width/patches/
 COPY scripts/apply-flashinfer-width-patch.py /opt/ifa26/flashinfer-width/apply-patch.py
 COPY scripts/run-flashinfer-width-diagnostic.py /opt/ifa26/flashinfer-width/run-diagnostic.py
 COPY benchmarks/benchmark_sparse_mla.py /opt/ifa26/flashinfer-width/benchmark_sparse_mla.py
-RUN test -n "$TESTED_IMAGE" && test -n "$SOURCE_REVISION" && \
+RUN test -n "$TESTED_IMAGE" && test -n "$TESTED_IMAGE_ID" && test -n "$SOURCE_REVISION" && \
     python3 /opt/ifa26/flashinfer-width/apply-patch.py \
       --manifest /opt/ifa26/flashinfer-width/patches/runtime-manifest.json \
       --report /opt/ifa26/flashinfer-width/build-provenance.json \

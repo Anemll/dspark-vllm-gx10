@@ -69,8 +69,13 @@ The remaining two changed files are the upstream test and benchmark.
 ## Diagnostic image and component test
 
 The implemented route is `docker/Dockerfile.flashinfer-width-diagnostic`.
-It requires `TESTED_IMAGE` and `SOURCE_REVISION`; use the exact accepted image
-ID or digest and the repository commit containing these artifacts. It creates
+It requires `TESTED_IMAGE`, `TESTED_IMAGE_ID`, and `SOURCE_REVISION`; use a
+digest reference or a local tag verified against the accepted image ID, and
+the repository commit containing these artifacts. Docker BuildKit interprets
+a raw `sha256:<image-id>` in `FROM` as a repository tag, not a local image ID.
+The coordinator must verify `docker image inspect` matches `TESTED_IMAGE_ID`
+before and after the build; the label records that identity, not an in-image
+verification. It creates
 a new image layer, never mutates the running container, and performs no pip,
 package-manager, dependency, submodule, or model operation. The diagnostic
 image is not a serving candidate.
@@ -91,6 +96,7 @@ should inspect the accepted base identity and choose actual values:
 ```bash
 docker build --network none --pull=false \
   --build-arg TESTED_IMAGE="$TESTED_IMAGE" \
+  --build-arg TESTED_IMAGE_ID="$TESTED_IMAGE_ID" \
   --build-arg SOURCE_REVISION="$SOURCE_REVISION" \
   --file docker/Dockerfile.flashinfer-width-diagnostic \
   --tag "$DIAGNOSTIC_IMAGE" .
