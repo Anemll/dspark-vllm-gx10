@@ -24,13 +24,17 @@ from vllm.models.deepseek_v4.sparse_mla import (
 from vllm.platforms import current_platform
 from vllm.platforms.interface import DeviceCapability
 from vllm.utils.flashinfer import flashinfer_trtllm_batch_decode_sparse_mla_dsv4
+from vllm.utils.dsv4_sparse_policy import (
+    native_sparse_widths_enabled,
+    sparse_decode_widths,
+)
 from vllm.v1.attention.backend import MultipleOf
 
 if TYPE_CHECKING:
     from vllm.v1.attention.backends.mla.sparse_swa import DeepseekSparseSWAMetadata
 
 _FLASHINFER_DSV4_WORKSPACE_BUFFER_SIZE = 128 * 1024 * 1024
-_FLASHINFER_DSV4_DECODE_TOPKS = (128, 512, 1024)
+_FLASHINFER_DSV4_DECODE_TOPKS = sparse_decode_widths()
 _flashinfer_dsv4_workspace_by_device: dict[torch.device, torch.Tensor] = {}
 
 
@@ -627,6 +631,12 @@ class DeepseekV4FlashInferSM120Attention(DeepseekV4Attention):
                 "FLASHINFER_MLA_SPARSE_DSV4 on SM120 requires FlashInfer's "
                 "sparse MLA decode API."
             )
+        if native_sparse_widths_enabled():
+            # Validate both Python dispatch and the actual bundled binary before
+            # the first model request. A version string alone cannot prove this.
+            from vllm.utils.dsv4_sparse_binary import verify_native_sparse_binary
+
+            verify_native_sparse_binary(self.padded_heads)
         self._einsum_recipe, self._tma_aligned_scales = compute_fp8_einsum_recipe()
         # Per-tensor FP8 cache path scales.
         if self.kv_cache_torch_dtype != torch.float8_e4m3fn:

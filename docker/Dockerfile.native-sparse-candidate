@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: MIT
+# Dependency backport, NOT the overlay-only build. Build once and transfer the
+# identical image. sparse-binary is a separate named BuildKit context containing
+# the component-tested library from the exact manifest-pinned FlashInfer source.
+ARG TESTED_IMAGE
+FROM ${TESTED_IMAGE}
+ARG TESTED_IMAGE
+ARG TESTED_IMAGE_ID
+ARG SOURCE_REVISION
+ARG SPARSE_LIBRARY_SHA256
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      ai.anemll.native-sparse.base-image-id="${TESTED_IMAGE_ID}" \
+      ai.anemll.native-sparse.library-sha256="${SPARSE_LIBRARY_SHA256}" \
+      ai.anemll.native-sparse.flashinfer-patch="e982c904e4ab015a10d1d0bfb0d1321f8d6d52b27db4ea750b8061dec3f9191d"
+COPY patches/flashinfer/ /opt/ifa26/native-sparse/patches/
+COPY scripts/apply-flashinfer-width-patch.py scripts/install-flashinfer-sparse-aot.py /opt/ifa26/native-sparse/
+COPY --from=sparse-binary /sparse_mla_sm120.so /opt/ifa26/native-sparse/sparse_mla_sm120.so
+COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/
+ENV FLASHINFER_CUDA_ARCH_LIST=12.1a FLASHINFER_JIT_DEBUG=0
+RUN test -n "$TESTED_IMAGE_ID" && test -n "$SOURCE_REVISION" && \
+    python3 /opt/ifa26/native-sparse/apply-flashinfer-width-patch.py \
+      --manifest /opt/ifa26/native-sparse/patches/runtime-manifest.json \
+      --report /opt/ifa26/native-sparse/patch-report.json \
+      --tested-image "$TESTED_IMAGE" --source-revision "$SOURCE_REVISION" && \
+    python3 /opt/ifa26/native-sparse/install-flashinfer-sparse-aot.py \
+      --library /opt/ifa26/native-sparse/sparse_mla_sm120.so \
+      --sha256 "$SPARSE_LIBRARY_SHA256" \
+      --patch-report /opt/ifa26/native-sparse/patch-report.json \
+      --output /opt/ifa26/native-sparse/provenance.json && \
+    VLLM_DSV4_NATIVE_SPARSE_WIDTHS=1 python3 -c \
+      'from vllm.utils.dsv4_sparse_binary import verify_native_sparse_binary; verify_native_sparse_binary(32)'

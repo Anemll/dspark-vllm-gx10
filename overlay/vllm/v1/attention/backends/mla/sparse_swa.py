@@ -9,6 +9,7 @@ from vllm.config import CacheConfig, VllmConfig, get_current_vllm_config
 from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
 from vllm.platforms import current_platform
 from vllm.triton_utils import tl, triton
+from vllm.utils.dsv4_sparse_policy import dspark_sparse_width
 from vllm.utils.math_utils import cdiv
 from vllm.v1.attention.backend import (
     AttentionBackend,
@@ -386,12 +387,16 @@ class DeepseekSparseSWAMetadataBuilder(AttentionMetadataBuilder):
 
         # DSpark draft: the block is non-causal (every query attends to the
         # trailing window of context PLUS all query tokens, including future ones),
-        # so its per-token index list is wider than `window_size`. The kernel pads
-        # the q-head count to B_TOPK (64/128), which requires the index width to be
-        # a multiple of 128.
+        # so its per-token index list is wider than `window_size`.
+        # Native SM12x FlashInfer kernels accept 64-entry alignment (#51538).
+        # Other backends and the control arm retain the 128-entry alignment.
         self.is_dspark = spec_config is not None and spec_config.use_dspark()
         self.noncausal_index_width = (
-            cdiv(self.window_size + self.num_speculative_tokens, 128) * 128
+            dspark_sparse_width(
+                self.window_size,
+                self.num_speculative_tokens,
+                sm12x=current_platform.is_device_capability_family(120),
+            )
             if self.is_dspark
             else 0
         )
