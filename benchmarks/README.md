@@ -111,6 +111,46 @@ Run the offline contract tests:
 python3 -m unittest discover -s tests -p 'test_benchmark*.py' -v
 ```
 
+## Known-answer prefix-cache contract
+
+`benchmark_prefix_contract.py` sends eight sequential requests across exact
+1023/1025-token prompt families. It checks fixed JSON state values after a
+repeat, growing turn, and divergent branch. Each request is bracketed by server
+metrics: cold inputs must be uncached, and replay/branches must have measured
+cache hits. Correct free-form prose or identical text alone is not the gate.
+Use a new seed for a new cold run; retain the same seed after a candidate
+restart for a matched comparison. A cold wrong answer is not labelled cache
+corruption, and missing/contaminated metrics are inconclusive.
+
+```sh
+python3 benchmarks/benchmark_prefix_contract.py \
+  --base-url http://spark-head.local:8888 --model MODEL_ID \
+  --seed 4106 --timeout 30 --budget-seconds 240 \
+  --output .local/results/control-prefix-contract.json
+```
+
+## Model-free GPU diagnostics
+
+`benchmark_sparse_mla.py` compares identical active entries with different
+sentinel padding. Eager timings include host enqueue gaps; graph mode captures
+a batch of calls and reports per-call device time. These hot synthetic buffers
+do not measure model throughput or prove full-model graph correctness. Results
+record checks after changed-input and timed replays, atomic partial evidence,
+fresh autotuner storage, tactics, source and binary hashes. Output must be new.
+Reusing `--compiled-provenance` requires the coordinator to verify the same
+immutable image and supply `--image-id`; preserve Docker inspect evidence next
+to the report. The client cannot introspect the host image ID. See
+[`patches/flashinfer/README.md`](../patches/flashinfer/README.md) for isolated
+assembly and hard outer timeouts.
+
+`benchmark_mhc_warmup.py` is a bounded, model-free canary for the mHC warmup
+overlay. It requires a compatible SM121 runtime, explicit baseline/candidate
+source files, and a new output directory. It checks synthetic target/draft
+dispatch, finite outputs, unchanged parameters, isolated TileLang cache roots,
+generated-library provenance and the previously missed 294-token norm path.
+It does not establish model quality, TP=2 correctness, or zero JIT from timing
+alone. Inspect the phase-specific cache/compiler evidence before deployment.
+
 The exact-token prefill client also rejects missing/inconsistent usage,
 metadata-only streams, missing finish reasons, and missing `[DONE]`. Its TTFT
 starts at the first nonempty completion text, including a whitespace token.

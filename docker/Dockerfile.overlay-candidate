@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Only for Python overlay changes with unchanged compiled dependencies/pins.
+# Verify the local base tag against BASE_IMAGE_ID before AND after building.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+ARG BASE_IMAGE
+ARG BASE_IMAGE_ID
+ARG SOURCE_REVISION
+RUN test -n "$BASE_IMAGE" && test -n "$BASE_IMAGE_ID" && test -n "$SOURCE_REVISION" && \
+    python3 -c 'import importlib.util; from pathlib import Path; p=importlib.util.find_spec("vllm"); assert p and Path(p.origin).parent == Path("/usr/local/lib/python3.12/dist-packages/vllm"), "unexpected vLLM installation path"'
+COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}" \
+      org.opencontainers.image.version="dev-${SOURCE_REVISION}" \
+      org.opencontainers.image.description="Experimental Python overlay candidate; dependencies unchanged" \
+      ai.anemll.candidate.base-image="${BASE_IMAGE}" \
+      ai.anemll.candidate.base-image-id="${BASE_IMAGE_ID}"
