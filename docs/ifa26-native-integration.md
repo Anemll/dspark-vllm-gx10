@@ -94,3 +94,13 @@ graph pools, allocator pressure, and alternating replay order. It completed in
 launch-overhead measurements with synthetic preparation, not real-model TPS.
 The tested attention-source SHA256 is
 `94b5e497f89a0027146ab962aa6e00541c8a3204beaddc317c8626386ce01718`.
+
+The first full-model graph candidate (`bdf3e5e97646`) failed during construction:
+the new guard referenced `current_platform` without importing it. Both ranks
+stopped before serving; no graph-candidate speed result was produced. The
+structural canary extracted preparation methods but did not execute that
+constructor. The failed run is retained, and the validated control was selected
+for rollback before retrying. The follow-up adds the missing import, executes
+the actual constructor guard in offline tests, and adds a pinned Ruff F821
+undefined-name check to CI. This failed start is avoidable validation cost,
+not performance progress.

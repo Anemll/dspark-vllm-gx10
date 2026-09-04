@@ -27,7 +27,9 @@ def main():
     if args.output.exists():
         raise FileExistsError(args.output)
     os.environ["VLLM_USE_BREAKABLE_CUDAGRAPH"] = "1"
+    os.environ["DSPARK_NARROW_ATTN_GRAPH"] = "1"
     import torch
+    import vllm.models.deepseek_v4.attention as installed_attention
     from vllm.compilation.breakable_cudagraph import (
         BreakableCUDAGraphCapture, eager_break_during_capture,
     )
@@ -37,9 +39,38 @@ def main():
 
     torch.manual_seed(4104)
     source = args.source.read_text()
+    installed_source = Path(installed_attention.__file__).read_text()
+    if source != installed_source:
+        raise RuntimeError("canary source must match the installed candidate module")
     tree = ast.parse(source)
     cls = next(n for n in tree.body if isinstance(n, ast.ClassDef)
                and n.name == "DeepseekV4Attention")
+    # Execute the real constructor prefix with the installed module globals,
+    # including the real platform import/detection, without allocating weights.
+    # The original synthetic canary missed a NameError in this prefix.
+    init = next(n for n in cls.body if isinstance(n, ast.FunctionDef)
+                and n.name == "__init__")
+    prefix = []
+    for node in init.body[1:]:  # omit super().__init__ on our lightweight owner
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "tp_size"
+            for target in node.targets
+        ):
+            break
+        prefix.append(node)
+    init.body = prefix
+    init.name = "constructor_guard"
+    guard_module = ast.Module(body=[ast.ImportFrom(module="__future__", level=0,
+                            names=[ast.alias(name="annotations")]), init], type_ignores=[])
+    guard_scope = dict(vars(installed_attention))
+    exec(compile(ast.fix_missing_locations(guard_module), str(args.source), "exec"), guard_scope)
+    guard_owner = SimpleNamespace(_prepare_and_attn=lambda: None)
+    guard_config = SimpleNamespace(model_config=SimpleNamespace(hf_config=None),
+                                   quant_config=None, use_v2_model_runner=True,
+                                   cache_config=SimpleNamespace(cache_dtype="nvfp4_ds_mla"))
+    guard_scope["constructor_guard"](guard_owner, guard_config, "canary")
+    assert guard_owner._narrow_attention_graph is True
+    print("Installed candidate constructor guard passed", flush=True)
     nodes = [n for n in cls.body if isinstance(n, ast.FunctionDef)
              and n.name in ("_prepare_and_attn", "_sparse_indexer_and_attn")]
     scope = dict(torch=torch, eager_break_during_capture=eager_break_during_capture,
@@ -167,6 +198,7 @@ def main():
             gc.collect()
             torch.cuda.empty_cache()
     report = dict(kind="synthetic_graph_lifetime_not_model_speed", results=rows,
+                  installed_constructor_guard_passed=True,
                   source_sha256=hashlib.sha256(source.encode()).hexdigest(),
                   device=torch.cuda.get_device_name(),
                   elapsed_seconds=time.monotonic() - started)

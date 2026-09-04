@@ -34,6 +34,60 @@ class Value:
 
 
 class GraphBoundaryTests(unittest.TestCase):
+    def test_actual_constructor_guard_and_platform_import(self):
+        tree = ast.parse(SOURCE.read_text())
+        self.assertTrue(any(
+            isinstance(node, ast.ImportFrom) and node.module == "vllm.platforms"
+            and any(alias.name == "current_platform" for alias in node.names)
+            for node in tree.body
+        ), "the opt-in constructor must import its platform helper")
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef)
+                   and n.name == "DeepseekV4Attention")
+        init = next(n for n in cls.body if isinstance(n, ast.FunctionDef)
+                    and n.name == "__init__")
+        prefix = []
+        for node in init.body:
+            if isinstance(node, ast.Assign) and any(
+                isinstance(target, ast.Name) and target.id == "tp_size"
+                for target in node.targets
+            ):
+                break
+            prefix.append(node)
+        init.body = prefix
+        harness = ast.ClassDef(name="GuardHarness", bases=[ast.Name(id="Base", ctx=ast.Load())],
+                               keywords=[], body=[init], decorator_list=[])
+
+        class Base:
+            def _prepare_and_attn(self):
+                pass
+
+        for enabled, v2, sm12x, dtype, allowed in (
+            (True, True, True, "nvfp4_ds_mla", True),
+            (True, False, True, "nvfp4_ds_mla", False),
+            (True, True, False, "nvfp4_ds_mla", False),
+            (True, True, True, "fp8", False),
+            (True, True, True, None, False),
+            (False, False, False, None, True),
+        ):
+            scope = {
+                "Base": Base,
+                "narrow_attention_graph_enabled": lambda: enabled,
+                "current_platform": SimpleNamespace(is_device_capability_family=lambda family: sm12x and family == 120),
+                "eager_break_during_capture": lambda fn: fn,
+            }
+            module = ast.Module(body=[ast.ImportFrom(module="__future__", level=0,
+                                names=[ast.alias(name="annotations")]), harness], type_ignores=[])
+            exec(compile(ast.fix_missing_locations(module), str(SOURCE), "exec"), scope)
+            config = SimpleNamespace(model_config=SimpleNamespace(hf_config=None),
+                                     quant_config=None, use_v2_model_runner=v2,
+                                     cache_config=None if dtype is None else SimpleNamespace(cache_dtype=dtype))
+            with self.subTest(enabled=enabled, v2=v2, sm12x=sm12x, dtype=dtype):
+                if allowed:
+                    self.assertEqual(scope["GuardHarness"](config, "test")._narrow_attention_graph, enabled)
+                else:
+                    with self.assertRaises(ValueError):
+                        scope["GuardHarness"](config, "test")
+
     def run_case(self, narrow, branch, quant_tuple):
         events = []
         scope = methods()

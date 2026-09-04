@@ -46,6 +46,7 @@ from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.utils import extract_layer_index
 from vllm.models.deepseek_v4.common.rope import build_deepseek_v4_rope
 from vllm.models.deepseek_v4.compressor import DeepseekCompressor
+from vllm.platforms import current_platform
 from vllm.utils.dsv4_sparse_policy import narrow_attention_graph_enabled
 from vllm.utils.multi_stream_utils import (
     execute_in_parallel,
