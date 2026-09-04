@@ -46,6 +46,7 @@ from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.models.utils import extract_layer_index
 from vllm.models.deepseek_v4.common.rope import build_deepseek_v4_rope
 from vllm.models.deepseek_v4.compressor import DeepseekCompressor
+from vllm.utils.dsv4_sparse_policy import narrow_attention_graph_enabled
 from vllm.utils.multi_stream_utils import (
     execute_in_parallel,
     maybe_execute_in_parallel,
@@ -174,6 +175,25 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
         config = vllm_config.model_config.hf_config
         quant_config = vllm_config.quant_config
         cache_config = vllm_config.cache_config
+        # vLLM #51430/#52401: only the V2 runner may capture preparation.
+        # Keep the original wide boundary unless this SM12x experiment is opted
+        # in. No persistent eager scratch pool is introduced (#52836).
+        narrow_graph = narrow_attention_graph_enabled()
+        self._narrow_attention_graph = narrow_graph
+        if narrow_graph and (
+            not vllm_config.use_v2_model_runner
+            or not current_platform.is_device_capability_family(120)
+            or cache_config is None
+            or cache_config.cache_dtype != "nvfp4_ds_mla"
+        ):
+            raise ValueError(
+                "DSPARK_NARROW_ATTN_GRAPH requires V2, SM12x and nvfp4_ds_mla"
+            )
+        self._prepare_and_attn_fn = self._prepare_and_attn
+        if not narrow_graph:
+            self._prepare_and_attn_fn = eager_break_during_capture(
+                self._prepare_and_attn
+            )
         tp_size = get_tensor_model_parallel_world_size()
         layer_id = extract_layer_index(prefix)
 
@@ -345,9 +365,9 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
             device=hidden_states.device,
         )
 
-        # Metadata-independent input GEMMs + RMSNorm stay in the captured
-        # graph; the metadata-dependent rest (q up-proj + kv-insert, indexer,
-        # compressor, MLA attention) runs in the eager break.
+        # Input GEMMs and RMSNorm are captured in both modes. The opt-in V2
+        # boundary additionally captures preparation with static metadata
+        # buffers; sparse scoring and MLA attention remain eager.
         qr_kv, kv_score, indexer_kv_score, indexer_weights = (
             self.attn_gemm_parallel_execute(hidden_states)
         )
@@ -360,10 +380,9 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
             self.eps,
         )
 
-        # attention_impl is wrapped with @eager_break_during_capture: this is
-        # where the breakable cudagraph capture breaks (the attention op runs
-        # eagerly between captured graph segments).
-        self.attention_impl(
+        # The control breaks before all metadata-dependent preparation. The
+        # opt-in V2 path breaks only at sparse scoring/attention below.
+        self._prepare_and_attn_fn(
             hidden_states,
             qr,
             kv,
@@ -438,8 +457,7 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
 
         return qr_kv, kv_score, indexer_kv_score, indexer_weights
 
-    @eager_break_during_capture
-    def attention_impl(
+    def _prepare_and_attn(
         self,
         hidden_states: torch.Tensor,
         qr: torch.Tensor,
@@ -452,6 +470,7 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
     ) -> None:
         forward_context = get_forward_context()
         attn_metadata = forward_context.attn_metadata
+        index_q = index_q_scale = index_weights_out = None
 
         # wq_b + kv_insert (+ MLA compressor when an indexer is present) ride
         # on the default stream so q stays on its consumer stream (forward_mqa
@@ -473,7 +492,7 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
             # wq_b+kv_insert; slot [0] runs the full indexer; slot [1] runs the
             # MLA compressor. Slot [2] is reserved for the indexer's inner
             # overlap. ROCm (aux_streams is None) falls back to sequential.
-            q, _ = execute_in_parallel(
+            q, (indexer_inputs, _) = execute_in_parallel(
                 wq_b_kv_insert,
                 [
                     lambda: indexer(
@@ -483,6 +502,7 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
                         indexer_weights,
                         positions,
                         self.indexer_rotary_emb,
+                        prepare_only=self._narrow_attention_graph,
                     ),
                     lambda: compressor(kv_score, positions, self.rotary_emb),
                 ],
@@ -491,6 +511,12 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
                 [aux_streams[0], aux_streams[1]] if aux_streams is not None else None,
                 enable=aux_streams is not None,
             )
+            if self._narrow_attention_graph:
+                q_quant, index_weights_out = indexer_inputs
+                if isinstance(q_quant, tuple):
+                    index_q, index_q_scale = q_quant
+                else:
+                    index_q = q_quant
         elif self.compressor is not None:
             # wq_b + kv_insert on default, compressor on aux.
             aux_stream = (
@@ -515,8 +541,34 @@ class DeepseekV4Attention(nn.Module, AttentionLayerBase, ABC):
             q = self.wq_b(qr).view(-1, self.n_local_heads, self.head_dim)
             q = self._fused_qnorm_rope_kv_insert(q, kv, positions, attn_metadata)
 
-        # MLA attention writes into the pre-allocated `out` buffer
-        # ([num_tokens, padded_heads, head_dim]).
+        if self._narrow_attention_graph:
+            self._sparse_indexer_and_attn(
+                hidden_states, index_q, index_q_scale, index_weights_out,
+                q, kv, positions, out,
+            )
+        else:
+            # Preserve the original control's indexer/MLA-compressor overlap.
+            self.forward_mqa(q, kv, positions, out)
+
+    @eager_break_during_capture
+    def _sparse_indexer_and_attn(
+        self,
+        hidden_states: torch.Tensor,
+        index_q: torch.Tensor | None,
+        index_q_scale: torch.Tensor | None,
+        index_weights: torch.Tensor | None,
+        q: torch.Tensor,
+        kv: torch.Tensor,
+        positions: torch.Tensor,
+        out: torch.Tensor,
+    ) -> None:
+        # Separate tensor arguments are intentional: the breakable wrapper
+        # weak-references each top-level tensor. Do not hide graph-owned views
+        # inside a tuple captured by the eager replay closure.
+        if self.indexer is not None and index_q is not None:
+            assert index_weights is not None
+            q_quant = (index_q, index_q_scale) if index_q_scale is not None else index_q
+            self.indexer.indexer_op(hidden_states, q_quant, None, index_weights)
         self.forward_mqa(q, kv, positions, out)
 
     def _fused_qnorm_rope_kv_insert(
@@ -796,7 +848,9 @@ class DeepseekV4Indexer(nn.Module):
         indexer_weights: torch.Tensor,
         positions: torch.Tensor,
         rotary_emb: nn.Module,
-    ) -> torch.Tensor:
+        *,
+        prepare_only: bool = False,
+    ) -> torch.Tensor | tuple:
         compressor = self.compressor
 
         def wq_b_and_q_quant():
@@ -822,4 +876,6 @@ class DeepseekV4Indexer(nn.Module):
             self.ln_events[1],
             self.aux_stream,
         )
+        if prepare_only:
+            return q_quant, weights
         return self.indexer_op(hidden_states, q_quant, k, weights)

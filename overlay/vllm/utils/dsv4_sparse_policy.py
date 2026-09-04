@@ -27,3 +27,10 @@ def sparse_decode_widths() -> tuple[int, ...]:
     if native_sparse_widths_enabled():
         return (128, 192, 256, 512, 1024)
     return (128, 512, 1024)
+
+
+def narrow_attention_graph_enabled() -> bool:
+    value = os.environ.get("DSPARK_NARROW_ATTN_GRAPH", "0")
+    if value not in ("0", "1"):
+        raise ValueError("DSPARK_NARROW_ATTN_GRAPH must be 0 or 1")
+    return value == "1"

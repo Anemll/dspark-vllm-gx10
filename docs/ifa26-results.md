@@ -1,7 +1,11 @@
 # IFA26: measured baseline and optimization decisions
 
 Evidence date: 2026-09-04. This report summarizes the saved local experiment
-artifacts, not NVIDIA's SpeedBench results. The two-node DSv4 deployment was
+artifacts, not NVIDIA's SpeedBench results. The later fixed-capacity native-width
+integration is covered in [the follow-up report](ifa26-native-integration.md):
+the option was tested and rejected as a speed optimization. The older component
+stop decision below is retained as the history of the first experiment.
+The two-node DSv4 deployment was
 restored and its baseline, long-prefill, and bounded prefix-contract checks
 passed. The native sparse-width component experiment does **not** justify a
 serving deployment for the predeclared minimum 5% coding-throughput gain.

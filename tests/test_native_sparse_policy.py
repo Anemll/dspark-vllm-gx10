@@ -13,6 +13,16 @@ spec.loader.exec_module(policy)
 
 
 class NativeSparsePolicyTests(unittest.TestCase):
+    def test_narrow_graph_explicit_opt_in(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertFalse(policy.narrow_attention_graph_enabled())
+        for value in ("0", "1"):
+            with patch.dict(os.environ, {"DSPARK_NARROW_ATTN_GRAPH": value}):
+                self.assertEqual(policy.narrow_attention_graph_enabled(), value == "1")
+        with patch.dict(os.environ, {"DSPARK_NARROW_ATTN_GRAPH": "auto"}):
+            with self.assertRaises(ValueError):
+                policy.narrow_attention_graph_enabled()
+
     def test_control_preserves_legacy(self):
         with patch.dict(os.environ, {"VLLM_DSV4_NATIVE_SPARSE_WIDTHS": "0"}):
             self.assertEqual(policy.dspark_sparse_width(128, 5, sm12x=True), 256)

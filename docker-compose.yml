@@ -37,6 +37,7 @@ services:
       DSPARK_SLOT_CLAMP: "${DSPARK_SLOT_CLAMP:-1}"
       # Opt-in IFA native-width candidate; requires its verified FlashInfer image.
       VLLM_DSV4_NATIVE_SPARSE_WIDTHS: "${VLLM_DSV4_NATIVE_SPARSE_WIDTHS:-0}"
+      DSPARK_NARROW_ATTN_GRAPH: "${DSPARK_NARROW_ATTN_GRAPH:-0}"
       # Empty/unset preserves the runtime's automatic graph selection.
       # 0 = regular CUDA graphs; 1 = force breakable CUDA graphs.
       VLLM_USE_BREAKABLE_CUDAGRAPH: "${VLLM_USE_BREAKABLE_CUDAGRAPH:-}"
