@@ -14,11 +14,18 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
+import math
 import random
 import re
 import statistics
+import threading
 import time
 import urllib.request
+
+try:
+    from .benchmark_dsv4_api import _abort_response, sse_data, write_report
+except ImportError:
+    from benchmark_dsv4_api import _abort_response, sse_data, write_report
 
 
 DEFAULT_SIZES = "1024,2048,4096,8192,16384,32768"
@@ -74,7 +81,12 @@ def tokenize(base_url: str, model: str, text: str) -> list[int]:
         f"{base_url.rstrip('/')}/tokenize",
         {"model": model, "prompt": text},
     )
-    return [int(token) for token in response["tokens"]]  # type: ignore[index]
+    tokens = response.get("tokens")
+    if not isinstance(tokens, list) or not tokens or any(type(token) is not int or token < 0 for token in tokens):
+        raise ValueError("tokenizer did not return nonempty nonnegative integer token IDs")
+    if "count" in response and response["count"] != len(tokens):
+        raise ValueError("tokenizer count disagrees with returned IDs")
+    return tokens
 
 
 def fetch_text(url: str, timeout: float = 30) -> str:
@@ -100,7 +112,10 @@ def metric_total(
         labels = dict(re.findall(r'(\w+)="((?:\\.|[^"\\])*)"', match["labels"] or ""))
         if required_labels and any(labels.get(key) != value for key, value in required_labels.items()):
             continue
-        total += float(match["value"])
+        value = float(match["value"])
+        if not math.isfinite(value) or value < 0:
+            raise ValueError(f"invalid counter: {metric_name}")
+        total += value
         matched = True
     if not matched:
         raise RuntimeError(f"metric not found: {metric_name}")
@@ -138,6 +153,8 @@ def run_completion(
     model: str,
     prompt: list[int],
     timeout: float,
+    *,
+    evidence: dict | None = None,
 ) -> tuple[float, float, dict[str, int], str | None]:
     body = {
         "model": model,
@@ -157,30 +174,76 @@ def run_completion(
     first_event: float | None = None
     usage: dict[str, int] = {}
     finish_reason = None
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        for raw in response:
-            line = raw.decode("utf-8", "replace").strip()
-            if not line.startswith("data: "):
-                continue
-            payload = line[6:]
-            if payload == "[DONE]":
-                break
-            event = json.loads(payload)
-            if event.get("usage"):
-                usage = {
-                    key: int(value)
-                    for key, value in event["usage"].items()
-                    if isinstance(value, (int, float))
-                }
-            choices = event.get("choices", [])
-            if choices and first_event is None:
-                first_event = time.perf_counter()
-            for choice in choices:
-                if choice.get("finish_reason"):
-                    finish_reason = choice["finish_reason"]
-    finished = time.perf_counter()
-    first_event = first_event or finished
-    return first_event - started, finished - started, usage, finish_reason
+    evidence = evidence if evidence is not None else {}
+    evidence.update(request_body=body, events=[], done_received=False, text="", status="running")
+    timer = None
+    try:
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ValueError("timeout must be finite and positive")
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            remaining = timeout - (time.perf_counter() - started)
+            if remaining <= 0:
+                raise TimeoutError("request deadline exceeded before response")
+            timer = threading.Timer(remaining, _abort_response, args=(response,))
+            timer.daemon = True
+            timer.start()
+            for payload in sse_data(response):
+                now = time.perf_counter()
+                elapsed = now - started
+                if elapsed >= timeout:
+                    raise TimeoutError("request deadline exceeded")
+                record = {"elapsed_s": elapsed, "raw_data": payload}
+                evidence["events"].append(record)
+                if payload == "[DONE]":
+                    evidence["done_received"] = True
+                    break
+                event = json.loads(payload)
+                record["data"] = event
+                if not isinstance(event, dict):
+                    raise ValueError("SSE event is not an object")
+                if event.get("error"):
+                    raise ValueError(f"server error: {event['error']}")
+                if event.get("usage") is not None:
+                    usage = event["usage"]
+                for choice in event.get("choices", []):
+                    if choice.get("index", 0) != 0:
+                        raise ValueError("prefill benchmark expects exactly one completion choice")
+                    text = choice.get("text") or ""
+                    if text:
+                        if first_event is None:
+                            first_event = now
+                        evidence["text"] += text
+                    if choice.get("finish_reason") is not None:
+                        finish_reason = choice["finish_reason"]
+        elapsed = time.perf_counter() - started
+        if elapsed >= timeout:
+            raise TimeoutError("request deadline exceeded")
+        if not evidence["done_received"]:
+            raise ValueError("stream ended without [DONE]")
+        if first_event is None:
+            raise ValueError("no nonempty completion text; metadata is not a first token")
+        if finish_reason not in {"stop", "length"}:
+            raise ValueError(f"missing or unexpected finish_reason: {finish_reason!r}")
+        if not isinstance(usage, dict):
+            raise ValueError("usage is not an object")
+        if type(usage.get("prompt_tokens")) is not int or usage["prompt_tokens"] != len(prompt):
+            raise ValueError("missing or mismatched usage.prompt_tokens")
+        if type(usage.get("completion_tokens")) is not int or usage["completion_tokens"] != 1:
+            raise ValueError("missing or invalid usage.completion_tokens; expected one output token")
+        evidence["status"] = "complete"
+        return first_event - started, elapsed, usage, finish_reason
+    except BaseException as exc:
+        evidence["status"] = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
+        evidence["error"] = f"{type(exc).__name__}: {exc}"
+        raise
+    finally:
+        if timer is not None:
+            timer.cancel()
+        evidence.update(
+            elapsed_s=time.perf_counter() - started,
+            ttft_s=first_event - started if first_event is not None else None,
+            usage=usage, finish_reason=finish_reason,
+        )
 
 
 def median_or_none(values: list[float | None]) -> float | None:
@@ -225,126 +288,161 @@ def main() -> None:
     parser.add_argument("--output")
     args = parser.parse_args()
 
-    base_url = args.base_url.rstrip("/")
-    version = request_json(f"{base_url}/version").get("version", "unknown")
-    pool = tokenize(base_url, args.model, TOKEN_CORPUS)
-    sizes = [int(value) for value in args.sizes.split(",")]
+    try:
+        sizes = [int(value) for value in args.sizes.split(",")]
+    except ValueError:
+        parser.error("sizes must be a comma-separated list of positive integers")
     if (
-        any(size <= 0 for size in sizes)
-        or args.trials <= 0
-        or args.warmup_tokens < 0
-        or args.shape_warmup_trials < 0
+        not sizes or any(size <= 0 for size in sizes) or args.trials <= 0
+        or args.warmup_tokens < 0 or args.shape_warmup_trials < 0
+        or not math.isfinite(args.timeout) or args.timeout <= 0
     ):
-        parser.error(
-            "sizes/trials must be positive and warm-up values non-negative"
-        )
+        parser.error("sizes/trials/finite timeout must be positive; warmups non-negative")
 
-    print(
-        f"target {base_url} model {args.model} version {version} label {args.label}",
-        flush=True,
-    )
-    if args.warmup_tokens:
-        warmup = make_prompt(pool, args.warmup_tokens, 0, args.seed)
-        warmup_ttft, _, _, _ = run_completion(
-            base_url, args.model, warmup, args.timeout
-        )
-        print(
-            f"warmup {args.warmup_tokens:,} tokens: TTFT {warmup_ttft:.3f}s",
-            flush=True,
-        )
-    for size in sizes:
-        for warmup_trial in range(1, args.shape_warmup_trials + 1):
-            # Negative trial IDs keep shape warm-ups distinct from measured prompts.
-            prompt = make_prompt(pool, size, -warmup_trial, args.seed)
-            warmup_ttft, _, _, _ = run_completion(
-                base_url, args.model, prompt, args.timeout
-            )
-            print(
-                f"shape warmup {size:,} tokens ({warmup_trial}/"
-                f"{args.shape_warmup_trials}): TTFT {warmup_ttft:.3f}s",
-                flush=True,
-            )
+    base_url = args.base_url.rstrip("/")
     results: list[PrefillResult] = []
-    for size in sizes:
-        print(f"=== {size:,} input tokens ===", flush=True)
-        for trial in range(1, args.trials + 1):
-            prompt = make_prompt(pool, size, trial, args.seed)
-            prompt_hash = hashlib.sha256(
-                ",".join(str(token) for token in prompt).encode()
-            ).hexdigest()
-            before = snapshot_metrics(base_url)
-            ttft_s, elapsed_s, usage, finish_reason = run_completion(
-                base_url, args.model, prompt, args.timeout
-            )
-            after = snapshot_metrics(base_url)
-
-            prompt_tokens = int(usage.get("prompt_tokens", size))
-            completion_tokens = int(usage.get("completion_tokens", 0))
-            prefill_s = after.prefill_time_s - before.prefill_time_s
-            request_delta = after.prefill_requests - before.prefill_requests
-            computed_tokens = round(after.computed_tokens - before.computed_tokens)
-            cache_hit_tokens = round(after.cache_hit_tokens - before.cache_hit_tokens)
-            metrics_exact = abs(request_delta - 1.0) < 0.01
-            server_tps = (
-                computed_tokens / prefill_s
-                if metrics_exact and computed_tokens > 0 and prefill_s > 0
-                else None
-            )
-            result = PrefillResult(
-                target_tokens=size,
-                trial=trial,
-                prompt_sha256=prompt_hash,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
-                ttft_s=ttft_s,
-                elapsed_s=elapsed_s,
-                client_input_tps=prompt_tokens / max(ttft_s, 1e-9),
-                server_prefill_s=prefill_s,
-                server_computed_tokens=computed_tokens,
-                server_cache_hit_tokens=cache_hit_tokens,
-                server_prefill_tps=server_tps,
-                metrics_request_delta=request_delta,
-                metrics_exact=metrics_exact,
-                finish_reason=finish_reason,
-            )
-            results.append(result)
-            server_text = f"{server_tps:.1f}" if server_tps is not None else "shared"
-            cache_text = f" cache-hit={cache_hit_tokens}" if cache_hit_tokens else ""
-            print(
-                f"  trial={trial}: server={server_text} tok/s | "
-                f"client={result.client_input_tps:.1f} tok/s | "
-                f"TTFT={ttft_s:.3f}s | computed={computed_tokens}{cache_text}",
-                flush=True,
-            )
-
     report = {
         "schema_version": 1,
+        "status": "running",
         "label": args.label,
         "target": args.report_target,
         "started_at_utc": datetime.now(timezone.utc).isoformat(),
         "model": args.model,
-        "version": version,
+        "version": "unknown",
         "sizes": sizes,
         "trials_per_size": args.trials,
         "warmup_tokens": args.warmup_tokens,
         "shape_warmup_trials": args.shape_warmup_trials,
         "seed": args.seed,
-        "token_pool_sha256": hashlib.sha256(
-            ",".join(str(token) for token in pool).encode()
-        ).hexdigest(),
+        "timeout": args.timeout,
         "measurement": {
             "server_prefill_tps": (
                 "Delta of vllm request_prefill_kv_computed_tokens divided by "
                 "request_prefill_time_seconds; valid only when metrics_exact is true."
             ),
-            "client_input_tps": "Prompt tokens divided by client-observed TTFT.",
+            "client_input_tps": "Prompt tokens divided by time to first nonempty completion text, excluding empty metadata.",
             "cache_control": (
-                "Deterministic unique token-ID prompts prevent cross-trial prefix hits."
+                "Deterministic token-ID prefixes differ across sizes/trials. "
+                "Reusing the same seed on a warm server may reuse previous-run prefixes; "
+                "no cache flush is performed."
             ),
         },
-        "results": [asdict(result) for result in results],
-        "summary": build_summary(results),
+        "requests": [],
+        "results": [],
+        "summary": [],
     }
+    write_report(args.output, report)
+
+    def checkpoint():
+        report["results"] = [asdict(result) for result in results]
+        report["summary"] = build_summary(results)
+        write_report(args.output, report)
+
+    def begin_request(prompt, phase, size, trial):
+        record = {
+            "phase": phase, "target_tokens": size, "trial": trial,
+            "prompt_sha256": hashlib.sha256(",".join(str(token) for token in prompt).encode()).hexdigest(),
+            "prompt_token_ids": prompt, "status": "running", "stream": {},
+        }
+        report["requests"].append(record)
+        checkpoint()
+        return record
+
+    def complete_request(prompt, record):
+        try:
+            response = run_completion(base_url, args.model, prompt, args.timeout, evidence=record["stream"])
+            record["status"] = "complete"
+            return response
+        except BaseException as exc:
+            record["status"] = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
+            record["error"] = f"{type(exc).__name__}: {exc}"
+            raise
+        finally:
+            checkpoint()
+
+    try:
+        version = request_json(f"{base_url}/version").get("version", "unknown")
+        report["version"] = version
+        pool = tokenize(base_url, args.model, TOKEN_CORPUS)
+        report["token_pool_sha256"] = hashlib.sha256(",".join(str(token) for token in pool).encode()).hexdigest()
+        report["token_pool"] = pool
+        checkpoint()
+        print(f"target {base_url} model {args.model} version {version} label {args.label}", flush=True)
+        if args.warmup_tokens:
+            warmup = make_prompt(pool, args.warmup_tokens, 0, args.seed)
+            record = begin_request(warmup, "warmup", args.warmup_tokens, 0)
+            warmup_ttft, _, _, _ = complete_request(warmup, record)
+            print(f"warmup {args.warmup_tokens:,} tokens: TTFT {warmup_ttft:.3f}s", flush=True)
+        for size in sizes:
+            for warmup_trial in range(1, args.shape_warmup_trials + 1):
+                # Negative trial IDs preserve the original distinct warmup prompts.
+                prompt = make_prompt(pool, size, -warmup_trial, args.seed)
+                record = begin_request(prompt, "shape-warmup", size, -warmup_trial)
+                warmup_ttft, _, _, _ = complete_request(prompt, record)
+                print(f"shape warmup {size:,} tokens ({warmup_trial}/{args.shape_warmup_trials}): TTFT {warmup_ttft:.3f}s", flush=True)
+
+        for size in sizes:
+            print(f"=== {size:,} input tokens ===", flush=True)
+            for trial in range(1, args.trials + 1):
+                prompt = make_prompt(pool, size, trial, args.seed)
+                record = begin_request(prompt, "measured", size, trial)
+                before = snapshot_metrics(base_url)
+                record["metrics_before"] = asdict(before)
+                checkpoint()
+                ttft_s, elapsed_s, usage, finish_reason = complete_request(prompt, record)
+                after = snapshot_metrics(base_url)
+                record["metrics_after"] = asdict(after)
+                prompt_tokens = usage["prompt_tokens"]
+                completion_tokens = usage["completion_tokens"]
+                prefill_s = after.prefill_time_s - before.prefill_time_s
+                request_delta = after.prefill_requests - before.prefill_requests
+                prompt_delta = after.prompt_tokens - before.prompt_tokens
+                computed_tokens = round(after.computed_tokens - before.computed_tokens)
+                cache_hit_tokens = round(after.cache_hit_tokens - before.cache_hit_tokens)
+                metrics_exact = (
+                    abs(request_delta - 1.0) < 0.01
+                    and abs(prompt_delta - prompt_tokens) < 0.01
+                    and prefill_s >= 0 and computed_tokens >= 0
+                    and 0 <= cache_hit_tokens <= prompt_tokens
+                )
+                server_tps = (
+                    computed_tokens / prefill_s
+                    if metrics_exact and computed_tokens > 0 and prefill_s > 0 else None
+                )
+                result = PrefillResult(
+                    target_tokens=size, trial=trial,
+                    prompt_sha256=record["prompt_sha256"],
+                    prompt_tokens=prompt_tokens, completion_tokens=completion_tokens,
+                    ttft_s=ttft_s, elapsed_s=elapsed_s,
+                    client_input_tps=prompt_tokens / max(ttft_s, 1e-9),
+                    server_prefill_s=prefill_s,
+                    server_computed_tokens=computed_tokens,
+                    server_cache_hit_tokens=cache_hit_tokens,
+                    server_prefill_tps=server_tps,
+                    metrics_request_delta=request_delta,
+                    metrics_exact=metrics_exact, finish_reason=finish_reason,
+                )
+                results.append(result)
+                record["measurement_complete"] = True
+                checkpoint()
+                server_text = f"{server_tps:.1f}" if server_tps is not None else "shared"
+                cache_text = f" cache-hit={cache_hit_tokens}" if cache_hit_tokens else ""
+                print(
+                    f"  trial={trial}: server={server_text} tok/s | "
+                    f"client={result.client_input_tps:.1f} tok/s | "
+                    f"TTFT={ttft_s:.3f}s | computed={computed_tokens}{cache_text}",
+                    flush=True,
+                )
+        report["status"] = "complete"
+    except BaseException as exc:
+        report["status"] = "interrupted" if isinstance(exc, KeyboardInterrupt) else "failed"
+        report["error"] = f"{type(exc).__name__}: {exc}"
+        if report["requests"]:
+            report["requests"][-1]["measurement_error"] = report["error"]
+        raise
+    finally:
+        checkpoint()
+
     print("=== MEDIANS ===")
     for row in report["summary"]:
         server = row["median_server_prefill_tps"]
@@ -354,11 +452,6 @@ def main() -> None:
             f"client {row['median_client_input_tps']:.1f} tok/s | "
             f"TTFT {row['median_ttft_s']:.3f}s"
         )
-    if args.output:
-        with open(args.output, "w", encoding="utf-8") as output:
-            json.dump(report, output, indent=2)
-            output.write("\n")
-
 
 if __name__ == "__main__":
     main()
