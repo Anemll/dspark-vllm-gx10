@@ -15,8 +15,11 @@ from datetime import datetime, timezone
 import hashlib
 import importlib.metadata
 import json
+import math
+import os
 from pathlib import Path
 import statistics
+import tempfile
 import time
 
 
@@ -34,6 +37,7 @@ def main() -> None:
     parser.add_argument("--timing-mode", choices=("eager", "graph"), default="eager")
     parser.add_argument("--compiled-provenance", type=Path,
                         help="Reuse a hash-verified library from a successful isolated diagnostic")
+    parser.add_argument("--image-id", help="Coordinator-verified image ID; record alongside Docker inspect evidence")
     parser.add_argument("--isolate-aot-dir", type=Path,
                         help="Empty diagnostic AOT directory; prevents loading an old packaged kernel")
     parser.add_argument("--output", type=Path, required=True)
@@ -45,8 +49,19 @@ def main() -> None:
     if (not widths or not tokens or min(tokens) < 1 or max(tokens) > 256
             or not 1 <= args.active_entries <= min(widths) or max(widths) > 1024
             or args.heads not in (8, 16, 32, 64, 128)
-            or args.trials < 1 or args.repetitions < 1 or args.timeout <= 0):
+            or not 1 <= args.trials <= 100 or not 1 <= args.repetitions <= 1000
+            or not math.isfinite(args.timeout) or not 0 < args.timeout <= 3600
+            or not math.isfinite(args.min_free_gib) or args.min_free_gib < 0
+            or len(set(widths)) != len(widths) or len(set(tokens)) != len(tokens)):
         parser.error("invalid or unbounded benchmark dimensions")
+    if args.compiled_provenance and not args.image_id:
+        parser.error("binary reuse requires --image-id and matching external Docker inspect evidence")
+    if args.output.exists() or args.output.is_symlink():
+        parser.error("output must be new; refusing to overwrite existing evidence")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    autotune_dir = args.output.with_name(args.output.stem + "-autotune")
+    autotune_dir.mkdir(exist_ok=False)
+    os.environ["FLASHINFER_AUTOTUNE_DIR"] = str(autotune_dir.resolve())
     import torch
     import flashinfer
     from flashinfer.mla import _sparse_mla_sm120 as sparse
@@ -70,6 +85,11 @@ def main() -> None:
         "torch_version": torch.__version__, "cuda_version": torch.version.cuda,
         "client_source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "source_sha256": hashlib.sha256(Path(sparse.__file__).read_bytes()).hexdigest(),
+        "coordinator_verified_image_id": args.image_id,
+        "image_identity_note": "Not introspected inside container; join with preserved Docker inspect evidence. Required when reusing old five-file manifests.",
+        "tvm_ffi_version": importlib.metadata.version("apache-tvm-ffi"),
+        "autotune_cache": str(sparse._decode_dsv4_default_cache_path()),
+        "autotune_policy": "Fresh empty disk cache; no autotune context. Actual hot-cache tactics recorded at exit.",
         "timing_mode": (
             "captured public-call batch, CUDA event envelope per call; no host gaps inside batch"
             if args.timing_mode == "graph" else
@@ -80,16 +100,25 @@ def main() -> None:
         "runtime_source_hashes": {},
         "correctness_tolerance": {"atol": 0.05, "rtol": 0.05},
         "results": [],
+        "trial_orders": [],
     }
 
     def save():
         report["elapsed_s"] = time.monotonic() - start
-        args.output.write_text(json.dumps(report, indent=2) + "\n")
+        serialized = json.dumps(report, indent=2, allow_nan=False) + "\n"
+        with tempfile.NamedTemporaryFile(mode="w", dir=args.output.parent, delete=False) as handle:
+            temporary = Path(handle.name)
+            handle.write(serialized)
+        try:
+            temporary.replace(args.output)
+        finally:
+            temporary.unlink(missing_ok=True)
 
     def deadline():
         if time.monotonic() - start > args.timeout:
             raise TimeoutError("component benchmark exceeded its time budget")
 
+    save()
     try:
         for path in [Path(sparse.__file__),
                      jit_env.FLASHINFER_CSRC_DIR / "sparse_mla_sm120_decode_dsv4.cu",
@@ -103,11 +132,21 @@ def main() -> None:
         free, total = torch.cuda.mem_get_info()
         report["gpu"] = {"name": torch.cuda.get_device_name(), "capability": capability,
                          "free_bytes_before": free, "total_bytes": total}
+        from flashinfer.jit.mla import gen_sparse_mla_sm120_module
+        spec = gen_sparse_mla_sm120_module()
+        report["all_jit_sources_sha256"] = {
+            str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in spec.sources
+        }
+        report["extra_cuda_cflags"] = spec.extra_cuda_cflags
+        report["public_wrapper_sha256"] = hashlib.sha256(
+            Path(sparse.__file__).with_name("_core.py").read_bytes()
+        ).hexdigest()
         if args.compiled_provenance:
             provenance = json.loads(args.compiled_provenance.read_text())
             if provenance["status"] not in ("passed", "compile_only_passed"):
                 raise RuntimeError("reuse requires a successful isolated build")
             if (provenance["torch_version"] != torch.__version__
+                    or provenance["cuda_version"] != torch.version.cuda
                     or provenance["flashinfer_distribution_version"] != report["flashinfer_version"]
                     or tuple(provenance["gpu"]["capability"]) != capability):
                 raise RuntimeError("compiled runtime/GPU provenance mismatch")
@@ -118,7 +157,6 @@ def main() -> None:
             if hashlib.sha256(library.read_bytes()).hexdigest() != provenance["library"]["sha256"]:
                 raise RuntimeError("compiled library hash mismatch")
             jit_env.FLASHINFER_AOT_DIR = library.parent.parent
-            from flashinfer.jit.mla import gen_sparse_mla_sm120_module
             spec = gen_sparse_mla_sm120_module()
             if not spec.is_aot or spec.aot_path.resolve() != library.resolve():
                 raise RuntimeError("reused library does not match the resolved AOT path")
@@ -184,6 +222,11 @@ def main() -> None:
                 raise RuntimeError("query replay has insufficient signal to reject a stale output")
             arms = {}
             for width in widths:
+                record = {"tokens": num_tokens, "width": width, "correct": False,
+                          "checks": {}, "trials_us": [], "median_us": None,
+                          "reference_rms": reference.float().square().mean().sqrt().item()}
+                report["results"].append(record)
+                save()
                 indices = torch.full((num_tokens, width), -1, device=device, dtype=torch.int32)
                 indices[:, :args.active_entries] = live_indices
                 output = torch.empty_like(query).unsqueeze(1)
@@ -198,18 +241,26 @@ def main() -> None:
 
                 run()
                 torch.cuda.synchronize()
-                torch.testing.assert_close(output.squeeze(1), reference, atol=0.05, rtol=0.05)
-                max_error = (output.squeeze(1).float() - reference.float()).abs().max().item()
+                def check(expected, phase, output=output, record=record):
+                    error = (output.squeeze(1).float() - expected.float()).abs().max().item()
+                    record["checks"][phase] = {"max_abs_error": error, "passed": False}
+                    record["correct"] = False
+                    torch.testing.assert_close(output.squeeze(1), expected, atol=0.05, rtol=0.05)
+                    record["checks"][phase]["passed"] = True
+                    record["correct"] = True
+                    record["max_abs_error"] = max(row["max_abs_error"] for row in record["checks"].values())
+
+                check(reference, "eager_positive")
                 # Replay with changed query values to catch stale cached outputs.
                 query.neg_()
                 run()
                 torch.cuda.synchronize()
-                torch.testing.assert_close(output.squeeze(1), negative_reference, atol=0.05, rtol=0.05)
+                check(negative_reference, "eager_negative")
                 query.neg_()
                 for _ in range(3):
                     run()
                 torch.cuda.synchronize()
-                torch.testing.assert_close(output.squeeze(1), reference, atol=0.05, rtol=0.05)
+                check(reference, "eager_restored")
                 graph = None
                 if args.timing_mode == "graph":
                     graph = torch.cuda.CUDAGraph()
@@ -221,16 +272,22 @@ def main() -> None:
                     query.neg_()
                     graph.replay()
                     torch.cuda.synchronize()
-                    torch.testing.assert_close(output.squeeze(1), negative_reference, atol=0.05, rtol=0.05)
+                    check(negative_reference, "graph_negative")
                     query.neg_()
                     graph.replay()
                     torch.cuda.synchronize()
-                    torch.testing.assert_close(output.squeeze(1), reference, atol=0.05, rtol=0.05)
-                arms[width] = {"run": run, "graph": graph, "times_us": [], "max_abs_error": max_error}
+                    check(reference, "graph_restored")
+                record["correct"] = True
+                arms[width] = {"run": run, "graph": graph, "record": record, "check": check}
+                save()
                 deadline()
             # Alternate arm order across trials to reduce warm/thermal bias.
             for trial in range(args.trials):
-                order = widths if trial % 2 == 0 else list(reversed(widths))
+                offset = trial % len(widths)
+                order = widths[offset:] + widths[:offset]
+                if (trial // len(widths)) % 2:
+                    order = list(reversed(order))
+                report["trial_orders"].append({"tokens": num_tokens, "trial": trial, "widths": order})
                 for width in order:
                     deadline()
                     begin, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
@@ -242,14 +299,13 @@ def main() -> None:
                             arms[width]["run"]()
                     end.record()
                     end.synchronize()
-                    arms[width]["times_us"].append(begin.elapsed_time(end) * 1000 / args.repetitions)
+                    arm = arms[width]
+                    arm["record"]["trials_us"].append(begin.elapsed_time(end) * 1000 / args.repetitions)
+                    arm["check"](reference, f"after_trial_{trial}")
+                    save()
             for width in widths:
                 arm = arms[width]
-                report["results"].append({"tokens": num_tokens, "width": width,
-                                          "max_abs_error": arm["max_abs_error"], "correct": True,
-                                          "reference_rms": reference.float().square().mean().sqrt().item(),
-                                          "trials_us": arm["times_us"],
-                                          "median_us": statistics.median(arm["times_us"])})
+                arm["record"]["median_us"] = statistics.median(arm["record"]["trials_us"])
             save()
             print(json.dumps(report["results"][-len(widths):]), flush=True)
         report["status"] = "passed"
@@ -259,6 +315,10 @@ def main() -> None:
         report["error"] = f"{type(error).__name__}: {error}"
         raise
     finally:
+        report["decode_hot_cache_tactics"] = [
+            {"signature": repr(key), "tactic": repr(value)}
+            for key, value in sparse._decode_dsv4_hot_cache.items()
+        ]
         libraries = list(jit_env.FLASHINFER_JIT_DIR.glob("*sparse_mla_sm120*/*.so"))
         libraries.extend(jit_env.FLASHINFER_AOT_DIR.glob("*sparse_mla_sm120*/*.so"))
         report["library_artifacts"] = [
