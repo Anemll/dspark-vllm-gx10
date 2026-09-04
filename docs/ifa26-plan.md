@@ -1,20 +1,53 @@
 # IFA 2026: applicability and implementation plan
 
-Status: proposed; source review on 2026-09-04. Repository baseline: `IFA26`
-at `081fda9`, matching `main` when the branch was created. This document plans
-changes; it does not validate a new image or change the running cluster.
+Status: first implementation and bounded experiment completed; source review and measured
+results dated 2026-09-04. Branch `IFA26` started at `081fda9`, matching `main`
+when created. Measurement clients, runtime inspection, and regression tests
+have been implemented; restored a399/0731 TP2 baseline and bounded prefix tests
+passed. The native-width component gate did not justify a serving deployment.
+The corrected mHC startup canary and TP2 startup/smoke, decode, coding,
+multi-turn, exact-prefill checks through 65,536 tokens, and eight known-answer
+prefix/cache checks passed. The narrow startup-warmup fix is accepted for the
+tested 0731/DSpark-five workload; both candidate containers remain running,
+with release defaults unchanged. See [measured results and evidence
+limits](ifa26-results.md); the sections below retain the broader migration plan.
 
 ## Recommendation
 
-Prioritize DeepSeek V4 sparse-MLA correctness, native sparse widths, and
-agent-workload measurement. Evaluate vLLM 0.28 as a compatibility migration,
-then measure individual optimizations on that fixed stack. Add Qwen/XQA as a
-separate, optional model profile after the DeepSeek deployment passes.
+Retain the accepted mHC startup-warmup candidate and validated a399 rollback.
+After an initial instrumentation failure, its fresh isolated canary passed:
+finite outputs, unchanged parameters,
+verified compiled libraries, and no observed new compilation on two 294-token
+probes. The same candidate image now ran on both TP ranks; warmup took
+50.89/50.79 seconds before readiness and the initial smoke showed no new mHC
+compile. W4A16, draft-input, and top-k cold compilations remain. Readiness took
+5 minutes 54 seconds from head launch. Final both-rank logs show no post-monitor
+TileLang compilation or observed engine/CUDA/NCCL error, and the eight-case
+semantic/cache contract passed with measured reuse. Acceptance is limited to
+this tested workload, not a universal zero-JIT guarantee or release promotion.
 
-The strongest specific kernel opportunity is eliminating unnecessary DSpark
-sparse-index padding: our wrapper expands width 256 to 512, while newer
-FlashInfer supports 192 and 256 directly. This is a testable hypothesis, not
-an end-to-end speedup prediction.
+All benchmark replay bodies/hashes matched baseline, including exact prompt
+IDs through 65,536 tokens. However, automatic KV profiling reported 1,995,392
+cache tokens versus baseline 2,226,543, a 10.38% capacity reduction measured
+before mHC warmup. Same configured settings do not make this a matched-capacity
+A/B. Do not attribute observed higher throughput or lower prefill times to the
+warmup. Judge the startup change on compilation coverage and correctness;
+resolve effective capacity and cold-state controls before causal TPS claims.
+
+Native sparse widths have now been measured on SM121. Captured width-256 calls
+saved about 3.98 microseconds at five query tokens and 0.32 microseconds at
+twenty, with larger savings beyond the 64-token dispatch boundary. These
+component results do not establish the predeclared minimum 5% serving-throughput
+gain. Keep the patch and diagnostic evidence, but defer a full serving
+FlashInfer backport for this experiment. No end-to-end native-width improvement
+was measured.
+
+Evaluate vLLM 0.28 as a separate compatibility migration. Add Qwen/XQA as a
+separate optional profile after the DeepSeek deployment passes its gates.
+The active experiment's working rollback is the validated a399 prefix-cache
+image with the existing DeepSeek-V4-Flash-0731 checkpoint. The original
+`v0.1.1` image remains cached, but its original model location is empty or
+absent, so it is not a startup-verified rollback for this run.
 
 ## Assessment of the supplied information
 
@@ -79,7 +112,12 @@ using any compiled results. This review used the tracked Python dispatch code.
 
 ### 1. Measurement, regression tests, and capability reporting
 
-Implement first; these make later runtime changes reviewable.
+Implemented for the first experiment: dependency-free stream/prefill clients,
+exact 8K coding and fixed-history replay, a known-answer prefix contract,
+runtime inspection, and CPU regression coverage. Raw reports preserve request
+and source hashes, usage, SSE events, validation failures, and sample-aware
+summaries. The [results](ifa26-results.md) distinguish measured coverage from
+remaining gaps; dashboard changes and broader GPU gates remain separate work.
 
 | Proposed change | Files | Acceptance criterion |
 | --- | --- | --- |
@@ -88,13 +126,13 @@ Implement first; these make later runtime changes reviewable.
 | Make latency and throughput interpretation explicit | Existing benchmark clients and dashboard | Aggregate output tokens/wall time, per-request throughput, TTFT/TPOT distributions, completion/errors, acceptance, and computed/cached tokens are distinct. Preserve raw trials and report medians, not only the best trial. |
 | Add regression coverage | New CPU/GPU test groups; `.github/workflows/ci.yml` | CPU tests cover contracts and metadata; opt-in GPU tests cover actual numerical behavior. Syntax and license checks remain. |
 
-The current streaming client counts non-empty content events as chunks and
-computes decode rate from first-to-last content arrival. Speculative decoding
-can emit multiple tokens per event. Keep chunk timing labeled as such; obtain
-true token timing from server instrumentation or document the approximation.
-Validate usage and tool/reasoning streams instead of silently accepting missing
-content as a successful result. Small two-trial smoke runs cannot establish
-reliable p95 latency; collect enough requests for distribution reports.
+The updated streaming client preserves chunk counts and legacy throughput
+fields with explicit proxy labels. It records content/reasoning/tool deltas,
+rejects missing usage or invalid output, and distinguishes visible-content
+TTFT from first output. Exact-token prefill excludes empty metadata from TTFT
+and retains partial-failure evidence. True token timing still requires server
+instrumentation. Small two-trial smoke runs cannot establish reliable p95
+latency; collect enough requests for distribution reports.
 
 The existing random-token prefill harness deliberately avoids prefix hits and
 is useful for raw prefill timing. It does not test coding quality or multi-turn
@@ -132,8 +170,10 @@ and [Docker versions](https://github.com/vllm-project/vllm/blob/v0.28.0/docker/v
 Treat this as a whole-stack compatibility comparison. Keep scheduler settings,
 draft length, weights, cache format, and supported graph policy explicit.
 Do not attribute any total migration gain to XQA or one PR. Both ranks must use
-the same once-built image. The production rollback stays at its pinned v0.1.1
-digest, independent of the newer repository `main`.
+the same once-built image. Retain the pinned `v0.1.1` image, but use the
+startup-verified a399/0731 deployment as this experiment's working rollback;
+the original `v0.1.1` model path is no longer available. A future migration
+must reverify the complete image/model/config rollback tuple before interruption.
 
 ### 3. Prioritize the DeepSeek V4 improvements that touch our path
 
@@ -145,13 +185,19 @@ model revision and GPU topology, so our checkpoint/TP2 path still needs tests.
 The FlashInfer CUTLASS MoE activation fix in that PR does not automatically
 mean our B12X MoE path has that defect.
 
-**First performance experiment:** use
+**First performance experiment, component gate completed:** use
 [FlashInfer #4380](https://github.com/flashinfer-ai/flashinfer/pull/4380)'s native
 192/256 DSV4 sparse dispatch. On the same compatible image, compare the
 existing forced-512 behavior with native 256. Then compare 192 only after the
 metadata producer represents all active window and draft entries correctly.
 Our pinned FlashInfer's dispatch table contains 128/512/1024, so changing only
 the wrapper's supported-width list would be invalid.
+
+The isolated backport passed the tested SM121 reference and graph-replay
+checks, but the component savings did not justify a serving rollout for the
+minimum 5% C4 coding-throughput target. See [the stop decision](ifa26-results.md#native-sparse-widths-component-result-and-stop-decision).
+Retain this section's untested cache/model gates for any future revival; do
+not treat the component pass as a TP2 model-validation result.
 
 Test 32 query heads, the real 584-byte packed caches, SWA-only/C4/C128 layers,
 active-length sentinels, and caller-owned output/workspace. Include token counts
@@ -285,8 +331,19 @@ Proposed decision defaults, to record before a future hardware run:
 
 ## First implementation deliverable
 
-Deliver capability reporting, regression tests for our existing cache/prefix
-contracts, and an 8K coding/multi-turn benchmark with a run manifest. Follow
-with the v0.28 overlay inventory and dependency compatibility check. Those
-artifacts determine the exact candidate pins and make the native-width
-experiment attributable without promising NVIDIA's benchmark ratios.
+The first deliverable is implemented and exercised: capability reporting,
+stream/prefill validation, reproducible 8K coding and fixed-history replay,
+and a known-answer prefix contract with measured cache hits. The baseline,
+26 exact-prefill trials through 65,536 tokens, and eight prefix-contract
+requests passed. Their scope and variance are recorded in [the results](ifa26-results.md).
+
+The mHC candidate has also completed smoke, 14 decode, ten coding, four
+fixed-history, 26 exact-prefill measured requests, and eight known-answer
+prefix/cache cases. Final both-rank health/resource review passed; both
+candidate containers are retained for the narrow startup-warmup fix, with
+the verified a399 rollback intact and no release/default promotion. The
+observed serving timings are not a causal throughput result because capacity
+and cold state were not matched. Maximum tested input length remains 65,536.
+The v0.28 overlay inventory and dependency compatibility check remain planned work.
+No migration, Qwen/XQA enablement, or NVIDIA benchmark ratio has been validated
+by the current component experiment.
