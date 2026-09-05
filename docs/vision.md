@@ -2,8 +2,35 @@
 
 This branch backports upstream vLLM's multimodal wrapper to the pinned Spark
 runtime. CPU, real processor/configuration and bounded CUDA component gates
-pass. Full TP2 model and matched text-performance acceptance are still pending.
-Do not replace a known-good text deployment on component evidence alone.
+pass. The first full TP2 test with text-only 0731 weights passed streaming and
+tool calls but failed the text-speed gate. The candidate is not accepted; the
+validated text image was restored. Full Vision-Exp serving remains untested.
+
+## Text regression result (2026-09-05)
+
+Candidate `f4596d54e122` was tested against control `8c97ddf50b07` using identical
+0731 weights, DSpark with five speculative tokens, TP2, scheduler, cache budget,
+benchmark client and prompts. Each measured trial requested 512 output tokens.
+Only the serving image changed. All 14 measured requests completed correctly.
+
+| Concurrent requests | Recorded control tok/s | Candidate tok/s | Change |
+|---|---:|---:|---:|
+| 1 | 50.27 | 42.58 | -15.3% |
+| 2 | 68.85 | 69.10 | +0.4% |
+| 4 | 98.67 | 100.71 | +2.1% |
+
+Values are median aggregate output throughput across two trials, including TTFT
+and client overhead. Differences below 3% are noise, not claimed improvements.
+A bounded single-request confirmation returned 46.09 tok/s: 8.3% below the
+recorded control. After rollback, two fresh control trials returned 48.54 tok/s;
+the candidate confirmation was still 5.0% slower than that recovery check.
+The limited samples fail the non-regression gate but do not establish its cause.
+
+Both images captured full and piecewise target graphs and full DSpark graphs;
+missing full-graph capture is not an explanation for this result. Candidate
+prefill, prefix-cache and full vision-model tests were deferred after rejection.
+No new image was built or deployed to fix this result during the test phase.
+Do not replace a known-good text deployment with this candidate.
 
 ## Implementation
 
