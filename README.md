@@ -141,6 +141,9 @@ The [content and visual benchmark suite](docs/benchmark-suite.md) adds eight
 text workloads with separate decode/TTFT/DSpark metrics and an independently
 gated visual protocol. It does not replace the historical results below or
 claim that a text-only checkpoint supports images.
+The [September 5 content baseline](benchmarks/results/content-0731-20260905.md)
+includes all eight workloads at C1/C2/C4, with the visual suite explicitly
+marked as prepared but not yet run.
 The post-fix
 [route-pack warmup validation](benchmarks/results/route-pack-warmup-v025.md)
 includes strict-JIT boundary coverage, a 65K prefill check, and decode

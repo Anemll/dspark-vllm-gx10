@@ -15,8 +15,8 @@ reports medians and ranges. Different checkpoints or statistics are not a
 matched speedup comparison.
 
 Default matrix: C1/C2/C4, three measured trials per setting, 512 output tokens,
-128-token excluded warmup per content/concurrency, temperature0, thinking off,
-seed5205. That is168 measured requests plus56 warmup requests. Each category has
+128-token excluded warmup per content/concurrency, temperature 0, thinking off,
+seed 5205. That is 168 measured requests plus 56 warmup requests. Each category has
 one fixed prompt: repeated timing coverage, not broad content/quality sampling.
 Other than the reference prompt, early deterministic case IDs distinguish
 warmup, trial and request inputs. All exact bodies, hashes, usage and SSE events
@@ -73,16 +73,16 @@ at every network operation and clamps per-request budgets.
 
 Keep these separate from short-prompt content decoding:
 
-- Exact prefill:1K/2K/4K/8K/16K/32K, plus33,966/36,549/40,720/65,536-token
+- Exact prefill: 1K/2K/4K/8K/16K/32K, plus 33,966/36,549/40,720/65,536-token
   boundaries. Use the existing prefill harness and identical saved seeds.
-- Agent context: exact8K coding and growing/repeated/divergent history; do not
+- Agent context: exact 8K coding and growing/repeated/divergent history; do not
   label synthetic fixtures as NVIDIA SpeedBench-Coding.
 - Protocol correctness: streaming, parsed tool calls, known-answer JSON and
   measured prefix-cache contracts. Speed alone does not establish correctness.
 
 Previously accepted evidence may be reused only with its original date,
-checkpoint/configuration and metric definition shown. The September5 content
-baseline reuses the existing8c control's September4 prefill/8K coding evidence;
+checkpoint/configuration and metric definition shown. The September 5 content
+baseline reuses the existing 8c control's September 4 prefill/8K coding evidence;
 it does not pretend those runs were repeated or measured on Vision-Exp.
 
 ## Separate visual benchmark
@@ -110,11 +110,11 @@ python3 benchmarks/benchmark_content.py --model VISION_MODEL_ID \
 | Correctness | Invoice/document | Invoice ID and amount due |
 | Correctness | Spatial layout | Correct colors/shapes/positions |
 | Correctness | Two-image comparison | Correct warehouse and stock difference |
-| Performance | Each of the five categories at512/1024/2048 pixels square | Separate TTFT,128-token decode, aggregate throughput and acceptance at C1/C2 |
+| Performance | Each of the five categories at 512/1024/2048 pixels square | Separate TTFT, 128-token decode, aggregate throughput and acceptance at C1/C2 |
 
-Correctness uses five1024px cases and strict JSON known answers. Every warmup
+Correctness uses five 1024 px cases and strict JSON known answers. Every warmup
 and measured request must pass before the throughput suite is permitted.
-Throughput has15cases, three measured trials per concurrency, plus warmup.
+Throughput has 15 cases, three measured trials per concurrency, plus warmup.
 Correctness and throughput images differ in a visible fixture stamp and hash,
 so the exact same image was not primed by the correctness suite.
 
@@ -144,7 +144,7 @@ descriptions for image bytes, compare different model weights as a text A/B,
 or publish vision throughput after a failed visual-content check.
 
 The [Anemll SGLang vision reference](https://github.com/Anemll/SGLang-DSv4F-vision-2xSparks)
-is contextual only: its roughly30.5tok/s text and33tok/s image smoke figures use
+is contextual only: its roughly 30.5 tok/s text and 33 tok/s image smoke figures use
 a different engine/model workload, not this matched matrix. No vLLM-vs-SGLang
 gain is inferred from those figures.
 
