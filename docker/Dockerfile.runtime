@@ -16,11 +16,13 @@ ARG TVM_FFI_VERSION
 
 LABEL org.opencontainers.image.source="https://github.com/anemll/dspark-vllm-gx10"
 LABEL org.opencontainers.image.description="Two-node GB10 DSpark/NVFP4 vLLM runtime"
-LABEL org.opencontainers.image.licenses="MIT AND Apache-2.0"
+LABEL org.opencontainers.image.licenses="MIT AND Apache-2.0 AND BSD-3-Clause"
 
 COPY LICENSE NOTICE CREDITS.md /usr/share/licenses/dspark-vllm-gx10/
 COPY LICENSES/Apache-2.0.txt \
   /usr/share/licenses/dspark-vllm-gx10/Apache-2.0.txt
+COPY LICENSES/BSD-3-Clause-NVIDIA.txt \
+  /usr/share/licenses/dspark-vllm-gx10/BSD-3-Clause-NVIDIA.txt
 
 ENV FLASHINFER_DISABLE_VERSION_CHECK=1
 RUN python3 -m pip install --no-cache-dir \
@@ -37,5 +39,8 @@ RUN python3 -m pip install --no-cache-dir \
 
 # Merge the downstream Python overlay into the installed vLLM package.
 COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/
+COPY scripts/build-vision-module.py /opt/dsv4-vision/build-vision-module.py
+RUN FLASHINFER_CUDA_ARCH_LIST=12.1a MAX_JOBS=2 \
+    python3 /opt/dsv4-vision/build-vision-module.py
 
 ENTRYPOINT ["vllm", "serve"]

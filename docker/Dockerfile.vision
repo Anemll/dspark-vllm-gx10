@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: MIT
+# Use an exact, already-tested text image ID. This adds a separately named
+# image-prefill module and preserves the existing compiled text libraries.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+ARG SOURCE_REVISION
+ARG VISION_CUDA_ARCH_LIST=12.1a
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.licenses="MIT AND Apache-2.0 AND BSD-3-Clause"
+COPY overlay/vllm/ /usr/local/lib/python3.12/dist-packages/vllm/
+COPY LICENSE NOTICE CREDITS.md /usr/share/licenses/dspark-vllm-gx10/
+COPY LICENSES/ /usr/share/licenses/dspark-vllm-gx10/
+COPY tests/ /opt/dsv4-vision/tests/
+COPY scripts/build-vision-module.py /opt/dsv4-vision/build-vision-module.py
+RUN python3 -m compileall -q /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4
+RUN FLASHINFER_CUDA_ARCH_LIST="${VISION_CUDA_ARCH_LIST}" MAX_JOBS=2 \
+    SOURCE_REVISION="${SOURCE_REVISION}" python3 /opt/dsv4-vision/build-vision-module.py

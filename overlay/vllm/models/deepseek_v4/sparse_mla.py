@@ -9,6 +9,7 @@ import torch
 
 from vllm.config import VllmConfig
 from vllm.config.cache import CacheDType
+from vllm.platforms import current_platform
 from vllm.platforms.interface import DeviceCapability
 from vllm.triton_utils import tl, triton
 from vllm.utils.math_utils import cdiv
@@ -88,6 +89,11 @@ class DeepseekV4FlashMLABackend(AttentionBackend):
     @classmethod
     def supports_sink(cls) -> bool:
         return True
+
+    @classmethod
+    def supports_mm_prefix(cls) -> bool:
+        # The Spark VL wrapper rejects other devices before weight loading.
+        return current_platform.is_device_capability_family(120)
 
     @classmethod
     def supports_compute_capability(cls, capability: DeviceCapability) -> bool:

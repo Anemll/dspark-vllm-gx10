@@ -24,13 +24,17 @@ from vllm.models.deepseek_v4.sparse_mla import (
 from vllm.platforms import current_platform
 from vllm.platforms.interface import DeviceCapability
 from vllm.utils.flashinfer import flashinfer_trtllm_batch_decode_sparse_mla_dsv4
+from vllm.utils.dsv4_sparse_policy import (
+    native_sparse_widths_enabled,
+    sparse_decode_widths,
+)
 from vllm.v1.attention.backend import MultipleOf
 
 if TYPE_CHECKING:
     from vllm.v1.attention.backends.mla.sparse_swa import DeepseekSparseSWAMetadata
 
 _FLASHINFER_DSV4_WORKSPACE_BUFFER_SIZE = 128 * 1024 * 1024
-_FLASHINFER_DSV4_DECODE_TOPKS = (128, 512, 1024)
+_FLASHINFER_DSV4_DECODE_TOPKS = sparse_decode_widths()
 _flashinfer_dsv4_workspace_by_device: dict[torch.device, torch.Tensor] = {}
 
 
@@ -627,6 +631,12 @@ class DeepseekV4FlashInferSM120Attention(DeepseekV4Attention):
                 "FLASHINFER_MLA_SPARSE_DSV4 on SM120 requires FlashInfer's "
                 "sparse MLA decode API."
             )
+        if native_sparse_widths_enabled():
+            # Validate both Python dispatch and the actual bundled binary before
+            # the first model request. A version string alone cannot prove this.
+            from vllm.utils.dsv4_sparse_binary import verify_native_sparse_binary
+
+            verify_native_sparse_binary(self.padded_heads)
         self._einsum_recipe, self._tma_aligned_scales = compute_fp8_einsum_recipe()
         # Per-tensor FP8 cache path scales.
         if self.kv_cache_torch_dtype != torch.float8_e4m3fn:
@@ -930,6 +940,18 @@ class DeepseekV4FlashInferSM120Attention(DeepseekV4Attention):
                 raise RuntimeError(
                     "Compressed sparse MLA prefill requires compressed sparse indices."
                 )
+            if swa_indices_chunk.shape[-1] == 512 and q_chunk.shape[0] > 64:
+                # The separate image module adds only the missing dual-cache
+                # envelope; existing text/decode binaries remain untouched.
+                from .vision_sparse import image_sparse_prefill
+
+                image_sparse_prefill(
+                    q_chunk, swa_kv_paged, swa_indices_chunk,
+                    output[query_start:query_end], self.scale, self.attn_sink,
+                    swa_lens_chunk, extra_kv_paged, extra_sparse_indices_chunk,
+                    extra_sparse_lengths_chunk,
+                )
+                continue
             flashinfer_trtllm_batch_decode_sparse_mla_dsv4(
                 query=q_chunk,
                 swa_kv_cache=swa_kv_paged,

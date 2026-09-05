@@ -93,6 +93,10 @@ class Scheduler(SchedulerInterface):
             )
         self.structured_output_manager = structured_output_manager
         self.is_encoder_decoder = vllm_config.model_config.is_encoder_decoder
+        self.dsv4_image_atomic = (
+            getattr(vllm_config.model_config.hf_config, "model_type", None) == "deepseek_v4"
+            and getattr(vllm_config.model_config.hf_config, "vision_n_layers", 0) > 0
+        )
 
         # include_finished_set controls whether a separate set of finished
         # request ids should be included in the EngineCoreOutputs returned
@@ -1385,6 +1389,16 @@ class Scheduler(SchedulerInterface):
             num_encoder_tokens = mm_feature.mm_position.length
             num_encoder_embeds = mm_feature.mm_position.get_num_embeds()
             item_identifier = mm_feature.identifier
+
+            # Image KVs attend to future image tokens even on encoder-cache
+            # hits. Enforce atomic decoder scheduling BEFORE the cache fast
+            # path, including a cached prefix that ends inside the image.
+            if (
+                self.dsv4_image_atomic and mm_feature.modality == "image"
+                and num_computed_tokens + num_new_tokens < start_pos + num_encoder_tokens
+            ):
+                num_new_tokens = max(0, start_pos - (num_computed_tokens + shift_computed_tokens))
+                break
 
             if self.is_encoder_decoder and num_computed_tokens > 0:
                 assert start_pos == 0, (

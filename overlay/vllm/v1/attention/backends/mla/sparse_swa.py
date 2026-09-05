@@ -9,6 +9,7 @@ from vllm.config import CacheConfig, VllmConfig, get_current_vllm_config
 from vllm.model_executor.layers.attention_layer_base import AttentionLayerBase
 from vllm.platforms import current_platform
 from vllm.triton_utils import tl, triton
+from vllm.utils.dsv4_sparse_policy import dspark_sparse_width
 from vllm.utils.math_utils import cdiv
 from vllm.v1.attention.backend import (
     AttentionBackend,
@@ -92,7 +93,14 @@ class DeepseekV4SWACache(torch.nn.Module, AttentionLayerBase):
             num_kv_heads=1,
             head_size=self.head_dim,
             dtype=self.dtype,
-            sliding_window=self.window_size,
+            # Retain the whole image for prefix-cache hits inside a sentinel
+            # span. Mask semantics still use window128 in the metadata builder.
+            sliding_window=max(
+                self.window_size,
+                getattr(vllm_config.model_config.hf_config, "vision_max_n_token", 0)
+                if getattr(vllm_config.model_config.hf_config, "vision_n_layers", 0) > 0
+                else 0,
+            ),
             cache_dtype_str=self.cache_config.cache_dtype,
             # 576B for FlashMLA packing; 512B for FlashInfer sparse (#44577).
             alignment=(
@@ -391,12 +399,24 @@ class DeepseekSparseSWAMetadataBuilder(AttentionMetadataBuilder):
         # a multiple of 128.
         self.is_dspark = spec_config is not None and spec_config.use_dspark()
         self.noncausal_index_width = (
-            cdiv(self.window_size + self.num_speculative_tokens, 128) * 128
+            dspark_sparse_width(
+                self.window_size,
+                self.num_speculative_tokens,
+                sm12x=current_platform.is_device_capability_family(120),
+            )
             if self.is_dspark
             else 0
         )
         self.decode_swa_indices_noncausal: torch.Tensor | None = None
         self._max_tokens = max_tokens
+        self.image_visibility = None
+        if getattr(hf_config, "vision_n_layers", 0) > 0:
+            from vllm.models.deepseek_v4.nvidia.vision_attention import ImageVisibilityBuffers
+
+            self.image_visibility = ImageVisibilityBuffers(
+                max_tokens, self.vllm_config.scheduler_config.max_num_seqs,
+                self.window_size, hf_config.vision_max_n_token, self.device,
+            )
 
     def build(
         self,
@@ -489,7 +509,16 @@ class DeepseekSparseSWAMetadataBuilder(AttentionMetadataBuilder):
         # Prefill SWA indices live in paged coordinates. `token_offset` lets
         # the kernel read is_valid_token / token_to_req_indices at absolute
         # prefill positions while writing output starting at index 0.
-        if num_prefill_tokens > 0:
+        image_indices = None
+        if self.image_visibility is not None:
+            image_indices = self.image_visibility.build(
+                common_attn_metadata, num_decodes, num_decode_tokens,
+                num_prefill_tokens, token_to_req_indices, is_valid_token, self.block_size,
+            )
+        prefill_swa_indices = prefill_swa_lens = None
+        if image_indices is not None:
+            prefill_swa_indices, prefill_swa_lens = image_indices
+        elif num_prefill_tokens > 0:
             prefill_swa_indices = self.prefill_swa_indices[:num_prefill_tokens]
             prefill_swa_lens = self.prefill_swa_lens[:num_prefill_tokens]
             _compute_swa_indices_and_lens_kernel[(num_prefill_tokens,)](
@@ -534,16 +563,8 @@ class DeepseekSparseSWAMetadataBuilder(AttentionMetadataBuilder):
             token_to_req_indices=token_to_req_indices,
             decode_swa_indices=decode_swa_indices[:num_decode_tokens],
             decode_swa_lens=self.decode_swa_lens[:num_decode_tokens],
-            prefill_swa_indices=(
-                self.prefill_swa_indices[:num_prefill_tokens]
-                if num_prefill_tokens > 0
-                else None
-            ),
-            prefill_swa_lens=(
-                self.prefill_swa_lens[:num_prefill_tokens]
-                if num_prefill_tokens > 0
-                else None
-            ),
+            prefill_swa_indices=prefill_swa_indices,
+            prefill_swa_lens=prefill_swa_lens,
             block_size=self.block_size,
             num_decodes=num_decodes,
             num_prefills=num_prefills,

@@ -9,7 +9,7 @@ distinctions below are intentional: **direct code ancestry** is separated from
 
 ### vLLM contributors — Apache-2.0
 
-The files under `overlay/vllm/` are based on vLLM and retain vLLM's
+The Python files under `overlay/vllm/` are based on vLLM and retain vLLM's
 Apache-2.0 SPDX and copyright notices.
 
 - Upstream: https://github.com/vllm-project/vllm
@@ -19,12 +19,30 @@ Apache-2.0 SPDX and copyright notices.
 ### FlashInfer contributors — Apache-2.0
 
 The runtime uses FlashInfer's native SM120/SM121 DeepSeek V4 sparse-MLA
-kernel and API. FlashInfer source is not copied into this repository; the
-reproducible image build fetches the pinned revision.
+kernel and API. The image build fetches the pinned revision. The optional
+vision module additionally vendors the small NVIDIA prefill dispatcher;
+that file and its binding retain their BSD-3-Clause notices (see below).
 
 - Upstream: https://github.com/flashinfer-ai/flashinfer
 - Pinned revision: `0472b9b3f2fba11b463f8526f390297d52a8aad7`
 - License: Apache-2.0
+
+### DeepSeek V4 vision backport
+
+- vLLM model integration: Isotr0py and vLLM contributors,
+  [PR #54566](https://github.com/vllm-project/vllm/pull/54566), merged as
+  `1356635d837c4ef002ec98c1a0296e7ff60be3c1` (Apache-2.0).
+- Vision tower and preprocessing reference snapshot:
+  `8277c42e4c74c5dd604f29b6d938a3456658f247`. The image transform originates
+  in DeepSeek's official inference implementation, as attributed upstream.
+- Streaming checkpoint-loader design: Anemll's
+  [SGLang vision integration](https://github.com/Anemll/SGLang-DSv4F-vision-2xSparks),
+  `e0d634c2180dc209fa309c375c21cbbb895df54f`.
+- Image-only sparse-prefill dispatcher: NVIDIA CORPORATION & AFFILIATES,
+  BSD-3-Clause, from pinned FlashInfer's `sparse_mla_sm120_prefill.cu`.
+  The extra top-k512/page64 and page2 dispatches follow lucamotz and
+  tacos8me's [FlashInfer #4850](https://github.com/flashinfer-ai/flashinfer/pull/4850).
+  See `LICENSES/BSD-3-Clause-NVIDIA.txt`. The existing text binary is not replaced.
 
 ### Luke Alonso / b12x — Apache-2.0
 
