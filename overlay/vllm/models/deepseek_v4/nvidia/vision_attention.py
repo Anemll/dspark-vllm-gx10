@@ -59,7 +59,7 @@ class ImageVisibilityBuffers:
         self.ends[:len(ends)].copy_(torch.tensor(ends, dtype=torch.int32))
         _compute_image_visibility_kernel[(num_prefill_tokens,)](
             self.left, self.right, self.indptr, self.starts, self.ends,
-            common.query_start_loc, common.seq_lens, token_to_req,
+            common.query_start_loc, common.seq_lens, token_to_req, is_valid,
             self.max_image_tokens, token_offset=num_decode_tokens,
         )
         _compute_image_swa_indices_and_lens_kernel[(num_prefill_tokens,)](
@@ -81,6 +81,7 @@ def _compute_image_visibility_kernel(
     query_start_loc_ptr,
     seq_lens_ptr,
     token_to_req_indices_ptr,
+    is_valid_token_ptr,
     max_image_tokens,
     token_offset,
 ):
@@ -93,6 +94,10 @@ def _compute_image_visibility_kernel(
     """
     pid = tl.program_id(0)
     token_idx = pid + token_offset
+    if not tl.load(is_valid_token_ptr + token_idx):
+        tl.store(left_visible_ptr + token_idx, 0)
+        tl.store(right_visible_ptr + token_idx, 0)
+        return
     req_idx = tl.load(token_to_req_indices_ptr + token_idx)
 
     query_start = tl.load(query_start_loc_ptr + req_idx)

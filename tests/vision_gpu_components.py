@@ -64,6 +64,7 @@ class GPUComponents(unittest.TestCase):
                                                torch.tensor(qlens, device="cuda"))
         valid = torch.ones(409, device="cuda", dtype=torch.bool)
         valid[-1] = False
+        token_to_req[-1] = 999  # invalid graph padding must not dereference a request
         common = SimpleNamespace(num_reqs=3, mm_req_doc_ranges={1: [(3, 386)]},
             seq_lens_cpu_upper_bound=seq_cpu, query_start_loc_cpu=qsl_cpu,
             seq_lens=seq_cpu.cuda(), query_start_loc=qsl_cpu.cuda(),

@@ -387,6 +387,39 @@ class DeepseekV4VLDummyInputsBuilder(
 class DeepseekV4VLMultiModalProcessor(
     BaseMultiModalProcessor[DeepseekV4VLProcessingInfo]
 ):
+    def _apply_hf_processor_mm_only(
+        self,
+        mm_items: MultiModalDataItems,
+        hf_processor_mm_kwargs: Mapping[str, object],
+        tokenization_kwargs: Mapping[str, object],
+    ) -> BatchFeature:
+        # This is a plain image callable, not transformers.ProcessorMixin;
+        # bypass the pinned generic helper's private _merge_kwargs contract.
+        data, passthrough = self._get_hf_mm_data(mm_items)
+        processed = self.info.get_hf_processor(**hf_processor_mm_kwargs)(
+            **data, return_tensors="pt"
+        )
+        processed.update(passthrough)
+        return processed
+
+    def _apply_hf_processor_text_mm(
+        self,
+        prompt_text: str,
+        mm_items: MultiModalDataItems,
+        hf_processor_mm_kwargs: Mapping[str, object],
+        tokenization_kwargs: Mapping[str, object],
+    ) -> tuple[list[int], BatchFeature, bool]:
+        # The pinned framework expects an HF processor to tokenize and expand
+        # placeholders. This checkpoint supplies image transforms only. Keep
+        # tokenization separate and let vLLM apply our pad-free replacements.
+        prompt_ids = self.info.get_tokenizer().encode(
+            prompt_text, **tokenization_kwargs
+        )
+        processed = self._apply_hf_processor_mm_only(
+            mm_items, hf_processor_mm_kwargs, tokenization_kwargs
+        )
+        return prompt_ids, processed, False
+
     def _get_mm_fields_config(
         self,
         hf_inputs: BatchFeature,

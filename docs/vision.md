@@ -1,8 +1,9 @@
 # DeepSeek V4 Flash vision on SM120/SM121 (experimental)
 
 This branch backports upstream vLLM's multimodal wrapper to the pinned Spark
-runtime. It is under validation: component tests are not an end-to-end model
-or performance pass. Do not replace a known-good text deployment on that basis.
+runtime. CPU, real processor/configuration and bounded CUDA component gates
+pass. Full TP2 model and matched text-performance acceptance are still pending.
+Do not replace a known-good text deployment on component evidence alone.
 
 ## Implementation
 
@@ -38,6 +39,13 @@ remain enabled. No repository default model or live environment is changed.
 First run the CPU components, GPU routing/visibility canary and prebuilt
 image-prefill numerical canary. Then verify real configuration/processor
 loading before loading the full model on both ranks.
+
+The numerical canary requires `BASELINE_SPARSE_LIBRARY` and
+`BASELINE_SPARSE_SHA256` pointing to the already-built control library. It
+loads that verified binary directly, with no JIT fallback. The existing
+single-cache case must match bit-for-bit. Dense-reference checks use the
+pinned FlashInfer suite's `atol=0.05, rtol=0.05` for its quantized prefill.
+The canary fails if peak test allocations exceed 128 MiB.
 
 Text non-regression must compare the same 0731 weights, DSpark settings,
 prompts, seeds, cache budget and scheduler against the existing control.

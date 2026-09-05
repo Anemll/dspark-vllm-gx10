@@ -25,6 +25,33 @@ from vllm.tokenizers.deepseek_v4_encoding import encode_messages, flatten_conten
 
 
 class VisionComponents(unittest.TestCase):
+    def test_real_scheduler_keeps_images_atomic_even_on_cache_hits(self):
+        from vllm.v1.core.sched.scheduler import Scheduler
+        from vllm.multimodal.inputs import PlaceholderRange
+        scheduler = Scheduler.__new__(Scheduler)
+        scheduler.dsv4_image_atomic = True
+        scheduler.is_encoder_decoder = False
+        scheduler.ec_connector = None
+        scheduler.scheduler_config = SimpleNamespace(disable_chunked_mm_input=True)
+        scheduler.encoder_cache_manager = SimpleNamespace(
+            check_and_update_cache=lambda request, i: True,
+        )
+        feature = SimpleNamespace(modality="image", identifier="cached-image",
+                                  mm_position=PlaceholderRange(offset=100, length=384))
+        request = SimpleNamespace(has_encoder_inputs=True, mm_features=[feature])
+        for computed, budget, expected in ((0, 200, 100), (200, 100, 0),
+                                          (200, 400, 400), (100, 384, 384)):
+            result = scheduler._try_schedule_encoder_inputs(request, computed, budget, 4096)
+            self.assertEqual(result[1], expected)
+        scheduler.dsv4_image_atomic = False
+        self.assertEqual(scheduler._try_schedule_encoder_inputs(request, 0, 200, 4096)[1], 200)
+
+    def test_actual_mapper_preserves_vision_bias_and_text_names(self):
+        from vllm.models.deepseek_v4.nvidia.model import _make_deepseek_v4_weights_mapper
+        mapper = _make_deepseek_v4_weights_mapper("fp4")
+        self.assertEqual(mapper.apply_list(["layers.0.ffn.gate.bias_vl", "layers.0.ffn.gate.bias"]),
+                         ["model.layers.0.ffn.gate.bias_vl", "model.layers.0.ffn.gate.e_score_correction_bias"])
+
     def test_real_vision_constructor_and_tiny_forward(self):
         from vllm.config import VllmConfig, DeviceConfig, CompilationConfig, set_current_vllm_config
         from vllm.v1.attention.backends.registry import AttentionBackendEnum

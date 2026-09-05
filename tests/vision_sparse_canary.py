@@ -28,6 +28,9 @@
 
 """Bounded image-only FlashInfer numerical canary; helpers from pinned FlashInfer."""
 import json
+import hashlib
+import os
+from pathlib import Path
 import torch
 from vllm.models.deepseek_v4.nvidia.vision_sparse import image_sparse_prefill
 
@@ -194,13 +197,29 @@ def main():
         out = torch.empty_like(q)
         image_sparse_prefill(q, main, indices, out, 512**-0.5, sink, lengths,
                              extra, extra_indices, extra_lengths)
+        if not extra_pbs:
+            # The baseline already supports single-cache topk512. Verify that
+            # this separately linked module exactly retains that implementation.
+            import tvm_ffi
+            baseline_path = Path(os.environ["BASELINE_SPARSE_LIBRARY"])
+            assert hashlib.sha256(baseline_path.read_bytes()).hexdigest() == os.environ["BASELINE_SPARSE_SHA256"]
+            baseline_module = tvm_ffi.load_module(str(baseline_path))
+            baseline = torch.empty_like(out)
+            baseline_lse = torch.empty(q.shape[:2], device="cuda", dtype=torch.float32)
+            baseline_module.sparse_mla_sm120_paged_attention(
+                q, main, indices, baseline, baseline_lse, 512**-0.5,
+                1, lengths, sink, None, None, None,
+            )
+            torch.testing.assert_close(out, baseline, atol=0, rtol=0)
         # Chunk the dense reference to bound allocation, not the tested kernel.
         maximum = 0.
         for start in range(0, tokens, 8):
             end = min(start+8, tokens)
             expected, _ = _ref_sparse_attn(q[start:end], values, virtual_indices[start:end],
                                            512**-0.5, 512, sink)
-            torch.testing.assert_close(out[start:end], expected, atol=5e-3, rtol=5e-2)
+            # Match the pinned FlashInfer correctness suite's published
+            # tolerance for its quantized prefill kernels.
+            torch.testing.assert_close(out[start:end], expected, atol=5e-2, rtol=5e-2)
             maximum = max(maximum, float((out[start:end]-expected).abs().max()))
         torch.cuda.synchronize()
         results.append(dict(heads=heads, extra_page=extra_pbs, extra_topk=extra_topk,

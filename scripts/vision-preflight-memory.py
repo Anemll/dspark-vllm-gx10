@@ -44,6 +44,7 @@ class OverlayLoader(importlib.abc.MetaPathFinder, importlib.abc.Loader):
 
 sys.meta_path.insert(0, OverlayLoader())
 key = os.environ.get("VISION_TEST_FILE", "tests/vision_components.py")
-if key not in ("tests/vision_components.py", "tests/vision_gpu_components.py"):
+if key not in ("tests/vision_components.py", "tests/vision_gpu_components.py",
+               "tests/vision_processor_integration.py"):
     raise ValueError("Unsupported test entrypoint")
 exec(compile(files[key], key, "exec"), {"__name__": "__main__", "__file__": key})
