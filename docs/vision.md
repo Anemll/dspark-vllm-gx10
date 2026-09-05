@@ -32,6 +32,12 @@ prefill, prefix-cache and full vision-model tests were deferred after rejection.
 No new image was built or deployed to fix this result during the test phase.
 Do not replace a known-good text deployment with this candidate.
 
+The subsequent [source and trace diagnosis](vision-regression-diagnosis.md)
+found stable client inter-chunk cadence but different generated outputs and
+chunk counts, including within control repeats. It adds text-dispatch tests
+and a source-only decode callback reduction; neither establishes a root cause,
+a measured speedup or acceptance of a new candidate.
+
 ## Implementation
 
 - Checkpoints with `vision_n_layers > 0` select the multimodal architecture;

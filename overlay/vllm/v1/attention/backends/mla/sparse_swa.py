@@ -510,7 +510,9 @@ class DeepseekSparseSWAMetadataBuilder(AttentionMetadataBuilder):
         # the kernel read is_valid_token / token_to_req_indices at absolute
         # prefill positions while writing output starting at index 0.
         image_indices = None
-        if self.image_visibility is not None:
+        # Image visibility changes prefill only. Keep the vision callback out
+        # of target and DSpark decode-only steps, including graph padding.
+        if num_prefill_tokens > 0 and self.image_visibility is not None:
             image_indices = self.image_visibility.build(
                 common_attn_metadata, num_decodes, num_decode_tokens,
                 num_prefill_tokens, token_to_req_indices, is_valid_token, self.block_size,

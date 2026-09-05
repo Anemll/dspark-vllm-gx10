@@ -1,0 +1,114 @@
+{
+  "status": "diagnostic_only_candidate_still_rejected",
+  "metric": "client meaningful SSE output chunks; not engine steps, GPU kernel time or acceptance",
+  "arms": [
+    {
+      "label": "Recorded control",
+      "artifact_sha256": "f1d6657fcdf6fcdeee9046da7beb1fa1ae3bd96529a17857ade4af400f8bd442",
+      "client_sha256": "43a952a08d93aede7f4d7d919b89b17e703aff3925399955acfb5fe917103f19",
+      "trials": [
+        {
+          "trial": 1,
+          "aggregate_tok_s": 48.30304139491066,
+          "output_chunks": 164,
+          "decode_s": 10.401221500011161,
+          "mean_chunk_interval_ms": 63.81117484669424,
+          "median_chunk_interval_ms": 63.768959138542414,
+          "request_sha256": "03bd3419c519ee6186c8aa5919e26699a3fd6f238dd3c00fc20b7fbea9873b2f",
+          "visible_output_sha256": "617c05f2b067391fb045ee166f68c1d0f8b974c4532ef2b5c8e39fe840a6a63a"
+        },
+        {
+          "trial": 2,
+          "aggregate_tok_s": 52.24173035652184,
+          "output_chunks": 151,
+          "decode_s": 9.596208041999489,
+          "mean_chunk_interval_ms": 63.974720279996596,
+          "median_chunk_interval_ms": 63.75379196833819,
+          "request_sha256": "03bd3419c519ee6186c8aa5919e26699a3fd6f238dd3c00fc20b7fbea9873b2f",
+          "visible_output_sha256": "eb508d98ecc55581c604f37e356f510c2e8d85eaab198172702221f21eb1a16e"
+        }
+      ]
+    },
+    {
+      "label": "Vision candidate",
+      "artifact_sha256": "2453a5c9c6b18a08639a89d93c96e6b7a6c028d2437fd063d138541c5059bb49",
+      "client_sha256": "43a952a08d93aede7f4d7d919b89b17e703aff3925399955acfb5fe917103f19",
+      "trials": [
+        {
+          "trial": 1,
+          "aggregate_tok_s": 43.91980201237093,
+          "output_chunks": 182,
+          "decode_s": 11.459707916947082,
+          "mean_chunk_interval_ms": 63.31330340854742,
+          "median_chunk_interval_ms": 63.111542025581,
+          "request_sha256": "03bd3419c519ee6186c8aa5919e26699a3fd6f238dd3c00fc20b7fbea9873b2f",
+          "visible_output_sha256": "002dfe807ae7c82882e63f937f9b5224d57d363132cf7abbdeefad2d5f28a5db"
+        },
+        {
+          "trial": 2,
+          "aggregate_tok_s": 41.236524988273565,
+          "output_chunks": 192,
+          "decode_s": 12.186941416934133,
+          "mean_chunk_interval_ms": 63.80597600489074,
+          "median_chunk_interval_ms": 63.5050421115011,
+          "request_sha256": "03bd3419c519ee6186c8aa5919e26699a3fd6f238dd3c00fc20b7fbea9873b2f",
+          "visible_output_sha256": "5d9f7c2409cb790a0346d2e8db3f6b87549d1fc3529691df5de54bb29f680e89"
+        }
+      ]
+    },
+    {
+      "label": "Candidate confirmation",
+      "artifact_sha256": "62a99b855a9fc168a9be585a2472883746275a18c309e2010eeb8e2b4486fbfe",
+      "client_sha256": "43a952a08d93aede7f4d7d919b89b17e703aff3925399955acfb5fe917103f19",
+      "trials": [
+        {
+          "trial": 1,
+          "aggregate_tok_s": 45.18768759975492,
+          "output_chunks": 174,
+          "decode_s": 11.154405541019514,
+          "mean_chunk_interval_ms": 64.47633260704922,
+          "median_chunk_interval_ms": 63.96066700108349,
+          "request_sha256": "03bd3419c519ee6186c8aa5919e26699a3fd6f238dd3c00fc20b7fbea9873b2f",
+          "visible_output_sha256": "57ba17a987c613557bd86deb25453f400bbf4f5b3080b1ffd0085b1c51899118"
+        },
+        {
+          "trial": 2,
+          "aggregate_tok_s": 46.99132873945656,
+          "output_chunks": 168,
+          "decode_s": 10.685445749899372,
+          "mean_chunk_interval_ms": 63.984705089217805,
+          "median_chunk_interval_ms": 63.58266598545015,
+          "request_sha256": "03bd3419c519ee6186c8aa5919e26699a3fd6f238dd3c00fc20b7fbea9873b2f",
+          "visible_output_sha256": "cb7ac4e6a599b6174896871ab4b0323b6c97a2cee60802778e49129f5d7c2706"
+        }
+      ]
+    },
+    {
+      "label": "Restored control",
+      "artifact_sha256": "e5c8e07ab9fe75d822ca6d143bd781bc09c6ebc2086114e414aa0601f9c68e6b",
+      "client_sha256": "43a952a08d93aede7f4d7d919b89b17e703aff3925399955acfb5fe917103f19",
+      "trials": [
+        {
+          "trial": 1,
+          "aggregate_tok_s": 48.03021175638653,
+          "output_chunks": 166,
+          "decode_s": 10.483819500077516,
+          "mean_chunk_interval_ms": 63.538300000469796,
+          "median_chunk_interval_ms": 63.34216706454754,
+          "request_sha256": "03bd3419c519ee6186c8aa5919e26699a3fd6f238dd3c00fc20b7fbea9873b2f",
+          "visible_output_sha256": "c76928606215a07479103862222d8c494535190ea43abbb42698a300f21a1a12"
+        },
+        {
+          "trial": 2,
+          "aggregate_tok_s": 49.04660786770682,
+          "output_chunks": 162,
+          "decode_s": 10.213375916937366,
+          "mean_chunk_interval_ms": 63.43711749650538,
+          "median_chunk_interval_ms": 63.369374955073,
+          "request_sha256": "03bd3419c519ee6186c8aa5919e26699a3fd6f238dd3c00fc20b7fbea9873b2f",
+          "visible_output_sha256": "5cd44010ebb49c2a0ed7ce39588e3fec92069fb5a2bbb32cb1b4bec26f10029a"
+        }
+      ]
+    }
+  ]
+}
