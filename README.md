@@ -137,6 +137,10 @@ Best aggregate output throughput from the controlled 512-token workload:
 | 4 | 91.4 tok/s | 103.5 tok/s | 13.2% |
 
 Raw results and the dependency-free client are in `benchmarks/`.
+The [content and visual benchmark suite](docs/benchmark-suite.md) adds eight
+text workloads with separate decode/TTFT/DSpark metrics and an independently
+gated visual protocol. It does not replace the historical results below or
+claim that a text-only checkpoint supports images.
 The post-fix
 [route-pack warmup validation](benchmarks/results/route-pack-warmup-v025.md)
 includes strict-JIT boundary coverage, a 65K prefill check, and decode
