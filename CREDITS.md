@@ -89,6 +89,8 @@ patch remains an important correctness and validation reference.
   https://github.com/rafaelcaricio/spark_vllm_docker/pull/1 (Apache-2.0 repos)
 - MiaAI-Lab — two-node DGX Spark packaging:
   https://github.com/MiaAI-Lab/DeepSeek-v4-Flash-DSpark-2x-DGX-Spark (MIT)
+  Their `957890ac5e26` DSpark block-length analysis informed our narrower
+  `DSparkDraftModel`-only config guard; see [comparison and audit](docs/mia-comparison.md).
 - TonyD2Wild — the directly preceding two-node abliterated-model recipe:
   https://github.com/tonyd2wild/DeepSeek-v4-Flash-DSpark-Abliterated-Uncensored-2x-DGX-Spark (MIT)
 - Fraser Price — DeepSeek V4 Flash DSpark model/runtime research:

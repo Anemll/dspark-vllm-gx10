@@ -4,7 +4,9 @@ This branch backports upstream vLLM's multimodal wrapper to the pinned Spark
 runtime. CPU, real processor/configuration and bounded CUDA component gates
 pass. The first full TP2 test with text-only 0731 weights passed streaming and
 tool calls but failed the text-speed gate. The candidate is not accepted; the
-validated text image was restored. Full Vision-Exp serving remains untested.
+validated text image was restored. A subsequent full Vision-Exp startup was
+aborted during checkpoint loading under its memory gate; actual image
+inference remains unverified. See the [loading-memory diagnosis](vision-loading-memory.md).
 
 ## Text regression result (2026-09-05)
 
@@ -61,8 +63,10 @@ GB10. Transfer the identical image over the dedicated fabric. Keep both
 rollback images and role-specific configurations intact.
 
 Use the `DeepSeek-V4-Flash-Vision-Exp` checkpoint and `method=dspark`, not
-`mtp`. Its three draft layers require a separately verified draft setup; do
-not copy the 0731 checkpoint's speculative configuration blindly. Keep the V2
+`mtp`. Its trained five-token DSpark block uses three draft stages. The
+backported config guard now accepts explicit `num_speculative_tokens=5` for
+`DSparkDraftModel` without relaxing MTP validation. Real CPU config/processor
+tests pass, but full GPU inference with that setup is not yet verified. Keep the V2
 runner and at least 387 scheduled tokens available for one image block.
 The configuration validator disables partial image chunking. Text chunks
 remain enabled. No repository default model or live environment is changed.
@@ -84,7 +88,9 @@ Text non-regression must compare the same 0731 weights, DSpark settings,
 prompts, seeds, cache budget and scheduler against the existing control.
 Vision requires separate image-content, multiple-image, cached-prefix,
 streaming, tool-call and both-rank stability checks. Repeatable regressions
-over 3% reject a candidate. A different checkpoint's speed is not a matched
+over 3% on matched text tests reject a candidate. Vision decoding may be slower;
+its acceptance depends on correctness and stability, not the >80 text target.
+A different checkpoint's speed is not a matched
 text A/B result.
 
 ## Sources
