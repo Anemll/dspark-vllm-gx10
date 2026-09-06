@@ -71,7 +71,14 @@ Breakable=1 selects compilation mode 0; breakable=0 selects mode 3. Both
 retain `FULL_AND_PIECEWISE`. These checks establish config/processor support,
 **not** successful GPU graph capture, image inference or improved throughput.
 
-Next speed decision: keep the accepted 0731 image, checkpoint, DSpark5,
-scheduler and workload fixed; change only graph mode in a bounded TP2 window.
+There is an additional prerequisite: pinned NVIDIA target/draft classes lack
+`@support_torch_compile`. The V2 manager's non-breakable piecewise path calls
+the model directly, while FULL capture/replay is independent of that flag.
+Thus the printed graph mode may conceal eager piecewise execution, and Mia's
+historical speedup may not transfer to our V2 runner. Trace actual dispatch
+before spending a service outage on this hypothesis.
+
+If that gate supports a speed trial, keep the accepted 0731 image, checkpoint,
+DSpark5, scheduler and workload fixed; change only graph mode in a bounded TP2 window.
 Do not combine that result with a checkpoint switch, block-length change or
 IPC patch. The new Vision-Exp block-5 setup needs its own correctness run.
