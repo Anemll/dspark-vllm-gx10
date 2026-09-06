@@ -36,7 +36,7 @@ def render(kind, size, variant, destination):
         text(35, 200, "Units: 37")
         text(35, 270, "Destination: Oslo")
         expected = {"code": "Q7M4", "units": 37, "destination": "Oslo"}
-        question = 'Read the shipment note. Return only JSON with keys "code", "units" and "destination".'
+        question = 'Read the shipment note. Return only a JSON object with exactly these fields: "code" (string), "units" (integer, not a quoted string), and "destination" (string).'
     elif kind == "chart":
         text(35, 30, "Units sold by region")
         for x, height, color, name, value in [(55, 100, "#1763aa", "North", 12), (200, 200, "#da761e", "South", 24), (345, 150, "#287d37", "West", 18)]:
@@ -44,7 +44,7 @@ def render(kind, size, variant, destination):
             text(x + 20, 330 - height, str(value))
             text(x - 5, 390, name, selected_font=small)
         expected = {"largest": "South", "total": 54}
-        question = 'Read the bar chart. Return only JSON with "largest" (region name) and "total" (sum of all units).'
+        question = 'Read the bar chart. Return only a JSON object with exactly these fields: "largest" (string region name) and "total" (integer sum of all units, not a quoted string).'
     elif kind == "document":
         text(25, 35, "INVOICE 1042")
         text(25, 100, "Item       Qty   Price  Total", selected_font=small)
@@ -54,14 +54,14 @@ def render(kind, size, variant, destination):
         text(25, 325, "Shipping: 7")
         text(25, 375, "Amount due: 30")
         expected = {"invoice": 1042, "amount_due": 30}
-        question = 'Read the invoice. Return only JSON with integer keys "invoice" and "amount_due".'
+        question = 'Read the invoice. Return only a JSON object with exactly these fields: "invoice" and "amount_due", both with integer values, not quoted strings.'
     elif kind == "spatial":
         text(25, 35, "Shapes and positions")
         rect((55, 135, 190, 270), "#d12626")
         circle((300, 135, 435, 270), "#174ee8")
         draw.polygon([(round(x * scale), round(y * scale)) for x, y in [(250, 320), (180, 430), (320, 430)]], fill="#1c963a")
         expected = {"left": "red square", "right": "blue circle", "bottom": "green triangle"}
-        question = 'Identify the shapes. Return only JSON with "left", "right" and "bottom", each as a lowercase color and shape.'
+        question = 'Identify the shapes. Return only a JSON object with exactly these fields: "left", "right" and "bottom", each a string containing the lowercase color and shape.'
     elif kind in {"compare-a", "compare-b"}:
         number = 17 if kind.endswith("a") else 29
         color = "#104cb3" if kind.endswith("a") else "#b34810"
@@ -104,12 +104,14 @@ def main():
                     throughput.append(case)
             multi = {"id": f"two-images-{size}", "category": "multi-image", "images": [f"compare-a-{size}-{variant}.png", f"compare-b-{size}-{variant}.png"]}
             if variant == "correctness":
-                multi.update(prompt='Compare the warehouse cards. Return only JSON with "larger_warehouse" (A or B) and "difference" (integer stock difference).', expected_json={"larger_warehouse": "B", "difference": 12})
+                multi.update(prompt='Compare the warehouse cards. Return only a JSON object with exactly these fields: "larger_warehouse" (string, A or B) and "difference" (integer stock difference, not a quoted string).', expected_json={"larger_warehouse": "B", "difference": 12})
                 correctness.append(multi)
             else:
                 multi.update(prompt="Compare the two warehouse cards in detail. Describe their stock counts, colors and labels; explain the difference between them. Continue until the token limit without inventing unseen facts.", dimensions=[size, size])
                 throughput.append(multi)
-    for name, cases in (("vision-correctness-v1", correctness), ("vision-throughput-v1", throughput)):
+    # v2 makes the required JSON value types explicit without supplying answers.
+    # Keep v1 artifacts immutable: a prompt change is a new test specification.
+    for name, cases in (("vision-correctness-v2", correctness), ("vision-throughput-v1", throughput)):
         fixture = {"version": name, "generator": {"pillow": pillow_version, "source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}, "description": "Deterministic synthetic visual probes. Not a standardized VQA/recognition leaderboard. Correctness must pass before throughput. First-touch warmup TTFT is recorded; subsequent image-cache state is warmed/intended, not proven encoder-cold.", "cases": cases, "assets": assets}
         (args.output_dir / (name + ".json")).write_text(json.dumps(fixture, indent=2) + "\n")
     print(f"Created {len(correctness)} correctness and {len(throughput)} throughput cases in {args.output_dir}")

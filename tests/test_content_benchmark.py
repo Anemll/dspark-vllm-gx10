@@ -58,10 +58,44 @@ class ContentTests(unittest.TestCase):
 
     def test_semantic_json_gate(self):
         case = {"expected_json": {"answer": 42}}
-        good = StreamResult(0, content='{"answer":42}', ok=True)
-        bad = StreamResult(0, content='{"answer":24}', ok=True)
+        good = StreamResult(0, content='{"answer":42}', finish_reason="stop", ok=True)
+        bad = StreamResult(0, content='{"answer":24}', finish_reason="stop", ok=True)
         self.assertTrue(validate_result(good, case, 128).ok)
         self.assertFalse(validate_result(bad, case, 128).ok)
+        self.assertEqual(bad.errors, ["answer value mismatch at $.answer"])
+
+    def test_json_types_and_values_have_distinct_errors(self):
+        case = {"expected_json": {"code": "Q7M4", "units": 37, "destination": "Oslo"}}
+        result = StreamResult(0, content='{"code":"Q7M4","units":"37","destination":"Oslo"}', finish_reason="stop")
+        self.assertFalse(validate_result(result, case, 192).ok)
+        self.assertEqual(result.errors, ["JSON type mismatch at $.units: expected integer, got string"])
+        for value in ("true", "37.5"):
+            result = StreamResult(0, content='{"units":' + value + '}', finish_reason="stop")
+            self.assertFalse(validate_result(result, {"expected_json": {"units": 37}}, 192).ok)
+            self.assertIn("JSON type mismatch", result.errors[0])
+        result = StreamResult(0, content='{"units":37.0}', finish_reason="stop")
+        self.assertTrue(validate_result(result, {"expected_json": {"units": 37}}, 192).ok)
+
+    def test_strict_json_and_finish_reason(self):
+        for content in ('{"answer":0,"answer":42}', '{"answer":NaN}', '{"answer":Infinity}', '```json\n{"answer":42}\n```'):
+            result = StreamResult(0, content=content, finish_reason="stop")
+            self.assertFalse(validate_result(result, {"expected_json": {"answer": 42}}, 128).ok)
+            self.assertIn("not valid unwrapped JSON", result.errors[0])
+        result = StreamResult(0, content='{"answer":42}', finish_reason="length")
+        self.assertFalse(validate_result(result, {"expected_json": {"answer": 42}}, 128).ok)
+        self.assertIn("did not finish normally", result.errors[0])
+
+    def test_json_structure_and_nested_values(self):
+        case = {"expected_json": {"rows": [{"number": 1}]}}
+        for content, error in (
+            ('{"rows":[{"number":true}]}', "JSON type mismatch at $.rows[0].number: expected integer, got boolean"),
+            ('{"rows":[]}', "JSON array length mismatch at $.rows"),
+            ('{"rows":[{"number":2}]}', "answer value mismatch at $.rows[0].number"),
+            ('{"rows":[{"number":1}],"extra":0}', "JSON keys mismatch at $"),
+        ):
+            result = StreamResult(0, content=content, finish_reason="stop")
+            self.assertFalse(validate_result(result, case, 128).ok)
+            self.assertEqual(result.errors, [error])
 
     def test_partial_wave_survives_summary(self):
         self.assertEqual(summarize([{"phase": "measured", "case": "a", "concurrency": 1, "streams": []}]), [])

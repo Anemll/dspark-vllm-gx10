@@ -1,0 +1,287 @@
+{
+  "schema_version": 1,
+  "status": "failed_type_contract_in_first_warmup",
+  "date_utc": "2026-09-06",
+  "candidate": {
+    "kind": "Fresh actual image correctness decision with progress-aware loading limits",
+    "image_id": "sha256:d768bb8b27788bb046a10b54c7df7de7d0d0e3f26b1ee0c7aab04b2c69b9cd1b",
+    "source_revision": "d3195176f9c98daee9a2592714f0eb2af4ecf032",
+    "base_image_id": "sha256:7b83a4e1581840f0e1a561d7cd45b723a40deb1e65bd693be068fc08e23b0355",
+    "vision_kernel_sha256": "db34c8d2826eb953ab8dd75cd82afda4e58110481c20233899cf1135395b6bc9",
+    "model": "DeepSeek-V4-Flash-Vision-Exp",
+    "config_sha256": "6cd841bdd6702f5e2ac34671bc78047ed80817102465525ae2a41c502abbcd75",
+    "model_index_sha256": "507977e3d3818865264e68c0fdab139aa7f3929d0d0cf693dacc47428da56395",
+    "hardware": "2x GB10 SM121, TP2",
+    "speculative": {
+      "method": "dspark",
+      "num_speculative_tokens": 5,
+      "draft_sample_method": "probabilistic"
+    },
+    "kv_cache": "nvfp4_ds_mla, 10 GiB/rank",
+    "moe": "flashinfer_b12x, MXFP4 weights",
+    "max_model_len": 16384,
+    "max_num_seqs": 2,
+    "max_num_batched_tokens": 2048,
+    "effective_scheduled_tokens": 2040,
+    "effective_max_cudagraph_capture_size": 8,
+    "image_limit": 2,
+    "native_sparse_widths": 0,
+    "breakable_cudagraphs": 1,
+    "thinking": false,
+    "cache": "prefix caching enabled; no flush; repeated image fixtures intentionally warmed after first touch",
+    "text_control_reused": "content-0731-20260905; different weights/settings, no speedup ratio permitted"
+  },
+  "candidate_started_and_served_real_image": true,
+  "correctness_suite_completed": false,
+  "image_requests": {
+    "warmup": 1,
+    "measured": 0
+  },
+  "not_run": [
+    "OCR repeats",
+    "chart",
+    "invoice",
+    "spatial",
+    "multiple images",
+    "vision throughput"
+  ],
+  "request": {
+    "case": "ocr-1024",
+    "prompt": "Read the shipment note. Return only JSON with keys \"code\", \"units\" and \"destination\".",
+    "image_sha256": "e3b662fae2a52f3d8a72f579c08e5ddac381f70eab35f09d39544a939ef7b787",
+    "expected_json": {
+      "code": "Q7M4",
+      "units": 37,
+      "destination": "Oslo"
+    },
+    "response_text": "{\"code\": \"Q7M4\", \"units\": \"37\", \"destination\": \"Oslo\"}",
+    "original_ok": false,
+    "original_errors": [
+      "answer differs from the known visual/structured fixture"
+    ],
+    "offline_diagnostic_errors": [
+      "JSON type mismatch at $.units: expected integer, got string"
+    ],
+    "visible_values_match": true,
+    "diagnosis": "All three visible values match. JSON units is a string, whereas the v1 fixture expects an integer without specifying that type in its prompt. Not evidence of an image-kernel failure; not a passed suite.",
+    "finish_reason": "stop",
+    "done_received": true,
+    "prompt_tokens": 387,
+    "completion_tokens": 23,
+    "first_touch_ttft_s": 8.52945249993354,
+    "elapsed_s": 8.853171250084415,
+    "diagnostic_server_metrics": {
+      "exact": true,
+      "delta": {
+        "requests": 1.0,
+        "output_tokens": 23.0,
+        "decode_seconds": 0.3296016401145607,
+        "prefill_seconds": 8.370309124002233,
+        "computed_tokens": 387.0,
+        "drafts": 5.0,
+        "draft_tokens": 25.0,
+        "accepted_tokens": 19.0,
+        "running": 0.0,
+        "waiting": 0.0
+      },
+      "server_decode_tok_s": 66.74724067620959,
+      "server_prefill_tok_s": 46.23485157677872,
+      "draft_acceptance": 0.76,
+      "accepted_tokens_per_draft_step": 3.8
+    },
+    "timing_warning": "One failed first-touch warmup with cold image JIT and only 23 output tokens. Not a vision performance result, median, text A/B or >80 TPS claim."
+  },
+  "fixtures": {
+    "original_sha256": "63e86c3022b95e10841d062bef9197ce32e14718ef75f8231ab961e6018d59b0",
+    "v2_sha256": "770d0160fa2b73a93513d6868991e8e54b1ba2b5c841fb7efd1ba201b26ff7f8",
+    "pillow": "12.3.0",
+    "all_24_image_hashes_unchanged": true,
+    "v2_test_status": "offline_plan_only"
+  },
+  "logs": {
+    "failed-head": {
+      "fatal_signature_count": 0,
+      "image_visibility_jit": true,
+      "image_swa_jit": true,
+      "route_pack_inference_jit": false
+    },
+    "recovery-head": {
+      "fatal_signature_count": 0,
+      "image_visibility_jit": false,
+      "image_swa_jit": false,
+      "route_pack_inference_jit": false
+    },
+    "failed-worker": {
+      "fatal_signature_count": 0,
+      "image_visibility_jit": true,
+      "image_swa_jit": true,
+      "route_pack_inference_jit": false
+    },
+    "recovery-worker": {
+      "fatal_signature_count": 0,
+      "image_visibility_jit": false,
+      "image_swa_jit": false,
+      "route_pack_inference_jit": false
+    }
+  },
+  "memory": {
+    "loading-head": {
+      "samples": 107,
+      "first_utc": "2026-09-06T07:14:46.822108+00:00",
+      "last_utc": "2026-09-06T07:23:36.822335+00:00",
+      "min_available_gib": 13.682868957519531,
+      "min_swap_free_gib": 6.8517303466796875,
+      "min_disk_free_gib": 41.767967224121094,
+      "max_full_stall_percent": 34.01927871612794,
+      "host_oom_kills": 0,
+      "snapshot_errors": [],
+      "invalid_intervals": []
+    },
+    "recovery-head": {
+      "samples": 96,
+      "first_utc": "2026-09-06T07:24:53.986251+00:00",
+      "last_utc": "2026-09-06T07:32:48.987213+00:00",
+      "min_available_gib": 12.434986114501953,
+      "min_swap_free_gib": 6.785930633544922,
+      "min_disk_free_gib": 41.73719787597656,
+      "max_full_stall_percent": 41.75677164142057,
+      "host_oom_kills": 0,
+      "snapshot_errors": [],
+      "invalid_intervals": []
+    },
+    "loading-worker": {
+      "samples": 129,
+      "first_utc": "2026-09-06T07:13:21.674155+00:00",
+      "last_utc": "2026-09-06T07:24:01.674701+00:00",
+      "min_available_gib": 16.163116455078125,
+      "min_swap_free_gib": 8.69625473022461,
+      "min_disk_free_gib": 25.34139633178711,
+      "max_full_stall_percent": 78.40815032397572,
+      "host_oom_kills": 0,
+      "snapshot_errors": [],
+      "invalid_intervals": []
+    },
+    "recovery-worker": {
+      "samples": 101,
+      "first_utc": "2026-09-06T07:24:25.867387+00:00",
+      "last_utc": "2026-09-06T07:32:45.867875+00:00",
+      "min_available_gib": 15.532772064208984,
+      "min_swap_free_gib": 8.596809387207031,
+      "min_disk_free_gib": 25.302574157714844,
+      "max_full_stall_percent": 40.05695097235736,
+      "host_oom_kills": 0,
+      "snapshot_errors": [],
+      "invalid_intervals": []
+    }
+  },
+  "smokes": {
+    "candidate-stream": {
+      "ok": true,
+      "finish_reason": "stop",
+      "elapsed_s": 0.2248575841076672,
+      "content": "STREAM_OK",
+      "tool_calls": []
+    },
+    "candidate-tool": {
+      "ok": true,
+      "finish_reason": "tool_calls",
+      "elapsed_s": 3.603482333011925,
+      "content": "",
+      "tool_calls": [
+        {
+          "index": 0,
+          "id": "chatcmpl-tool-ace093b9f48889ff",
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"city\": \"Paris\"}"
+          }
+        }
+      ]
+    },
+    "recovery-stream": {
+      "ok": true,
+      "finish_reason": "stop",
+      "elapsed_s": 0.24362366693094373,
+      "content": "STREAM_OK",
+      "tool_calls": []
+    },
+    "recovery-tool": {
+      "ok": true,
+      "finish_reason": "tool_calls",
+      "elapsed_s": 3.339199834037572,
+      "content": "",
+      "tool_calls": [
+        {
+          "index": 0,
+          "id": "chatcmpl-tool-92215f03023a6169",
+          "type": "function",
+          "function": {
+            "name": "get_weather",
+            "arguments": "{\"city\": \"Paris\"}"
+          }
+        }
+      ]
+    }
+  },
+  "recovery": {
+    "status": "verified_original_text_control",
+    "image_id_both_ranks": "sha256:dd79b04562de82ec4195f14f20b67693fa82b25fa63bf757900576faa373bcaf",
+    "source_revision": "8c97ddf50b07601e37e6dd74b91dc78c059a3eab",
+    "model": "DeepSeek-V4-Flash-0731",
+    "profile_sha256": {
+      "head": "4569e5140ad0f860b1fc5f44b8ec326f3883683297a065b96bdf8aa29fde2b55",
+      "worker": "5d13ff405d17118048edc5738e267da024e1c0e19bd7f1e97815f0cd248355e8"
+    },
+    "first_stop_utc": "2026-09-06T07:12:38Z",
+    "candidate_ready_utc": "2026-09-06T07:19:27Z",
+    "candidate_gate_failed_utc": "2026-09-06T07:20:28Z",
+    "candidate_head_stopped_utc": "2026-09-06T07:23:41Z",
+    "candidate_worker_stopped_utc": "2026-09-06T07:24:05Z",
+    "rollback_worker_started_utc": "2026-09-06T07:24:06Z",
+    "rollback_worker_distributed_init_utc": "2026-09-06T07:24:26Z",
+    "rollback_head_started_utc": "2026-09-06T07:24:38Z",
+    "rollback_api_startup_log_utc": "2026-09-06T07:30:40Z",
+    "recovery_verified_by_utc": "2026-09-06T07:32:12Z",
+    "experiment_cleanup_verified_utc": "2026-09-06T07:32:50Z",
+    "first_stop_to_verified_text_recovery_seconds_upper_bound": 1174,
+    "first_stop_to_cleanup_seconds": 1212,
+    "failure_to_head_stop_seconds": 193,
+    "failure_stop_delay_note": "Includes context recovery before the next tool action; not hidden from elapsed accounting.",
+    "health_version_models_dashboard": "all HTTP 200",
+    "streaming": "STREAM_OK, normal finish, usage and DONE present",
+    "tools": "get_weather city Paris, tool_calls finish",
+    "both_ranks_active_and_same_image": true,
+    "role_profiles_unchanged": true,
+    "recorder_processes_stopped_and_verified": true,
+    "owned_locks_released": true,
+    "candidate_logs_and_images_preserved": true,
+    "text_baseline_repeated": false,
+    "second_candidate_startup": false,
+    "note": "Text-service interruption upper bound, not continuous HTTP downtime: the vision API served requests during the candidate interval. Original text speed is reused evidence, not remeasured by the recovery smoke."
+  },
+  "raw_sha256": {
+    "vision-correctness.json": "219d69be64ba34ea47dc415c8d5028e97ad9d289011b853623faa8bf9546b85a",
+    "provenance.json": "516314571ab7705317ee88b104d1b5aa7d1cba388b78fa8dcfcbd07c98ecaae8",
+    "recovery-summary.json": "20f9109bd7e8a09ee53ecb24c30b412185ac5e6d8d202a0c88e1b4d9a75a852b",
+    "vision-correctness-requests/ocr-1024-c1-t0-r0.json": "d6498c508a936fec26120d29fc454c8a7bb21aec39ebf1890b43a213510cfb30",
+    "vision-fixtures-v2/vision-correctness-v2.json": "0a4d73fa22912b22b9665167b7e64a48d33b8ec0072b95a9469b4c8a2d7787d3",
+    "correctness-v2-plan.json": "bcd637944e4b2e8bcf8c38bf55f78a705986ca2c306f93a44b87a7e31ac09db1",
+    "failed-head.log": "c211bff01a53db93750852cea2b4714400a705561b3643acf0314ed837bacd8e",
+    "failed-head-inspect.json": "55708ce7c6102b924a6ee3e2dad69c2a8638259cfba8f3fe40181fecc91a157e",
+    "recovery-head.log": "9eb39b45b125e97a10dcbde2304ac5dbf7dc127bb1a4e28c257af21a89ef4dde",
+    "recovery-head-inspect.json": "d01f5441999bc3b8939a999eb512863925121817b0af9c79fb2d97014b88b4e6",
+    "loading-head-memory.jsonl": "5445e8cd2fe254222ec53931d64980ef836bbb15cc91b7432110ad2f5b9333a1",
+    "recovery-head-memory.jsonl": "cfb64073a0bece2b16b6cf2c24c0edd141383ada8e6353e83b022705db820887",
+    "failed-worker.log": "d3325dcd954bac7f18d7c21c015a6ba423783a76f2086fde2b0929e24880b6b6",
+    "failed-worker-inspect.json": "8afd0440aadd5c163495bc7a613ef1a284d43b9285b3e48560d6ecb9d13972fd",
+    "recovery-worker.log": "c416af50adc640b0c54005e9565153c99b727693fea46046bfed38f0f617a189",
+    "recovery-worker-inspect.json": "031e7ad16fd94f89c2e98c85b00265da0b6782529154313bde2a44c5698d0e85",
+    "loading-worker-memory.jsonl": "78e27c7992291cb65061964b7bb755f8b2a27c23dccf4304ec23e8fa7021296c",
+    "recovery-worker-memory.jsonl": "2e41e760299bc8eb0967e8e93b61f0a8f381b8fc00353ae1a5e95827a07d3436",
+    "candidate-smoke/stream.json": "cd4817aeb4cb8997d9aa964d64c18f230a5831ff6baff87ff5634403f86bddcd",
+    "candidate-smoke/tool.json": "3382f3855226f6253d30daa80ad940f37c829e968fdb6d9e128b660d0345ed73",
+    "recovery-smoke/stream.json": "29d866fe7a61a92f615610ab8f8f6d51334e500575ae057c5aab1f03e94b1350",
+    "recovery-smoke/tool.json": "6936867d669dd1721502b960eb3a0caa8ed27bf48ebd6a84a1ffccb810685005"
+  }
+}

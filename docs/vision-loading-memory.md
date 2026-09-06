@@ -1,9 +1,14 @@
 # Vision loading memory evidence
 
-Status, 2026-09-06: full Vision-Exp inference is still unverified. The first
-TP2 startup was stopped under its predeclared swap-out gate; the accepted
-0731 text service was restored and verified. A subsequent non-disruptive
-diagnosis made no service, cache or system-tuning changes.
+Status, 2026-09-06: a fresh progress-aware decision subsequently loaded
+Vision-Exp on both ranks and served a real image. The first response matched
+the visible OCR values but failed an ambiguous JSON-type test specification;
+the complete correctness suite remains unverified. The text control was
+restored again. See the [first-image evidence](vision-image-validation.md).
+
+The earlier rejected loading attempts below remain rejected historical runs.
+Their diagnosis made no service, cache or system-tuning changes and must not
+be confused with the later, separately bounded startup.
 
 ## Follow-up DSpark5 decision and control recovery
 

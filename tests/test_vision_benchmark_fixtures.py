@@ -28,13 +28,25 @@ class VisionFixtureTests(unittest.TestCase):
             output = Path(directory) / "fixtures"
             with patch.object(sys, "argv", ["prepare", "--output-dir", str(output)]):
                 main()
-            quality = json.loads((output / "vision-correctness-v1.json").read_text())
+            quality = json.loads((output / "vision-correctness-v2.json").read_text())
             throughput = json.loads((output / "vision-throughput-v1.json").read_text())
             self.assertEqual(len(quality["cases"]), 5)
             self.assertEqual(len(throughput["cases"]), 15)
             self.assertTrue(quality["generator"]["pillow"])
             self.assertEqual(len(quality["generator"]["source_sha256"]), 64)
             self.assertTrue(all("expected_json" in c for c in quality["cases"]))
+            self.assertEqual(quality["version"], "vision-correctness-v2")
+            for case in quality["cases"]:
+                self.assertIn("exactly these fields", case["prompt"])
+                for value in case["expected_json"].values():
+                    if type(value) is int:
+                        self.assertIn("integer", case["prompt"])
+                        self.assertIn("not", case["prompt"])
+                        self.assertNotIn(str(value), case["prompt"])
+            ocr = quality["cases"][0]
+            self.assertIn('"units" (integer, not a quoted string)', ocr["prompt"])
+            self.assertNotIn("Q7M4", ocr["prompt"])
+            self.assertNotIn("Oslo", ocr["prompt"])
             self.assertTrue(all("expected_json" not in c for c in throughput["cases"]))
             for asset in quality["assets"]:
                 path = output / asset["file"]

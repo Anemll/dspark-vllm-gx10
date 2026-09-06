@@ -97,13 +97,62 @@ def make_body(case, model, tokens, seed, fixture_dir, phase, trial, request_id):
     return body, images
 
 
+def _json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate object key: {key}")
+        result[key] = value
+    return result
+
+
+def _invalid_json_constant(value):
+    raise ValueError(f"non-JSON constant: {value}")
+
+
+def _json_type(value):
+    # bool is an int subclass in Python, but not a JSON number.
+    return {dict: "object", list: "array", str: "string", bool: "boolean",
+            int: "integer", float: "number", type(None): "null"}[type(value)]
+
+
+def json_answer_errors(actual, expected, path="$"):
+    """Distinguish schema failures from wrong values; never coerce strings.
+
+    Integral JSON numbers such as 37.0 satisfy an integer expectation. Booleans,
+    quoted numbers, duplicate keys and nonfinite values do not.
+    """
+    numeric = type(actual) in (int, float) and type(expected) in (int, float)
+    if numeric:
+        if type(expected) is int and type(actual) is float and not actual.is_integer():
+            return [f"JSON type mismatch at {path}: expected integer, got number"]
+    elif type(actual) is not type(expected):
+        return [f"JSON type mismatch at {path}: expected {_json_type(expected)}, got {_json_type(actual)}"]
+    if isinstance(expected, dict):
+        errors = []
+        if actual.keys() != expected.keys():
+            errors.append(f"JSON keys mismatch at {path}")
+        for key in expected.keys() & actual.keys():
+            errors.extend(json_answer_errors(actual[key], expected[key], f"{path}.{key}"))
+        return sorted(errors)
+    if isinstance(expected, list):
+        if len(actual) != len(expected):
+            return [f"JSON array length mismatch at {path}"]
+        return [error for i, (a, e) in enumerate(zip(actual, expected))
+                for error in json_answer_errors(a, e, f"{path}[{i}]")]
+    return [] if actual == expected else [f"answer value mismatch at {path}"]
+
+
 def validate_result(result, case, tokens):
     if "expected_json" in case:
         try:
-            if json.loads(result.content) != case["expected_json"]:
-                result.errors.append("answer differs from the known visual/structured fixture")
-        except ValueError:
-            result.errors.append("answer is not valid unwrapped JSON")
+            actual = json.loads(result.content, object_pairs_hook=_json_object,
+                                parse_constant=_invalid_json_constant)
+            result.errors.extend(json_answer_errors(actual, case["expected_json"]))
+        except ValueError as exc:
+            result.errors.append(f"answer is not valid unwrapped JSON: {exc}")
+        if result.finish_reason != "stop":
+            result.errors.append("structured correctness response did not finish normally")
     elif result.completion_tokens != tokens or result.finish_reason != "length":
         result.errors.append("fixed-length throughput request did not reach the token limit")
     result.ok = not result.errors

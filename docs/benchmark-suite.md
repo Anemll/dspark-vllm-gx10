@@ -94,11 +94,11 @@ across library versions is not assumed identical.
 
 ```sh
 python3 benchmarks/prepare_vision_benchmark.py \
-  --output-dir .local/vision-fixtures-v1
+  --output-dir .local/vision-fixtures-v2
 
 # This can run offline now; remove --plan-only only on a verified vision API.
 python3 benchmarks/benchmark_content.py --model VISION_MODEL_ID \
-  --fixture .local/vision-fixtures-v1/vision-correctness-v1.json \
+  --fixture .local/vision-fixtures-v2/vision-correctness-v2.json \
   --concurrency 1 --trials 1 --max-tokens 128 --budget-seconds 300 \
   --plan-only --output .local/results/vision-correctness-plan.json
 ```
@@ -114,6 +114,13 @@ python3 benchmarks/benchmark_content.py --model VISION_MODEL_ID \
 
 Correctness uses five 1024 px cases and strict JSON known answers. Every warmup
 and measured request must pass before the throughput suite is permitted.
+Version 2 explicitly specifies each JSON value type without supplying the image
+answers. Version 1's OCR prompt did not say that units must be numeric: the first
+live image response read all three values correctly but returned a quoted units
+value, failing the old strict comparison. Preserve that failure; do not relabel
+it as a passed suite or an image-recognition error. The validator now distinguishes
+JSON syntax, type/structure and answer-value failures, rejects duplicate keys and
+booleans masquerading as numbers, and requires a normal completion finish.
 Throughput has 15 cases, three measured trials per concurrency, plus warmup.
 Correctness and throughput images differ in a visible fixture stamp and hash,
 so the exact same image was not primed by the correctness suite.
@@ -121,7 +128,7 @@ so the exact same image was not primed by the correctness suite.
 ```sh
 python3 benchmarks/benchmark_content.py \
   --base-url http://vision-head.local:8888 --model VISION_MODEL_ID \
-  --fixture .local/vision-fixtures-v1/vision-throughput-v1.json \
+  --fixture .local/vision-fixtures-v2/vision-throughput-v1.json \
   --concurrency 1,2 --trials 3 --max-tokens 128 --warmup-tokens 128 \
   --timeout 90 --budget-seconds 1200 \
   --provenance VISION_PROVENANCE.json \
