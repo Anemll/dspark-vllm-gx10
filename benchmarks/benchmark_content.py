@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import time
 import urllib.request
 
@@ -145,12 +146,32 @@ def json_answer_errors(actual, expected, path="$"):
 
 def validate_result(result, case, tokens):
     if "expected_json" in case:
+        policy = case.get("answer_format", "json")
+        payload = result.content
+        fenced = re.fullmatch(r"```(?:json)?[ \t]*\r?\n(.*?)\r?\n```", payload.strip(), flags=re.DOTALL | re.IGNORECASE)
+        result.answer_validation = {
+            "format_policy": policy,
+            "single_markdown_fence_observed": fenced is not None,
+            "strict_unwrapped_json": False,
+            "json_content_matches_fixture": False,
+        }
         try:
-            actual = json.loads(result.content, object_pairs_hook=_json_object,
+            if policy not in ("json", "json_or_single_fence"):
+                raise ValueError(f"unknown answer format policy: {policy}")
+            # Vision accuracy is distinct from Markdown presentation. Only a
+            # single whole-response fence may be removed, and only by explicit
+            # fixture policy. Never extract a convenient JSON substring from
+            # surrounding prose, repair an answer, or coerce values.
+            if policy == "json_or_single_fence" and fenced:
+                payload = fenced.group(1)
+            actual = json.loads(payload, object_pairs_hook=_json_object,
                                 parse_constant=_invalid_json_constant)
-            result.errors.extend(json_answer_errors(actual, case["expected_json"]))
+            result.answer_validation["strict_unwrapped_json"] = fenced is None
+            answer_errors = json_answer_errors(actual, case["expected_json"])
+            result.answer_validation["json_content_matches_fixture"] = not answer_errors
+            result.errors.extend(answer_errors)
         except ValueError as exc:
-            result.errors.append(f"answer is not valid unwrapped JSON: {exc}")
+            result.errors.append(f"answer is not valid unwrapped JSON under {policy}: {exc}")
         if result.finish_reason != "stop":
             result.errors.append("structured correctness response did not finish normally")
     elif result.completion_tokens != tokens or result.finish_reason != "length":

@@ -97,6 +97,37 @@ class ContentTests(unittest.TestCase):
             self.assertFalse(validate_result(result, case, 128).ok)
             self.assertEqual(result.errors, [error])
 
+    def test_optional_single_fence_keeps_format_and_content_separate(self):
+        case = {"expected_json": {"largest": "South", "total": 54}, "answer_format": "json_or_single_fence"}
+        raw = '```json\n{\n  "largest": "South",\n  "total": 54\n}\n```'
+        result = StreamResult(0, content=raw, finish_reason="stop")
+        self.assertTrue(validate_result(result, case, 192).ok)
+        self.assertEqual(result.content, raw)
+        self.assertTrue(result.answer_validation["json_content_matches_fixture"])
+        self.assertFalse(result.answer_validation["strict_unwrapped_json"])
+        strict = StreamResult(0, content=raw, finish_reason="stop")
+        self.assertFalse(validate_result(strict, {"expected_json": case["expected_json"]}, 192).ok)
+        unwrapped = StreamResult(0, content='{"largest":"South","total":54}', finish_reason="stop")
+        self.assertTrue(validate_result(unwrapped, case, 192).ok)
+        self.assertTrue(unwrapped.answer_validation["strict_unwrapped_json"])
+
+    def test_optional_fence_does_not_repair_wrong_or_ambiguous_answers(self):
+        case = {"expected_json": {"answer": 42}, "answer_format": "json_or_single_fence"}
+        for content in (
+            'Here is the answer:\n```json\n{"answer":42}\n```',
+            '```json\n{"answer":42}\n```\nExplanation follows.',
+            '```json\n{"answer":42}\n```\n```json\n{"answer":24}\n```',
+            '```python\n{"answer":42}\n```',
+            '```json\n{"answer":24}\n```',
+            '```json\n{"answer":"42"}\n```',
+            '```json\n{"answer":true}\n```',
+            '```json\n{"answer":24,"answer":42}\n```',
+        ):
+            with self.subTest(content=content):
+                result = StreamResult(0, content=content, finish_reason="stop")
+                self.assertFalse(validate_result(result, case, 192).ok)
+                self.assertFalse(result.answer_validation["json_content_matches_fixture"])
+
     def test_partial_wave_survives_summary(self):
         self.assertEqual(summarize([{"phase": "measured", "case": "a", "concurrency": 1, "streams": []}]), [])
 

@@ -94,11 +94,11 @@ across library versions is not assumed identical.
 
 ```sh
 python3 benchmarks/prepare_vision_benchmark.py \
-  --output-dir .local/vision-fixtures-v2
+  --output-dir .local/vision-fixtures-v3
 
 # This can run offline now; remove --plan-only only on a verified vision API.
 python3 benchmarks/benchmark_content.py --model VISION_MODEL_ID \
-  --fixture .local/vision-fixtures-v2/vision-correctness-v2.json \
+  --fixture .local/vision-fixtures-v3/vision-correctness-v3.json \
   --concurrency 1 --trials 1 --max-tokens 128 --budget-seconds 300 \
   --plan-only --output .local/results/vision-correctness-plan.json
 ```
@@ -112,7 +112,7 @@ python3 benchmarks/benchmark_content.py --model VISION_MODEL_ID \
 | Correctness | Two-image comparison | Correct warehouse and stock difference |
 | Performance | Each of the five categories at 512/1024/2048 pixels square | Separate TTFT, 128-token decode, aggregate throughput and acceptance at C1/C2 |
 
-Correctness uses five 1024 px cases and strict JSON known answers. Every warmup
+Correctness uses five 1024 px cases and strict JSON known values. Every warmup
 and measured request must pass before the throughput suite is permitted.
 Version 2 explicitly specifies each JSON value type without supplying the image
 answers. Version 1's OCR prompt did not say that units must be numeric: the first
@@ -121,6 +121,15 @@ value, failing the old strict comparison. Preserve that failure; do not relabel
 it as a passed suite or an image-recognition error. The validator now distinguishes
 JSON syntax, type/structure and answer-value failures, rejects duplicate keys and
 booleans masquerading as numbers, and requires a normal completion finish.
+Version 3 separates image accuracy from Markdown presentation: these vision
+fixtures explicitly allow one whole-response JSON code fence. Prompts, pixels
+and expected values are unchanged from v2. The v2 chart response returned the
+correct values inside a fence, which failed that run's strict format gate.
+Its failed artifact stays unchanged. The client records raw output and
+`answer_validation.strict_unwrapped_json` separately from content matching;
+it never repairs values, extracts JSON from prose or accepts multiple answers.
+Strict unwrapped JSON remains the default for other fixtures. The v3 suite is
+currently an offline plan, not a passed live run.
 Throughput has 15 cases, three measured trials per concurrency, plus warmup.
 Correctness and throughput images differ in a visible fixture stamp and hash,
 so the exact same image was not primed by the correctness suite.
@@ -128,7 +137,7 @@ so the exact same image was not primed by the correctness suite.
 ```sh
 python3 benchmarks/benchmark_content.py \
   --base-url http://vision-head.local:8888 --model VISION_MODEL_ID \
-  --fixture .local/vision-fixtures-v2/vision-throughput-v1.json \
+  --fixture .local/vision-fixtures-v3/vision-throughput-v1.json \
   --concurrency 1,2 --trials 3 --max-tokens 128 --warmup-tokens 128 \
   --timeout 90 --budget-seconds 1200 \
   --provenance VISION_PROVENANCE.json \

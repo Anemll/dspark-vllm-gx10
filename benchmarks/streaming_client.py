@@ -101,6 +101,7 @@ class StreamResult:
     request_body: dict = field(default_factory=dict)
     request_sha256: str = ""
     prompt_sha256: str = ""
+    answer_validation: dict = field(default_factory=dict)
 
 
 def make_body(model: str, max_tokens: int, seed: int | None = None) -> dict:

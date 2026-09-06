@@ -1,5 +1,10 @@
 # First real image: correct OCR values, incomplete acceptance
 
+Latest follow-up: the same image passed OCR three times with numeric units.
+The next chart response had correct values but a Markdown JSON wrapper,
+failing the v2 strict-format gate. The full suite remains incomplete. Details
+of that separate run are below; the original v1 failure is not rewritten.
+
 On September 6, candidate source `d3195176f9c9` loaded
 `DeepSeek-V4-Flash-Vision-Exp` and its five-token DSpark draft on both GB10
 ranks. Both used image `sha256:d768bb8b27788bb046a10b54c7df7de7d0d0e3f26b1ee0c7aab04b2c69b9cd1b`.
@@ -83,3 +88,44 @@ contains exact provenance, the original response, diagnostic timings, memory
 summaries and hashes of raw request/SSE, rank logs, identities and recovery
 evidence. The full private evidence remains in the persistent experiment
 directory.
+
+## Follow-up: v2 OCR repeats and chart presentation
+
+The same source, image, model and server profiles were reused. The v2 prompt
+specified JSON value types. All three OCR requests (first-touch warmup and two
+measured repeats) returned the exact expected object, with numeric units.
+All had normal streaming finishes and exact exclusive server counters.
+
+The first chart response was:
+
+````text
+```json
+{
+  "largest": "South",
+  "total": 54
+}
+```
+````
+
+Both values are correct. The Markdown fence failed the predeclared unwrapped
+JSON requirement, so the benchmark stopped and the original text service was
+restored. It is not an image-reading error, a CUDA failure or a passed suite.
+Chart repeats, invoice, spatial, multiple-image and throughput cases did not
+run. No repeated text baseline or second candidate startup was performed.
+
+OCR first-touch TTFT was 8.747 s; the two repeats were approximately 0.431 s
+each. All emitted only 23 tokens. The chart emitted 22 tokens. Its single
+server-decode rate above 80 TPS is **not** the requested repeated 512-token
+text result and is not a vision-throughput claim.
+
+The next v3 specification keeps every prompt, expected value and image hash
+unchanged. It explicitly permits a single whole-response JSON fence for the
+image-content gate and records strict presentation compliance separately.
+Raw responses remain intact; wrong values/types, duplicate keys, surrounding
+prose and multiple answers still fail. Strict JSON is the client default for
+fixtures that do not opt in. Forty-three local tests pass. Offline rescoring
+diagnoses the v2 wrapper; it does not create new live v3 measurements.
+
+The [v2 result and diagnostic evidence](../benchmarks/results/vision-ocr-chart-20260906.json)
+retain original per-request pass/fail states, exact source and image identities,
+small-output timing caveats, recovery evidence and raw-artifact hashes.

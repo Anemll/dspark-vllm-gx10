@@ -9,7 +9,10 @@ validated text image was restored. After the
 loaded Vision-Exp on both ranks and served its first real image. That response
 read all three OCR values correctly but failed the fixture's unspecified JSON
 numeric-type expectation. The full vision suite remains incomplete; the text
-control is restored. See the [first-image evidence](vision-image-validation.md).
+control is restored. A follow-up v2 run passed OCR three times, then returned
+correct chart values inside a Markdown fence and stopped under its strict
+format gate. Invoice, spatial and multiple-image tests remain pending.
+See the [image evidence](vision-image-validation.md).
 
 ## Text regression result (2026-09-05)
 

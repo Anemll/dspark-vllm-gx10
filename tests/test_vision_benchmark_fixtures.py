@@ -28,16 +28,17 @@ class VisionFixtureTests(unittest.TestCase):
             output = Path(directory) / "fixtures"
             with patch.object(sys, "argv", ["prepare", "--output-dir", str(output)]):
                 main()
-            quality = json.loads((output / "vision-correctness-v2.json").read_text())
+            quality = json.loads((output / "vision-correctness-v3.json").read_text())
             throughput = json.loads((output / "vision-throughput-v1.json").read_text())
             self.assertEqual(len(quality["cases"]), 5)
             self.assertEqual(len(throughput["cases"]), 15)
             self.assertTrue(quality["generator"]["pillow"])
             self.assertEqual(len(quality["generator"]["source_sha256"]), 64)
             self.assertTrue(all("expected_json" in c for c in quality["cases"]))
-            self.assertEqual(quality["version"], "vision-correctness-v2")
+            self.assertEqual(quality["version"], "vision-correctness-v3")
             for case in quality["cases"]:
                 self.assertIn("exactly these fields", case["prompt"])
+                self.assertEqual(case["answer_format"], "json_or_single_fence")
                 for value in case["expected_json"].values():
                     if type(value) is int:
                         self.assertIn("integer", case["prompt"])

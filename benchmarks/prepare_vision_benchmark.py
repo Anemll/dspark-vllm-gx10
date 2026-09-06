@@ -97,6 +97,7 @@ def main():
                 case = {"id": f"{kind}-{size}", "category": kind, "images": [name], "prompt": question}
                 if variant == "correctness":
                     case["expected_json"] = expected
+                    case["answer_format"] = "json_or_single_fence"
                     correctness.append(case)
                 else:
                     case["prompt"] = "Describe and transcribe this image in detail. Explain its layout, visible labels, numbers, colors and relationships. Continue until the token limit. Do not invent details that are not visible."
@@ -105,13 +106,14 @@ def main():
             multi = {"id": f"two-images-{size}", "category": "multi-image", "images": [f"compare-a-{size}-{variant}.png", f"compare-b-{size}-{variant}.png"]}
             if variant == "correctness":
                 multi.update(prompt='Compare the warehouse cards. Return only a JSON object with exactly these fields: "larger_warehouse" (string, A or B) and "difference" (integer stock difference, not a quoted string).', expected_json={"larger_warehouse": "B", "difference": 12})
+                multi["answer_format"] = "json_or_single_fence"
                 correctness.append(multi)
             else:
                 multi.update(prompt="Compare the two warehouse cards in detail. Describe their stock counts, colors and labels; explain the difference between them. Continue until the token limit without inventing unseen facts.", dimensions=[size, size])
                 throughput.append(multi)
-    # v2 makes the required JSON value types explicit without supplying answers.
-    # Keep v1 artifacts immutable: a prompt change is a new test specification.
-    for name, cases in (("vision-correctness-v2", correctness), ("vision-throughput-v1", throughput)):
+    # v3 separates a single Markdown fence from image-content correctness.
+    # Prompts/pixels are unchanged from v2; preserve earlier strict failures.
+    for name, cases in (("vision-correctness-v3", correctness), ("vision-throughput-v1", throughput)):
         fixture = {"version": name, "generator": {"pillow": pillow_version, "source_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}, "description": "Deterministic synthetic visual probes. Not a standardized VQA/recognition leaderboard. Correctness must pass before throughput. First-touch warmup TTFT is recorded; subsequent image-cache state is warmed/intended, not proven encoder-cold.", "cases": cases, "assets": assets}
         (args.output_dir / (name + ".json")).write_text(json.dumps(fixture, indent=2) + "\n")
     print(f"Created {len(correctness)} correctness and {len(throughput)} throughput cases in {args.output_dir}")
