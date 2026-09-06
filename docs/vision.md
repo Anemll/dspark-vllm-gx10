@@ -1,18 +1,20 @@
 # DeepSeek V4 Flash vision on SM120/SM121 (experimental)
 
 This branch backports upstream vLLM's multimodal wrapper to the pinned Spark
-runtime. CPU, real processor/configuration and bounded CUDA component gates
-pass. The first full TP2 test with text-only 0731 weights passed streaming and
-tool calls but failed the text-speed gate. The candidate is not accepted; the
-validated text image was restored. After the
-[loading-memory diagnosis](vision-loading-memory.md), a fresh bounded run
-loaded Vision-Exp on both ranks and served its first real image. That response
-read all three OCR values correctly but failed the fixture's unspecified JSON
-numeric-type expectation. The full vision suite remains incomplete; the text
-control is restored. A follow-up v2 run passed OCR three times, then returned
-correct chart values inside a Markdown fence and stopped under its strict
-format gate. Invoice, spatial and multiple-image tests remain pending.
-See the [image evidence](vision-image-validation.md).
+runtime. Vision-Exp now passes five synthetic image categories on TP2 GB10:
+OCR, chart, invoice, spatial layout and two-image comparison, with three
+passing requests per category. Twelve requests ran in v3; three unchanged OCR
+passes were reused. CPU, processor/configuration and bounded CUDA component
+gates also pass. The [image evidence](vision-image-validation.md) preserves
+earlier JSON-type/presentation failures and reports separate, partial vision
+timing rather than rewriting those failures.
+
+The candidate is **not accepted as a replacement for the text service**.
+An earlier matched 0731 test failed text non-regression; later changes have
+not passed a new matched text gate. Extended stability and the complete visual
+timing matrix also remain open. The validated text image is the rollback;
+see the [loading-memory diagnosis](vision-loading-memory.md) for startup
+constraints. Image correctness does not satisfy the >80 TPS text target.
 
 ## Text regression result (2026-09-05)
 
@@ -72,8 +74,9 @@ Use the `DeepSeek-V4-Flash-Vision-Exp` checkpoint and `method=dspark`, not
 `mtp`. Its trained five-token DSpark block uses three draft stages. The
 backported config guard now accepts explicit `num_speculative_tokens=5` for
 `DSparkDraftModel` without relaxing MTP validation. Real CPU config/processor
-tests pass; full GPU startup and one real-image response now execute, but the
-complete image-content acceptance suite has not passed. Keep the V2
+tests pass; full GPU startup and the five-category synthetic image-content
+suite now pass, including two-image inputs. This does not establish matched
+text non-regression or broad visual quality. Keep the V2
 runner and at least 387 scheduled tokens available for one image block.
 The configuration validator disables partial image chunking. Text chunks
 remain enabled. No repository default model or live environment is changed.

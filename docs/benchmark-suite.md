@@ -128,8 +128,13 @@ correct values inside a fence, which failed that run's strict format gate.
 Its failed artifact stays unchanged. The client records raw output and
 `answer_validation.strict_unwrapped_json` separately from content matching;
 it never repairs values, extracts JSON from prose or accepts multiple answers.
-Strict unwrapped JSON remains the default for other fixtures. The v3 suite is
-currently an offline plan, not a passed live run.
+Strict unwrapped JSON remains the default for other fixtures. The live v3 run
+passed all 12 remaining requests; three unchanged v2 OCR passes were reused.
+All five synthetic categories therefore have first-touch plus two passing
+repeats. This is not a broad image-quality benchmark or text-speed acceptance.
+The [first timing report](vision-image-validation.md#follow-up-v3-content-pass-and-partial-visual-timing)
+has nine complete three-trial cells, one one-trial partial cell, and no
+1024/2048-pixel timing runs. It is explicitly not the full matrix below.
 Throughput has 15 cases, three measured trials per concurrency, plus warmup.
 Correctness and throughput images differ in a visible fixture stamp and hash,
 so the exact same image was not primed by the correctness suite.

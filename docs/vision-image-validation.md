@@ -1,9 +1,14 @@
-# First real image: correct OCR values, incomplete acceptance
+# Real-image correctness: five synthetic categories pass
 
-Latest follow-up: the same image passed OCR three times with numeric units.
-The next chart response had correct values but a Markdown JSON wrapper,
-failing the v2 strict-format gate. The full suite remains incomplete. Details
-of that separate run are below; the original v1 failure is not rewritten.
+Latest follow-up: the v3 run passed all 12 remaining chart, document, spatial
+and two-image requests. Together with three reused OCR passes on the identical
+image/configuration, all five synthetic categories pass first-touch plus two
+repeats. One chart answer used the explicitly permitted whole-response JSON
+fence; the other 11 new answers were unwrapped JSON. Exact values and types,
+normal finishes and exclusive server counters passed in every request.
+The earlier v1/v2 failures below remain unchanged. This is bounded synthetic
+image-content evidence, not broad visual quality, text non-regression or the
+>80 TPS text goal. Separate visual timing is partial, as reported below.
 
 On September 6, candidate source `d3195176f9c9` loaded
 `DeepSeek-V4-Flash-Vision-Exp` and its five-token DSpark draft on both GB10
@@ -129,3 +134,61 @@ diagnoses the v2 wrapper; it does not create new live v3 measurements.
 The [v2 result and diagnostic evidence](../benchmarks/results/vision-ocr-chart-20260906.json)
 retain original per-request pass/fail states, exact source and image identities,
 small-output timing caveats, recovery evidence and raw-artifact hashes.
+
+## Follow-up: v3 content pass and partial visual timing
+
+The unchanged `d768bb8b2778` image and role profiles passed all 12 remaining
+image requests in 21.307 seconds: chart, invoice, spatial layout and two-image
+comparison, each with first-touch plus two repeats. All values/types matched;
+all responses finished normally with exact exclusive server counters. The
+first chart answer had one permitted JSON fence; the other 11 were unwrapped
+JSON. Three unchanged OCR passes from v2 were reused, not rerun or relabelled.
+This establishes 15/15 content passes across five synthetic categories, not
+broad visual quality, long-context stability or text-speed non-regression.
+
+The separate timing run requested 128 output tokens, temperature zero,
+thinking off, seed 5205, three measured trials at C1/C2, with excluded warmup.
+It was interrupted at 147.975 seconds after observed throughput projected
+approximately 465 seconds for the full matrix, beyond its 300-second cap.
+There were 38 completed passing waves (56 requests) and one interrupted,
+unscored wave. No request-content or exact-counter gate failed in a completed
+wave. This is not a complete 15-case visual benchmark.
+
+The following are measured medians for **512-pixel** images only:
+
+| Content | C1 server decode tok/s | C1 total output tok/s | C1 TTFT (s) | C2 total output tok/s |
+|---|---:|---:|---:|---:|
+| OCR description | 49.38 | 43.44 | 0.374 | 53.80 |
+| Chart description | 53.17 | 46.56 | 0.361 | 54.57 |
+| Document description | 49.27 | 44.03 | 0.355 | 54.13 |
+| Spatial description | 51.11 | 44.62 | 0.360 | 55.21 |
+| Two-image comparison | 59.66 | 50.24 | 0.420 | incomplete |
+
+Each displayed timing cell has three measured trials. The two-image C2 case
+has only one scored measured trial (63.46 aggregate tok/s), excluded from the
+three-trial comparison. All ten 1024/2048-pixel timing cases remain unrun.
+Raw partial waves remain in the evidence rather than being averaged as zeros
+or silently discarded. These vision descriptions are not the 512-token text
+explanation workload. The >80 text target remains unmet.
+
+Exact images repeat after first touch with caches enabled. Warmed TTFT is not
+cold encoder latency, and encoder GPU time is unavailable. Image visibility,
+image sliding-window and W4A16 MoE shapes cold-JITed in warning mode; these
+first-touch delays are preserved separately. There was no inference route-pack
+JIT or fatal engine/CUDA/NCCL signature in the captured candidate logs.
+
+The original text control was restored and verified within 20m40s of the
+first stop; recorder cleanup and lock release finished at 21m04s. This is the
+text-service interruption window, not continuous HTTP downtime. Both original
+image IDs and role-profile hashes match, all four HTTP endpoints returned 200,
+and streaming/tool calls passed. No text baseline was repeated. Images, models
+and logs were retained. The cluster is left on the original text control.
+
+The [v3 result](../benchmarks/results/vision-correctness-v3-20260906.json)
+contains per-request correctness, partial timing medians/ranges, excluded
+warmups, exact image/source/configuration identities, both-rank memory and JIT
+summaries, recovery evidence and raw-artifact hashes. No interval thermal trace
+was collected for timing; the 50/51 C readings are post-recovery snapshots only.
+The full timing matrix needed about eight minutes at observed pace, so the
+five-minute timing estimate was too optimistic. Future timing decisions must
+budget from these measured rates and reuse completed cells.
