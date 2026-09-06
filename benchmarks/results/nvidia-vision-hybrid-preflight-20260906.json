@@ -1,0 +1,816 @@
+{
+  "schema_version": 1,
+  "date_utc": "2026-09-06",
+  "status": "preflight_complete_gpu_hybrid_not_launched",
+  "candidate_definition": "NVIDIA 0731 NVFP4 text target with original DSpark plus Vision-Exp multimodal-only tensors; an unvalidated hybrid, not a released model.",
+  "gpu_inference_run": false,
+  "image_quality_validated": false,
+  "download": {
+    "destination": "User-selected TB36 model share",
+    "transport": "Existing wired Ethernet SMB mount on source workstation; no inter-Spark bulk transfer.",
+    "repository": "nvidia/DeepSeek-V4-Flash-0731-NVFP4",
+    "revision": "f1caa71142bd0be02f728c79f75042ac1e461579",
+    "hf_dry_run_files_total": 75,
+    "hf_dry_run_missing_files": 0,
+    "weights_downloaded_this_turn": false,
+    "existing_shard_bytes": 175550788904,
+    "whole_checkpoint_checksum_verified": false
+  },
+  "models": {
+    "text_0731": {
+      "config_sha256": "6c8f3d2d3b48707541b88f32f22ef3f0f8a6b57d8523281e2b8d3cdb0ae9a023",
+      "index_sha256": "98efab455cf08dfbbbaaba6f570e1bf10bf927d2b4c3c453a59c2f6f0e3be92b",
+      "tensor_count": 72317,
+      "shard_count": 48,
+      "missing_shards": [],
+      "present_shard_bytes": 166886535336,
+      "download_metadata_revisions": [
+        "9e165c30e2704aec5d9d593cce3eebd58bbef1cb"
+      ],
+      "whole_checkpoint_checksum_verified": false
+    },
+    "nvidia_nvfp4": {
+      "config_sha256": "bb0d2286d6761439e41d3cef31d16489411b816ed8688922f59730bbd5567cdb",
+      "index_sha256": "5d2ad3076e04081d6c0728cb4b004dc832850ec5ae732f3adb06cf87c4b437a5",
+      "tensor_count": 138365,
+      "shard_count": 48,
+      "missing_shards": [],
+      "present_shard_bytes": 175550788904,
+      "download_metadata_revisions": [
+        "f1caa71142bd0be02f728c79f75042ac1e461579"
+      ],
+      "whole_checkpoint_checksum_verified": false
+    },
+    "vision_exp": {
+      "config_sha256": "6cd841bdd6702f5e2ac34671bc78047ed80817102465525ae2a41c502abbcd75",
+      "index_sha256": "507977e3d3818865264e68c0fdab139aa7f3929d0d0cf693dacc47428da56395",
+      "tensor_count": 72633,
+      "shard_count": 48,
+      "missing_shards": [],
+      "present_shard_bytes": 167819404368,
+      "download_metadata_revisions": [
+        "6821d6ad3681a4b137b066b76094fa82ebd0a380"
+      ],
+      "whole_checkpoint_checksum_verified": false
+    }
+  },
+  "structural_mismatches": {},
+  "vision_additions": {
+    "total": 316,
+    "tower_and_aligner": 263,
+    "sentinel_vectors": 4,
+    "language_and_draft_vision_router_biases": 46,
+    "new_hash_layer_correction_biases": 3,
+    "unrecognized": []
+  },
+  "config_differences": {
+    "rms_norm_eps": {
+      "text_0731": 0.000001,
+      "nvidia_nvfp4": 0.000001,
+      "vision_exp": 1e-20
+    },
+    "num_nextn_predict_layers": {
+      "text_0731": 1,
+      "nvidia_nvfp4": 1,
+      "vision_exp": 3
+    }
+  },
+  "samples": [
+    {
+      "tensor": "embed.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            129280,
+            4096
+          ],
+          "tensor_bytes": 1059061760,
+          "sampled_bytes": 12288,
+          "sample_sha256": "a3e06d7d3610d9e931ddab309bcd24758ef3ca7a226f478bb90bb322c9e19e1a",
+          "complete_tensor": false
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            129280,
+            4096
+          ],
+          "tensor_bytes": 1059061760,
+          "sampled_bytes": 12288,
+          "sample_sha256": "a3e06d7d3610d9e931ddab309bcd24758ef3ca7a226f478bb90bb322c9e19e1a",
+          "complete_tensor": false
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            129280,
+            4096
+          ],
+          "tensor_bytes": 1059061760,
+          "sampled_bytes": 12288,
+          "sample_sha256": "b67abd532e5c0aa2440a3eec3bacc6fe8f6e031cfdbc4fcbce77f56971acac71",
+          "complete_tensor": false
+        }
+      }
+    },
+    {
+      "tensor": "norm.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "bbb3449580466f542ab714f57707a8cb44f8435ae5b934e5334b2983a84cf6ef",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "bbb3449580466f542ab714f57707a8cb44f8435ae5b934e5334b2983a84cf6ef",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "dcd29b4fbe036a32e155c4161c037e58dcde0e7664e361bf527595cf3f29a3db",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "head.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            129280,
+            4096
+          ],
+          "tensor_bytes": 1059061760,
+          "sampled_bytes": 12288,
+          "sample_sha256": "89083772a331dedad31ab8cc401387bdeeaa18167a3562538da855cb7b05c33a",
+          "complete_tensor": false
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            129280,
+            4096
+          ],
+          "tensor_bytes": 1059061760,
+          "sampled_bytes": 12288,
+          "sample_sha256": "89083772a331dedad31ab8cc401387bdeeaa18167a3562538da855cb7b05c33a",
+          "complete_tensor": false
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            129280,
+            4096
+          ],
+          "tensor_bytes": 1059061760,
+          "sampled_bytes": 12288,
+          "sample_sha256": "58860673baeea134d5716ceb7338f44a18fb80a5a353ae994176c61e5c468b49",
+          "complete_tensor": false
+        }
+      }
+    },
+    {
+      "tensor": "layers.3.hc_attn_base",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "d953cdf7b4c42dc9a45ea2dc6f7465e43033bd716dadc5d9f322b4495da39528",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "d953cdf7b4c42dc9a45ea2dc6f7465e43033bd716dadc5d9f322b4495da39528",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "8fb40b2eed8684d516d6cb4c891868b8372896b4c88b0a08ed7ea275d0f9208c",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.3.attn_norm.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "4f70acf65dbf8a6afa5968be66556137ccb2e8452bcfb58d08f3ed40af4827df",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "4f70acf65dbf8a6afa5968be66556137ccb2e8452bcfb58d08f3ed40af4827df",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "c3e28f51d17d09e1db72fe62e489ffc3c6e3c26c9a90bb90f5388e1b5a4786cb",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.3.ffn_norm.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "3806d166a82ec108d273588d6c9288f05b7c1b7d5e1ab71d982d24cd9a4fc130",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "3806d166a82ec108d273588d6c9288f05b7c1b7d5e1ab71d982d24cd9a4fc130",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "779027b0fbfd76c86cff70876f50a858292b5f8f7e3e4e26d548bdbf735f4ed2",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.3.ffn.gate.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "56629a666cb75d7fff631b3448d4cc375fed9fe08873e7ced5ba2d551209d741",
+          "complete_tensor": false
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "56629a666cb75d7fff631b3448d4cc375fed9fe08873e7ced5ba2d551209d741",
+          "complete_tensor": false
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "238fbcb12baf91c924bcfd17ff84b1dafeeb8727874667502d4f57735ea5ea46",
+          "complete_tensor": false
+        }
+      }
+    },
+    {
+      "tensor": "layers.3.ffn.experts.0.w1.weight",
+      "text_nvidia_bytes_match": false,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "I8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "20f178fcb1889d2a758f87123a51a44f07af730f28e2973d8dd7c24bfb5fa074",
+          "complete_tensor": false
+        },
+        "nvidia_nvfp4": {
+          "dtype": "U8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "116fbfc4448cee40ab3c0eae69f5612268142a3989d3272bf62551ac49ae5845",
+          "complete_tensor": false
+        },
+        "vision_exp": {
+          "dtype": "I8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "c66bd221697f61612e0baef9fd58e6757e70dfc2270e4ef4e4bbd9a0a0e31fa0",
+          "complete_tensor": false
+        }
+      }
+    },
+    {
+      "tensor": "layers.21.hc_attn_base",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "5bd47c1f89202024d105b67ed506a889abf36ba39f044bc08536604544cf3a99",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "5bd47c1f89202024d105b67ed506a889abf36ba39f044bc08536604544cf3a99",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "c961e6304b6a9af87c5afb83b23a97c8b7d69408b2be03e3286a11340708865e",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.21.attn_norm.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "aead7afd5141f9f26fbbc16964e339395ba9023933492f030b90aee709aa5bf5",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "aead7afd5141f9f26fbbc16964e339395ba9023933492f030b90aee709aa5bf5",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "0ff700301e0e03adf6454fd472cc25a27a95a6db298f09eedb9182c5c7cc0316",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.21.ffn_norm.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "11431dd5320c84da256447752c6b53123ca7a604a3b636d5208e0094e34e7034",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "11431dd5320c84da256447752c6b53123ca7a604a3b636d5208e0094e34e7034",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "b9646ca006317cc0c09ec7b79d6abbde8378c005d87516ccfc4ccdfc036dcda2",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.21.ffn.gate.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "64bcfbe16fac3ecf0ac3cd52f6b0a6df6fa2c7772ec4b1cd4b92a85b62f5df9c",
+          "complete_tensor": false
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "64bcfbe16fac3ecf0ac3cd52f6b0a6df6fa2c7772ec4b1cd4b92a85b62f5df9c",
+          "complete_tensor": false
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "af1ede327efcdf05e1f8da707df0d5caba10c00144a42c03f3dd83c6d435cbe9",
+          "complete_tensor": false
+        }
+      }
+    },
+    {
+      "tensor": "layers.21.ffn.experts.0.w1.weight",
+      "text_nvidia_bytes_match": false,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "I8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "dd29f4b99bf7d6af7b64e7e9a3f19cbec70baaa84463c8575265b12bed7617d1",
+          "complete_tensor": false
+        },
+        "nvidia_nvfp4": {
+          "dtype": "U8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "d0a1d05def295b7c65a5e032d9d8f13481c11b88312dfe719095456167c6e5e7",
+          "complete_tensor": false
+        },
+        "vision_exp": {
+          "dtype": "I8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "69fe5761a0af26875f0c81f1285dc0a1c606d45a7f22d2c6a55a04d0143d749d",
+          "complete_tensor": false
+        }
+      }
+    },
+    {
+      "tensor": "layers.42.hc_attn_base",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "d88721a8e0f01f56d1a85324f561e3c6e0f764f731ab8c8bab1e6521756adcee",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "d88721a8e0f01f56d1a85324f561e3c6e0f764f731ab8c8bab1e6521756adcee",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "F32",
+          "shape": [
+            24
+          ],
+          "tensor_bytes": 96,
+          "sampled_bytes": 96,
+          "sample_sha256": "939f86f43710ccac8380d217f8eb07ec3b07274ddd85ed51b6b473e486d25d22",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.42.attn_norm.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "0887d4731dadb3f2d7808ef8d88dd90c377d6dfb33d95e73e9900620a980d6b9",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "0887d4731dadb3f2d7808ef8d88dd90c377d6dfb33d95e73e9900620a980d6b9",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "52c2f44c2c4db3d473b5cb278f55b18944cacb1a293226add0fa31166366a436",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.42.ffn_norm.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "9b117ef486847db9ae6ff3869fb45809cd7dfdda17d4affe830f510bfc6affd1",
+          "complete_tensor": true
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "9b117ef486847db9ae6ff3869fb45809cd7dfdda17d4affe830f510bfc6affd1",
+          "complete_tensor": true
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ],
+          "tensor_bytes": 8192,
+          "sampled_bytes": 8192,
+          "sample_sha256": "b58e664c79bae4b575c0887b5801a3d99a0866bf119b7273a9f8d49c9d340c50",
+          "complete_tensor": true
+        }
+      }
+    },
+    {
+      "tensor": "layers.42.ffn.gate.weight",
+      "text_nvidia_bytes_match": true,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "1aa92aebc3dc2261864c66693d5ce7ab5ecdaa50e869ac40497af9ca9285bedb",
+          "complete_tensor": false
+        },
+        "nvidia_nvfp4": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "1aa92aebc3dc2261864c66693d5ce7ab5ecdaa50e869ac40497af9ca9285bedb",
+          "complete_tensor": false
+        },
+        "vision_exp": {
+          "dtype": "BF16",
+          "shape": [
+            256,
+            4096
+          ],
+          "tensor_bytes": 2097152,
+          "sampled_bytes": 12288,
+          "sample_sha256": "64e894fe068c293e7be447c2b3910377eba3cf59c23fc0909444c3f635b71b66",
+          "complete_tensor": false
+        }
+      }
+    },
+    {
+      "tensor": "layers.42.ffn.experts.0.w1.weight",
+      "text_nvidia_bytes_match": false,
+      "text_vision_bytes_match": false,
+      "models": {
+        "text_0731": {
+          "dtype": "I8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "5650ab3825b9852f37dae279ce58a3697fd450c82e73421e2009caf288f1399d",
+          "complete_tensor": false
+        },
+        "nvidia_nvfp4": {
+          "dtype": "U8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "40d0aa9afde48a25059a2c88677ed259696351c52e81896987985e025992d49b",
+          "complete_tensor": false
+        },
+        "vision_exp": {
+          "dtype": "I8",
+          "shape": [
+            2048,
+            2048
+          ],
+          "tensor_bytes": 4194304,
+          "sampled_bytes": 12288,
+          "sample_sha256": "4bb58a4c220bd7ace051ce5587d2b038ef9b55630a61759dc317f97aabe43e9c",
+          "complete_tensor": false
+        }
+      }
+    }
+  ],
+  "sample_payload_bytes": {
+    "text_0731": 155936,
+    "nvidia_nvfp4": 155936,
+    "vision_exp": 155936
+  },
+  "audit_elapsed_s": 6.616437250049785,
+  "sample_summary": {
+    "compared_tensors": 18,
+    "nvidia_matches_text": 15,
+    "vision_matches_text": 0,
+    "interpretation": "All 18 sampled shared tensors differ between original text and Vision-Exp. Three NVIDIA packed-expert samples differ in raw bytes from text; this is not a dequantized-value or quality comparison."
+  },
+  "backend_cpu_gate": {
+    "source_commit": "752a3a504485790a2e8491cacbb35c137339ad34",
+    "source_sha256": "746e6a5569696fe07329e13aeb397ae2152453d6a972640c7e7cf29efd173350",
+    "method": "Execute actual pinned backend selector AST with CPU stand-ins, before backend/GPU construction.",
+    "requested_backend": "flashinfer_b12x",
+    "swiglu_limit": 10,
+    "result": "rejected_as_expected",
+    "reason": "Explicit NVFP4 b12x path does not apply the SwiGLU clamp. Removing the clamp is not an acceptable compatibility fix."
+  },
+  "backend_alternative": {
+    "name": "flashinfer_cutlass",
+    "source_commit": "752a3a504485790a2e8491cacbb35c137339ad34",
+    "source_path": "vllm/model_executor/layers/fused_moe/experts/flashinfer_cutlass_moe.py",
+    "source_sha256": "d90f5215a6972c742be60ff8e9786432ab544570273483daa8faf317ba2d3ab5",
+    "method": "Execute actual source device/quantization predicates with CPU stand-ins for SM121 and NVFP4 static weights/dynamic activations; inspect SILU clamp forwarding.",
+    "result": "source_declared_support_passed",
+    "gpu_kernel_validated": false
+  },
+  "unit_tests": {"total_passed": 58, "new_tests": 7, "gpu_tests": 0},
+  "draft_risk": "Target main experts are NVFP4, retained DSpark experts are MXFP4. Separate quantization dispatch remains an integration gate, not an executed GPU failure.",
+  "service": "Original 0731 control left running on both nodes; no restart, model deletion or serving configuration change.",
+  "advisor": "Required design question recorded locally; no advisor tool or fallback script available, no reply claimed.",
+  "provenance": {
+    "full_raw_audit_sha256": "fd60cf88ab0055492a2a638a501e052ffb71fb62a7dc266a2e4337da06046a87",
+    "audit_script_sha256": "37c3febf5bdee5a27474e40745c7d2bec656152a1ab6d341ebf55ff756f2ac8e",
+    "audit_tests_sha256": "36e4a29cbb08f684724d15643ee9890988492b62abddcf98b2d868c09001fbe0"
+  },
+  "caveats": [
+    "The NVIDIA model is text-only. A transplant is a new, unvalidated hybrid.",
+    "Equal samples do not prove whole-checkpoint equality; unequal samples do not prove the hybrid cannot work.",
+    "Matching shapes do not establish learned visual alignment or quality.",
+    "No GPU allocation, model generation or complete checkpoint hashing is performed."
+  ],
+  "next_gate": "Validate the existing clamp-preserving FlashInfer CUTLASS W4A4 alternative and independent MXFP4 DSpark loading; establish an approved TB36-to-Spark serving/staging route. Only then reserve an outage and run one hybrid image canary before throughput."
+}

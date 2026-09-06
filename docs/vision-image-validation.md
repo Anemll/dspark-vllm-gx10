@@ -192,3 +192,7 @@ was collected for timing; the 50/51 C readings are post-recovery snapshots only.
 The full timing matrix needed about eight minutes at observed pace, so the
 five-minute timing estimate was too optimistic. Future timing decisions must
 budget from these measured rates and reuse completed cells.
+
+The later [NVIDIA 0731 NVFP4 + vision hybrid preflight](nvidia-vision-hybrid.md)
+is a separate experiment. It has no GPU vision or throughput result and must
+not inherit the 15/15 correctness passes above.
