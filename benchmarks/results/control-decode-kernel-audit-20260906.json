@@ -1,0 +1,49 @@
+{
+  "scope": "Saved instrumented target decode, not serving TPS or critical-path sums",
+  "trace_sha256": "562d46c91262a8f278cd46439ccdf9ab5081515696c473f24f5065b1db782181",
+  "compressed_trace_sha256": "562d46c91262a8f278cd46439ccdf9ab5081515696c473f24f5065b1db782181",
+  "selected_contexts": {
+    "1": 1883,
+    "2": 1883,
+    "3": 1883,
+    "4": 1882
+  },
+  "contexts": 4,
+  "groups": {
+    "B12X W4A16 MoE": {
+      "count": 172,
+      "kernel_sum_ms": 110.85121199999998,
+      "mean_kernel_sum_ms_per_context": 27.712802999999994
+    },
+    "DeepGEMM FP8/FP4 projections": {
+      "count": 1116,
+      "kernel_sum_ms": 68.657455,
+      "mean_kernel_sum_ms_per_context": 17.16436375
+    },
+    "cuBLAS/CUTLASS WMMA GEMMs": {
+      "count": 504,
+      "kernel_sum_ms": 31.529205,
+      "mean_kernel_sum_ms_per_context": 7.88230125
+    },
+    "NCCL": {
+      "count": 348,
+      "kernel_sum_ms": 13.181880000000001,
+      "mean_kernel_sum_ms_per_context": 3.2954700000000003
+    },
+    "mHC": {
+      "count": 700,
+      "kernel_sum_ms": 6.748477000000001,
+      "mean_kernel_sum_ms_per_context": 1.6871192500000003
+    },
+    "FlashInfer sparse MLA": {
+      "count": 344,
+      "kernel_sum_ms": 3.500878000000002,
+      "mean_kernel_sum_ms_per_context": 0.8752195000000005
+    },
+    "Other": {
+      "count": 4347,
+      "kernel_sum_ms": 20.141945000000003,
+      "mean_kernel_sum_ms_per_context": 5.035486250000001
+    }
+  }
+}

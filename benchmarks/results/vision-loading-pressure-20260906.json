@@ -1,0 +1,67 @@
+{
+  "scope": "One failed vision decision plus mandatory text recovery; not matched speed A/B",
+  "source_sha256": {
+    "candidate_head": "dbd2e72e7f7e16bc85b621b6d3cd20f4476c5dbacb1d3ea1183312bc3b21f3d5",
+    "candidate_worker": "59246015820180b15a7fbc7e21f258cee9b824abce72f240cfc9ca95abe2cb4a",
+    "recovery_head": "e4e94bd079f6faf9faf9ef5f719ce22b4747108325366fa78bb78455eb9b6c71",
+    "recovery_worker": "3e59cfd5dc5d7676d1e10d2c0bcaae7835271a96c341167afdde6989bcb7a7c0"
+  },
+  "arms": {
+    "candidate_head": {
+      "samples": 34,
+      "valid_intervals": 33,
+      "snapshot_error_count": 0,
+      "max_full_psi_percent": 35.19422946748701,
+      "intervals_full_above_25_percent": 1,
+      "intervals_full_above_10_percent": 1,
+      "min_available_GiB": 31.538803100585938,
+      "min_swap_free_GiB": 7.5101776123046875,
+      "peak_swap_out_MiB_s": 472.67216057796173,
+      "oom_kills": 0,
+      "sample_start": "2026-09-06T06:50:03.664887+00:00",
+      "sample_end": "2026-09-06T06:52:48.665210+00:00"
+    },
+    "candidate_worker": {
+      "samples": 46,
+      "valid_intervals": 45,
+      "snapshot_error_count": 0,
+      "max_full_psi_percent": 30.478534655048836,
+      "intervals_full_above_25_percent": 1,
+      "intervals_full_above_10_percent": 3,
+      "min_available_GiB": 30.079105377197266,
+      "min_swap_free_GiB": 8.745613098144531,
+      "peak_swap_out_MiB_s": 375.0727762064987,
+      "oom_kills": 0,
+      "sample_start": "2026-09-06T06:49:06.674016+00:00",
+      "sample_end": "2026-09-06T06:52:51.674164+00:00"
+    },
+    "recovery_head": {
+      "samples": 90,
+      "valid_intervals": 89,
+      "snapshot_error_count": 0,
+      "max_full_psi_percent": 41.84544702682358,
+      "intervals_full_above_25_percent": 1,
+      "intervals_full_above_10_percent": 3,
+      "min_available_GiB": 13.047725677490234,
+      "min_swap_free_GiB": 7.018989562988281,
+      "peak_swap_out_MiB_s": 326.53456256197865,
+      "oom_kills": 0,
+      "sample_start": "2026-09-06T06:55:13.983980+00:00",
+      "sample_end": "2026-09-06T07:02:38.984237+00:00"
+    },
+    "recovery_worker": {
+      "samples": 104,
+      "valid_intervals": 103,
+      "snapshot_error_count": 0,
+      "max_full_psi_percent": 49.21739271176695,
+      "intervals_full_above_25_percent": 3,
+      "intervals_full_above_10_percent": 5,
+      "min_available_GiB": 15.39065933227539,
+      "min_swap_free_GiB": 8.65311050415039,
+      "peak_swap_out_MiB_s": 262.6388416177295,
+      "oom_kills": 0,
+      "sample_start": "2026-09-06T06:54:04.850265+00:00",
+      "sample_end": "2026-09-06T07:02:39.850970+00:00"
+    }
+  }
+}

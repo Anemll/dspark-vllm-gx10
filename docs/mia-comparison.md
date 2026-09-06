@@ -78,6 +78,13 @@ Thus the printed graph mode may conceal eager piecewise execution, and Mia's
 historical speedup may not transfer to our V2 runner. Trace actual dispatch
 before spending a service outage on this hypothesis.
 
+A subsequent recording-fake probe executes the pristine enum, descriptor
+construction, dispatch and replay methods: C1/2/4/12 all select identical
+FULL descriptors and the same replay operation with either flag. The
+piecewise call differs. This falsifies the proposed direct decode-path
+mechanism, not every possible indirect timing effect; no live graph-switch
+experiment is justified by the saved headline alone.
+
 If that gate supports a speed trial, keep the accepted 0731 image, checkpoint,
 DSpark5, scheduler and workload fixed; change only graph mode in a bounded TP2 window.
 Do not combine that result with a checkpoint switch, block-length change or

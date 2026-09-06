@@ -5,6 +5,56 @@ TP2 startup was stopped under its predeclared swap-out gate; the accepted
 0731 text service was restored and verified. A subsequent non-disruptive
 diagnosis made no service, cache or system-tuning changes.
 
+## Follow-up DSpark5 decision and control recovery
+
+A new Python-only candidate at `d3195176f9c9` was built once and loaded with
+the same image ID on both ranks. Its separately compiled vision module is
+byte-identical to the previously tested binary. Only a verified 1.5 MB delta
+crossed the fabric; existing base layers were reused without rebuilding.
+
+The new run measured five-second memory-pressure intervals. It was rejected
+under its predeclared single-interval `full PSI >25%` loading gate. Both ranks
+had ample available memory and no OOM. The head subsequently finished all
+48 target shards in 137.42 s while failure evidence was being captured; the
+worker finished its DSpark load (99 parameters) and reported 79.41 GiB model
+allocation. Neither fact proves successful image inference or graph capture.
+
+The mandatory **text control recovery also crossed this loading gate**:
+
+| Observation window | Peak full PSI | Minimum available GiB | OOM kills |
+|---|---:|---:|---:|
+| Vision candidate, rank 0 | 35.19% | 31.54 | 0 |
+| Vision candidate, rank 1 | 30.48% | 30.08 | 0 |
+| Text recovery, rank 0 | 41.85% | 13.05 | 0 |
+| Text recovery, rank 1 | 49.22% | 15.39 | 0 |
+
+The recovery windows include warmup/serving and are longer than the interrupted
+candidate windows: this is not a matched pressure A/B. Nevertheless, the same
+gate would reject a successful known-good startup. Text target weights loaded
+in 137.53 s, followed by successful health, streaming and tool checks. It is
+incorrect to present the transient PSI rejection as a vision-specific OOM or
+proof that the vision model cannot fit. The test remains rejected, not a pass.
+
+This revealed a decision-protocol problem: an isolated startup-stall peak is
+too conservative to be a capacity gate on this deployment. Before another
+attempt, define loading viability from bounded progress and completion time,
+hard memory/swap/disk floors, OOM/transport errors and sustained stalls that
+prevent progress. Do not repeat the same known false-positive threshold or
+relax serving stability. Actual image-content checks are still required.
+
+[Recorded interval summary](../benchmarks/results/vision-loading-pressure-20260906.json)
+contains observation windows and counters. Raw JSONL and both-rank logs are
+retained in private experiment evidence. The worker's peer-closed traceback
+occurred during the intentional head-first teardown, not before the abort
+decision. Normal missing optional NCCL-plugin notices also occurred in the
+control. A cold W4A16 JIT warning occurred during recovery's tool smoke, not
+route-pack JIT; warning-mode recovery passed and no zero-JIT claim is made.
+
+API interruption was 12m14s. Full recovery correctness was verified within
+13m33s. The original text image/profiles remain active and unchanged; both
+monitor pairs and the transfer listener stopped, and the cluster lock was
+released. No image, checkpoint or failure log was deleted.
+
 ## Observations, not a fit verdict
 
 Both ranks recognized the multimodal architecture and initialized. The abort
