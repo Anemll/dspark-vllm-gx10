@@ -45,3 +45,75 @@ its CUDA context; do not rerun it beside the loaded server. Use an explicitly
 bounded exclusive resource window after vision correctness is established.
 Any candidate must predict a meaningful end-to-end gain before a full matched
 text run. Do not equate a microkernel percentage with serving improvement.
+
+## Real-weight TC component harness
+
+`benchmarks/benchmark_moe_tc_decode.py` compares the original and fused-sum
+paths in a disposable, exclusive-GPU process using the installed serving
+adapter. It loads one real 0731 layer, not the shape-only B12X profile. The
+actual checkpoint confirms K4096, TP2 intermediate width 1024, 256 experts and
+topk6, with packed E8M0K32 weights and `w31` source order.
+
+Independent captured scratch/output buffers, observed dispatch selection,
+two seeded inputs and post-timing parity checks prevent a silent fallback or
+stale-output speed claim. Cold-L2 and warm-L2 timings use four alternating
+repeats of 20 CUDA events. The first M6 gate requires at least 10% cold-cache
+gain and at most 3% warm-cache regression; only then do M1/8/12 run. Model
+loading, compilation and routing generation are excluded from GPU timing.
+Inputs are seeded synthetic activations passed through the real model router,
+not captured end-to-end hidden states. A pass is component evidence only.
+
+The first isolated attempt loaded and prepared the real layer in 19.48 seconds,
+then stopped before any timed kernel because its scratch plan used unresolved
+`cuda` while the allocated tensor used `cuda:0`. This is a harness failure,
+not evidence against TC decode. Its raw result contains zero timing rows.
+The harness now derives device and dtype from the activation tensor; a unit
+regression test covers resolved indices, and the pristine B12X scratch
+validator reproduces the old error and accepts the fixed contract with CPU
+fakes. The serving implementation already uses the resolved device and is
+unchanged.
+
+A fresh corrected run, after verified restoration, passed that device guard
+but stopped on another harness mismatch: it passed the deprecated
+`input_scales_are_reciprocal=False`, while serving passes `True`. B12X rejected
+it before timing. Both attempts have zero timing rows and remain failures;
+neither is evidence that the TC kernel is faster or slower. The scale values
+were unit tensors, so this fix changes the call contract, not model weights.
+The harness now uses a single binding-keyword factory. An offline test executes
+the actual overlaid `B12xExperts.apply` method with fakes and compares its
+complete call—including tensor identities, device/dtype, scratch and all
+flags—to that factory. No serving code or node profile was changed.
+
+All 51 local tests pass, including eight new harness-contract tests. These
+offline checks do not validate GPU compilation, numerical parity or speed.
+The corrected harness has not yet completed a GPU run.
+
+[Sanitized failure and recovery evidence](../benchmarks/results/moe-tc-component-failures-20260906.json)
+retains both runner hashes, zero timing rows, exact errors, source and model
+fingerprints, and hashes of the raw logs and memory recordings. The attempts
+ran for 19.76 and 23.28 seconds, but their two avoidable service interruptions
+required 9m37s and 9m14s from first stop through verified recovery. Total elapsed
+time from starting this work window to final cleanup was 31m28s; source checks
+and documentation continued afterward. Those costs must not be described as
+only 43 seconds of testing.
+
+Both recoveries used the unchanged original text image on both ranks, with
+worker-before-head startup. Health, model/version, dashboard, streaming usage
+and tool-call checks passed. No new fatal/route-pack-JIT signatures or OOM
+events were found in the recorded recovery windows. Loading produced transient
+swap writes; final swap-out rate and full-memory-pressure avg10 were zero on
+both nodes. Component samplers continued briefly after process exit; missing
+process/cgroup errors in those post-exit samples are counted separately, not
+treated as an OOM or hidden. Final cleanup verified the original text service,
+stopped all experiment recorders and released both locks at 17:11:46 UTC.
+
+No serving optimization was accepted. The >80 tok/s goal remains open. Under
+the bounded A/B workflow, another GPU attempt requires a fresh decision window
+after this complete restoration; do not continue retrying inside this one.
+
+Never run this diagnostic beside the loaded API. Prepare and verify rollback,
+reserve an explicit outage window and stop both serving ranks first. Use an
+immutable existing image, read-only weights and script, independent cache,
+hard external timeout and continuous host/cgroup memory observation. A failed
+gate requires restoration before a new decision. No serving flag should be
+enabled based on the first failed attempt or the offline tests.

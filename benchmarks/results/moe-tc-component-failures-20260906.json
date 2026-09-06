@@ -1,0 +1,547 @@
+{
+  "schema_version": 1,
+  "status": "two_failed_harness_attempts_no_performance_result",
+  "date_utc": "2026-09-06",
+  "base_serving_image_id": "sha256:dd79b04562de82ec4195f14f20b67693fa82b25fa63bf757900576faa373bcaf",
+  "base_source_commit": "8c97ddf50b07601e37e6dd74b91dc78c059a3eab",
+  "model": "DeepSeek-V4-Flash-0731",
+  "goal_met": false,
+  "serving_speedup_measured": false,
+  "reused_explanation_c1_512_token_baseline_server_decode_median_tps": 47.61,
+  "serving_settings_changed": false,
+  "candidate_promoted": false,
+  "window_started_utc": "2026-09-06T16:40:18Z",
+  "final_cleanup_verified_utc": "2026-09-06T17:11:46Z",
+  "elapsed_to_final_cleanup_s": 1888,
+  "summed_first_stop_to_verified_recovery_upper_bound_s": 1131,
+  "outage_caveat": "Two separate interruptions, not continuous HTTP downtime. Includes reload and verification; no downtime polling trace. Documentation and final source checks continued after cleanup.",
+  "thermal_caveat": "Post-recovery GPU temperatures 49/50 C only; no during-component thermal timing trace.",
+  "attempts": [
+    {
+      "run_id": "moe-tc-20260906T1640",
+      "component": {
+        "schema_version": 1,
+        "kind": "real_weight_component_not_serving",
+        "status": "failed",
+        "tokens": [
+          6,
+          1,
+          8,
+          12
+        ],
+        "seed": 4104,
+        "layer": 3,
+        "budget_seconds": 350,
+        "runner_sha256": "04e9b4acb34c9155501514b3d8aa1303fafc9b14b42358f34852726e2eea4e5e",
+        "rows": [],
+        "decisions": [],
+        "dispatch": [
+          {
+            "tokens": 6,
+            "route_ids": [
+              [
+                190,
+                153,
+                132,
+                135,
+                239,
+                234
+              ],
+              [
+                191,
+                220,
+                2,
+                136,
+                88,
+                31
+              ],
+              [
+                246,
+                15,
+                184,
+                228,
+                83,
+                176
+              ],
+              [
+                156,
+                29,
+                167,
+                69,
+                8,
+                255
+              ],
+              [
+                101,
+                120,
+                248,
+                199,
+                191,
+                187
+              ],
+              [
+                202,
+                190,
+                195,
+                10,
+                191,
+                110
+              ]
+            ],
+            "variants": []
+          }
+        ],
+        "progress": [
+          {
+            "stage": "before-import",
+            "elapsed_s": 0.00025808089412748814,
+            "available_bytes": 123064156160,
+            "swap_free_bytes": 11328020480
+          },
+          {
+            "stage": "before-one-layer-load",
+            "elapsed_s": 6.550512108951807,
+            "available_bytes": 122430222336,
+            "swap_free_bytes": 11328024576
+          },
+          {
+            "stage": "after-one-layer-load",
+            "elapsed_s": 19.085213888902217,
+            "available_bytes": 119062994944,
+            "swap_free_bytes": 11328069632
+          },
+          {
+            "stage": "after-preparation",
+            "elapsed_s": 19.47894215094857,
+            "available_bytes": 118868979712,
+            "swap_free_bytes": 11328069632
+          }
+        ],
+        "contract": "TP2 rank0 shard; bf16 activations, MXFP4 E8M0K32 weights, real model router on seeded synthetic activations; routing/compilation/weight load excluded. Independent captured buffers, 4 alternating repeats x20 CUDA events. Parity cos>=.9999, RMSE<=.001; M6 cold gain>=10%, warm and later shapes regress<=3%. Not a serving-TPS prediction.",
+        "elapsed_s": 19.756527140038088,
+        "source_hashes": {
+          "b12x/integration/tp_moe.py": "49cd151aa80f4fdfa603eafe21b792b51a6483fa6f39452892ed2240fd79da34",
+          "b12x/moe/fused/w4a16/kernel.py": "28872ab5e474f13212a9e57b22a06e1ccba8fef012ba183bf69208d8f8c9e677",
+          "benchmarks/benchmark_moe.py": "ae213824d7931a51a719e2d1ee0fb67dacb075e6ab8ce65002db67019f617b79"
+        },
+        "shape": {
+          "hidden_size": 4096,
+          "intermediate_size": 2048,
+          "num_experts": 256,
+          "top_k": 6,
+          "tp_size": 2,
+          "tp_rank": 0
+        },
+        "checkpoint_metadata_sha256": {
+          "config.json": "6c8f3d2d3b48707541b88f32f22ef3f0f8a6b57d8523281e2b8d3cdb0ae9a023",
+          "model.safetensors.index.json": "98efab455cf08dfbbbaaba6f570e1bf10bf927d2b4c3c453a59c2f6f0e3be92b"
+        },
+        "device": {
+          "name": "NVIDIA GB10",
+          "SMs": 48
+        },
+        "adapter_sha256": "10e4ee6d339046994107f8815c33a6bae6e5f6a85048e8b43233826575be6e68",
+        "prepared_layout": "packed",
+        "source_format": "fp4_e8m0_k32",
+        "w13_layout": "w31",
+        "error": "ValueError: tp_moe.scratch scratch device cuda:0 does not match cuda"
+      },
+      "component_result_sha256": "01d464535286c8cfc60bc2a36886f179b52799b05cc313a6fcf01acabcdd01b4",
+      "component_log_sha256": "a0c0d3c0c42e7ebbffa4204996f46428e8b6f0c4eb914e9cbd75714e25783741",
+      "component_started_utc": "2026-09-06T16:51:03.157477464Z",
+      "component_finished_utc": "2026-09-06T16:51:24.305959064Z",
+      "component_exit_code": 1,
+      "component_oom_killed": false,
+      "component_head_memory": {
+        "sha256": "db53632b88c33c67af804e9dca43943f7fecfaa90b56c957647d6ace0c67ebcb",
+        "samples_in_window": 5,
+        "samples_after_process_exit": 9,
+        "error_samples_in_window": 0,
+        "error_samples_after_process_exit": 9,
+        "first_sample_utc": "2026-09-06T16:51:03.441503+00:00",
+        "last_sample_utc": "2026-09-06T16:51:23.441838+00:00",
+        "min_available_gib": 110.41729354858398,
+        "min_swap_free_gib": 10.550041198730469,
+        "host_oom_kill_delta": 0,
+        "cgroup_oom_events_max": 0,
+        "cgroup_oom_kill_events_max": 0,
+        "max_swap_out_mib_s": 0.0,
+        "after_ready_samples": 0,
+        "after_ready_max_full_psi_avg10": null,
+        "last_full_psi_avg10": 0.0,
+        "last_swap_out_bytes_s": 0.0
+      },
+      "component_worker_memory": {
+        "sha256": "031989e956653292d5bd81d5779354ae5af03e26ed98c5183ac5e2a5127012e9",
+        "samples_in_window": 0,
+        "samples_after_process_exit": 9,
+        "error_samples_in_window": 0,
+        "error_samples_after_process_exit": 0,
+        "first_sample_utc": null,
+        "last_sample_utc": null,
+        "min_available_gib": null,
+        "min_swap_free_gib": null,
+        "host_oom_kill_delta": 0,
+        "cgroup_oom_events_max": 0,
+        "cgroup_oom_kill_events_max": 0,
+        "max_swap_out_mib_s": 0.0,
+        "after_ready_samples": 0,
+        "after_ready_max_full_psi_avg10": null,
+        "last_full_psi_avg10": null,
+        "last_swap_out_bytes_s": null
+      },
+      "memory_caveat": "Samples after component exit may report missing process/cgroup and are counted separately. First-attempt worker recording began after component exit; it does not cover component execution.",
+      "first_stop_utc": "2026-09-06T16:50:25Z",
+      "api_ready_observed_utc": "2026-09-06T16:59:06Z",
+      "recovery_verified_utc": "2026-09-06T17:00:02Z",
+      "cleanup_verified_utc": "2026-09-06T17:00:23Z",
+      "first_stop_to_verified_recovery_s": 577.0,
+      "first_stop_to_cleanup_s": 598.0,
+      "all_experiment_recorders_stopped_and_locks_released": true,
+      "http_smoke_statuses_observed": {
+        "health": 200,
+        "version": 200,
+        "models": 200,
+        "dashboard": 200
+      },
+      "stream_smoke": {
+        "passed": true,
+        "finish_reason": "stop",
+        "done_received": true,
+        "usage_received": true,
+        "sha256": "7fe1d2cd8ed37c5d526d2cd492e15b775b56fa84c4afb4e90586b6c7b6236e9d"
+      },
+      "tool_smoke": {
+        "passed": true,
+        "finish_reason": "tool_calls",
+        "done_received": true,
+        "usage_received": true,
+        "sha256": "fa80baa8e48b5ee09e28590af5d74c0382dcac62daeddd52960105bb9f1d4381"
+      },
+      "recovery": {
+        "head": {
+          "image_id": "sha256:dd79b04562de82ec4195f14f20b67693fa82b25fa63bf757900576faa373bcaf",
+          "container_id": "1b9ff38920481c3d25d8e9a38da3a980766e432d48b39839c3e5f66c1f232d45",
+          "started_utc": "2026-09-06T16:53:19.591319077Z",
+          "running_at_verification": true,
+          "log_sha256": "8e9e1560cfacade628cafed1637b4d894b7287b81b0e57941e898c203f5d68d0",
+          "fatal_or_route_pack_jit_signature_matches": 0,
+          "memory": {
+            "sha256": "44a92d802df44f559ee1a540bd8cea67bff0d6994f81fbd03f4bf8557eafa9b0",
+            "samples_in_window": 81,
+            "samples_after_process_exit": 0,
+            "error_samples_in_window": 0,
+            "error_samples_after_process_exit": 0,
+            "first_sample_utc": "2026-09-06T16:53:19.838184+00:00",
+            "last_sample_utc": "2026-09-06T16:59:59.838485+00:00",
+            "min_available_gib": 12.421524047851562,
+            "min_swap_free_gib": 7.146656036376953,
+            "host_oom_kill_delta": 0,
+            "cgroup_oom_events_max": 0,
+            "cgroup_oom_kill_events_max": 0,
+            "max_swap_out_mib_s": 258.7403475715953,
+            "after_ready_samples": 11,
+            "after_ready_max_full_psi_avg10": 1.41,
+            "last_full_psi_avg10": 0.0,
+            "last_swap_out_bytes_s": 0.0
+          }
+        },
+        "worker": {
+          "image_id": "sha256:dd79b04562de82ec4195f14f20b67693fa82b25fa63bf757900576faa373bcaf",
+          "container_id": "afd506011555889247c7f20b1f5ee6baf4b6d5c054800b84bfcece9220cc6149",
+          "started_utc": "2026-09-06T16:52:13.335877644Z",
+          "running_at_verification": true,
+          "log_sha256": "dff5dcc8f3054adb9aca333371d5fe36cc37a62115512b23226105b4d0fe4d31",
+          "fatal_or_route_pack_jit_signature_matches": 0,
+          "memory": {
+            "sha256": "bc788c46f2d33f68e8b5da293277328361093f081331b59bd9818d9c8a7b07d9",
+            "samples_in_window": 94,
+            "samples_after_process_exit": 0,
+            "error_samples_in_window": 0,
+            "error_samples_after_process_exit": 0,
+            "first_sample_utc": "2026-09-06T16:52:13.638096+00:00",
+            "last_sample_utc": "2026-09-06T16:59:58.638190+00:00",
+            "min_available_gib": 15.832233428955078,
+            "min_swap_free_gib": 8.527118682861328,
+            "host_oom_kill_delta": 0,
+            "cgroup_oom_events_max": 0,
+            "cgroup_oom_kill_events_max": 0,
+            "max_swap_out_mib_s": 239.74061473825265,
+            "after_ready_samples": 11,
+            "after_ready_max_full_psi_avg10": 0.25,
+            "last_full_psi_avg10": 0.0,
+            "last_swap_out_bytes_s": 0.0
+          }
+        }
+      }
+    },
+    {
+      "run_id": "moe-tc-v2-20260906T1700",
+      "component": {
+        "schema_version": 1,
+        "kind": "real_weight_component_not_serving",
+        "status": "failed",
+        "tokens": [
+          6,
+          1,
+          8,
+          12
+        ],
+        "seed": 4104,
+        "layer": 3,
+        "budget_seconds": 350,
+        "runner_sha256": "63e0c63634fbd566b695cff9189f66c17888f7ef4c423f07c2534d6eb9fb1574",
+        "rows": [],
+        "decisions": [],
+        "dispatch": [
+          {
+            "tokens": 6,
+            "route_ids": [
+              [
+                190,
+                153,
+                132,
+                135,
+                239,
+                234
+              ],
+              [
+                191,
+                220,
+                2,
+                136,
+                88,
+                31
+              ],
+              [
+                246,
+                15,
+                184,
+                228,
+                83,
+                176
+              ],
+              [
+                156,
+                29,
+                167,
+                69,
+                8,
+                255
+              ],
+              [
+                101,
+                120,
+                248,
+                199,
+                191,
+                187
+              ],
+              [
+                202,
+                190,
+                195,
+                10,
+                191,
+                110
+              ]
+            ],
+            "variants": []
+          }
+        ],
+        "progress": [
+          {
+            "stage": "before-import",
+            "elapsed_s": 0.00022017699666321278,
+            "available_bytes": 123664175104,
+            "swap_free_bytes": 10816630784
+          },
+          {
+            "stage": "before-one-layer-load",
+            "elapsed_s": 6.830754800001159,
+            "available_bytes": 123032403968,
+            "swap_free_bytes": 10822230016
+          },
+          {
+            "stage": "after-one-layer-load",
+            "elapsed_s": 19.579183540074155,
+            "available_bytes": 119632502784,
+            "swap_free_bytes": 10829758464
+          },
+          {
+            "stage": "after-preparation",
+            "elapsed_s": 19.970230848994106,
+            "available_bytes": 119412084736,
+            "swap_free_bytes": 10829758464
+          }
+        ],
+        "contract": "TP2 rank0 shard; bf16 activations, MXFP4 E8M0K32 weights, real model router on seeded synthetic activations; routing/compilation/weight load excluded. Independent captured buffers, 4 alternating repeats x20 CUDA events. Parity cos>=.9999, RMSE<=.001; M6 cold gain>=10%, warm and later shapes regress<=3%. Not a serving-TPS prediction.",
+        "elapsed_s": 23.28121694899164,
+        "source_hashes": {
+          "b12x/integration/tp_moe.py": "49cd151aa80f4fdfa603eafe21b792b51a6483fa6f39452892ed2240fd79da34",
+          "b12x/moe/fused/w4a16/kernel.py": "28872ab5e474f13212a9e57b22a06e1ccba8fef012ba183bf69208d8f8c9e677",
+          "benchmarks/benchmark_moe.py": "ae213824d7931a51a719e2d1ee0fb67dacb075e6ab8ce65002db67019f617b79"
+        },
+        "shape": {
+          "hidden_size": 4096,
+          "intermediate_size": 2048,
+          "num_experts": 256,
+          "top_k": 6,
+          "tp_size": 2,
+          "tp_rank": 0
+        },
+        "checkpoint_metadata_sha256": {
+          "config.json": "6c8f3d2d3b48707541b88f32f22ef3f0f8a6b57d8523281e2b8d3cdb0ae9a023",
+          "model.safetensors.index.json": "98efab455cf08dfbbbaaba6f570e1bf10bf927d2b4c3c453a59c2f6f0e3be92b"
+        },
+        "device": {
+          "name": "NVIDIA GB10",
+          "SMs": 48
+        },
+        "adapter_sha256": "10e4ee6d339046994107f8815c33a6bae6e5f6a85048e8b43233826575be6e68",
+        "prepared_layout": "packed",
+        "source_format": "fp4_e8m0_k32",
+        "w13_layout": "w31",
+        "error": "AssertionError: input_scales_are_reciprocal is deprecated; b12x always expects reciprocal input scales"
+      },
+      "component_result_sha256": "3e4a0f34de266c17cbfb717f93949d4e56eb611921685b75083cbafcd155ea4e",
+      "component_log_sha256": "28181220dd79b5c0131d1617b333ac230390c0331ea3661e5139f6d8468031cf",
+      "component_started_utc": "2026-09-06T17:02:43.851938147Z",
+      "component_finished_utc": "2026-09-06T17:03:08.656978381Z",
+      "component_exit_code": 1,
+      "component_oom_killed": false,
+      "component_head_memory": {
+        "sha256": "1268dccada690e1a4f3fdbdeac4540d67a27f2802104c55ec9a38ae19e2db038",
+        "samples_in_window": 5,
+        "samples_after_process_exit": 9,
+        "error_samples_in_window": 0,
+        "error_samples_after_process_exit": 9,
+        "first_sample_utc": "2026-09-06T17:02:44.149760+00:00",
+        "last_sample_utc": "2026-09-06T17:03:04.149937+00:00",
+        "min_available_gib": 111.20153045654297,
+        "min_swap_free_gib": 10.073360443115234,
+        "host_oom_kill_delta": 0,
+        "cgroup_oom_events_max": 0,
+        "cgroup_oom_kill_events_max": 0,
+        "max_swap_out_mib_s": 0.0,
+        "after_ready_samples": 0,
+        "after_ready_max_full_psi_avg10": null,
+        "last_full_psi_avg10": 0.0,
+        "last_swap_out_bytes_s": 0.0
+      },
+      "component_worker_memory": {
+        "sha256": "2b6e36e2a37ebd246143961087d3a89910b4a90e158b4fae06ee80b1cca8ad79",
+        "samples_in_window": 5,
+        "samples_after_process_exit": 9,
+        "error_samples_in_window": 0,
+        "error_samples_after_process_exit": 0,
+        "first_sample_utc": "2026-09-06T17:02:44.417107+00:00",
+        "last_sample_utc": "2026-09-06T17:03:04.417641+00:00",
+        "min_available_gib": 115.77838134765625,
+        "min_swap_free_gib": 10.996910095214844,
+        "host_oom_kill_delta": 0,
+        "cgroup_oom_events_max": 0,
+        "cgroup_oom_kill_events_max": 0,
+        "max_swap_out_mib_s": 0.0,
+        "after_ready_samples": 0,
+        "after_ready_max_full_psi_avg10": null,
+        "last_full_psi_avg10": 0.0,
+        "last_swap_out_bytes_s": 0.0
+      },
+      "memory_caveat": "Samples after component exit may report missing process/cgroup and are counted separately. First-attempt worker recording began after component exit; it does not cover component execution.",
+      "first_stop_utc": "2026-09-06T17:02:07Z",
+      "api_ready_observed_utc": "2026-09-06T17:10:16Z",
+      "recovery_verified_utc": "2026-09-06T17:11:21Z",
+      "cleanup_verified_utc": "2026-09-06T17:11:46Z",
+      "first_stop_to_verified_recovery_s": 554.0,
+      "first_stop_to_cleanup_s": 579.0,
+      "all_experiment_recorders_stopped_and_locks_released": true,
+      "http_smoke_statuses_observed": {
+        "health": 200,
+        "version": 200,
+        "models": 200,
+        "dashboard": 200
+      },
+      "stream_smoke": {
+        "passed": true,
+        "finish_reason": "stop",
+        "done_received": true,
+        "usage_received": true,
+        "sha256": "bfe3e3c5a67694a7794309cb0b8e5dd6bfbaea70a47da861bce55c95db910929"
+      },
+      "tool_smoke": {
+        "passed": true,
+        "finish_reason": "tool_calls",
+        "done_received": true,
+        "usage_received": true,
+        "sha256": "e109e291f1226f87a2e8cbfb54dceecd2cd41c581ed11f63c1bbe211c6735798"
+      },
+      "recovery": {
+        "head": {
+          "image_id": "sha256:dd79b04562de82ec4195f14f20b67693fa82b25fa63bf757900576faa373bcaf",
+          "container_id": "35f92853d8f7c5f0557409a08c68f3f1cb24d1e8b4533040359d9671574b547b",
+          "started_utc": "2026-09-06T17:04:34.884657619Z",
+          "running_at_verification": true,
+          "log_sha256": "63327d98bea6694bbc939a9e28e6688885d7371a7b02e7c062c24a64414bee8b",
+          "fatal_or_route_pack_jit_signature_matches": 0,
+          "memory": {
+            "sha256": "aefaf650299f7522c2fae29b4b414cd85325b64cde4d64a497b651d5e41c9bf2",
+            "samples_in_window": 82,
+            "samples_after_process_exit": 0,
+            "error_samples_in_window": 0,
+            "error_samples_after_process_exit": 0,
+            "first_sample_utc": "2026-09-06T17:04:35.148392+00:00",
+            "last_sample_utc": "2026-09-06T17:11:20.148529+00:00",
+            "min_available_gib": 14.600425720214844,
+            "min_swap_free_gib": 6.841121673583984,
+            "host_oom_kill_delta": 0,
+            "cgroup_oom_events_max": 0,
+            "cgroup_oom_kill_events_max": 0,
+            "max_swap_out_mib_s": 238.63579053561782,
+            "after_ready_samples": 13,
+            "after_ready_max_full_psi_avg10": 0.0,
+            "last_full_psi_avg10": 0.0,
+            "last_swap_out_bytes_s": 0.0
+          }
+        },
+        "worker": {
+          "image_id": "sha256:dd79b04562de82ec4195f14f20b67693fa82b25fa63bf757900576faa373bcaf",
+          "container_id": "03f162a555345607b173f08ccd604bacc3a0a10a65ca8e37a71bd456add45b3a",
+          "started_utc": "2026-09-06T17:03:50.712844661Z",
+          "running_at_verification": true,
+          "log_sha256": "0e68edfc67f4d4ed27a20ee27247662936a6770aad47961195f85b1a181c8a20",
+          "fatal_or_route_pack_jit_signature_matches": 0,
+          "memory": {
+            "sha256": "01a9ce0aa55fd2c0dfb26edcf7ed873fc0cfe6ebdfc6b686384cea5ad79b4ba2",
+            "samples_in_window": 91,
+            "samples_after_process_exit": 0,
+            "error_samples_in_window": 0,
+            "error_samples_after_process_exit": 0,
+            "first_sample_utc": "2026-09-06T17:03:50.994449+00:00",
+            "last_sample_utc": "2026-09-06T17:11:20.994595+00:00",
+            "min_available_gib": 16.255233764648438,
+            "min_swap_free_gib": 8.481243133544922,
+            "host_oom_kill_delta": 0,
+            "cgroup_oom_events_max": 0,
+            "cgroup_oom_kill_events_max": 0,
+            "max_swap_out_mib_s": 302.66628488659023,
+            "after_ready_samples": 13,
+            "after_ready_max_full_psi_avg10": 0.0,
+            "last_full_psi_avg10": 0.0,
+            "last_swap_out_bytes_s": 0.0
+          }
+        }
+      }
+    }
+  ],
+  "source_only_fixes": {
+    "runner_sha256": "53b73a65d55f0843eabf9e345b7fe315f09809a701f34bcc023c474525805e0e",
+    "resolved_scratch_device_and_dtype_from_activation": true,
+    "reciprocal_input_scale_binding_matches_actual_serving_apply": true,
+    "actual_serving_apply_executed_with_cpu_fakes_matches_complete_benchmark_call": true,
+    "unit_tests_passed": 51,
+    "new_unit_tests": 8,
+    "corrected_harness_gpu_validated": false,
+    "next_gate": "Fresh bounded exclusive component decision; numerical and actual-dispatch gates before timings. No serving candidate based on offline tests."
+  }
+}
