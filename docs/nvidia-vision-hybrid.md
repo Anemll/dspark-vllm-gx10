@@ -1,8 +1,41 @@
 # NVIDIA 0731 NVFP4 + Vision-Exp: compatibility test
 
-Status (2026-09-06): **CPU preflight completed; hybrid GPU inference has not
-run.** No vision-quality or speed result is claimed for this hybrid. The
-original 0731 text service remained running on both Sparks.
+Status (2026-09-07): **The real GPU component canary failed before MoE
+execution; hybrid model inference has not run.** No vision-quality or speed
+result is claimed for this hybrid. The original 0731 text service was recovered
+from a preexisting rank-communication stall and is serving again.
+
+## GPU result and mixed-format loader fix
+
+[GPU canary evidence](../benchmarks/results/nvidia-cutlass-canary-20260907.json)
+records an actual SM121 attempt with NVFP4 W4A4, BF16 output and clamp=10.
+It failed after 1.17 seconds in component code, before any numerical row:
+FlashInfer's Python initializer supplied eight arguments, while the inherited
+compiled CUTLASS module accepted seven. The image contains
+`flashinfer-python==0.6.15` but `flashinfer-jit-cache==0.6.13+cu130`.
+The installed Python source hash matches our pinned FlashInfer source exactly;
+source-declared SM121 support did not establish binary compatibility.
+
+The new prefix-aware quantization resolver honors NVIDIA's explicit
+`quantized_layers` manifest and `mtp.*` exclusion. Seven new CPU tests check
+all 43 target layers, all three draft layers, wrapper prefixes, format/layout
+agreement, unchanged original dispatch and fail-closed malformed manifests.
+They also execute the actual upstream dispatcher to reproduce its selection
+of NVFP4 for an unchanged MXFP4 draft layer. All **65** repository tests pass.
+This loader fix is **not deployed or GPU-checkpoint-validated**.
+
+The next kernel gate needs a matching CUTLASS binary built from the pinned
+source, not another full checkpoint load or removal of the required clamp.
+TB36 still needs authenticated read-only mounts on both Sparks. No credentials
+were read or requested in chat. The bounded-test workflow stopped the failed
+GPU attempt; its logs remain preserved and its temporary container was removed.
+
+Before that attempt, the existing text service returned HTTP health=200 but
+timed out on a tiny completion and logged TCPStore/NCCL broken-pipe warnings
+on both ranks. Restarting the **same** containers in worker-first startup order
+recovered it. Endpoints, streaming and tool calls passed afterward; no model,
+image or node environment file was changed. This preexisting stall is not a
+failure of the NVIDIA hybrid, which has not been loaded.
 
 The requested experiment combines NVIDIA's 0731-NVFP4 text backbone and its
 DSpark weights with the multimodal-only parameters from Vision-Exp. This is
@@ -69,8 +102,8 @@ does not establish learned image/text alignment.
    source-declared support does not prove the installed kernel works.
 2. **Separate target/draft quantization.** NVIDIA main routed experts use
    NVFP4; retained DSpark expert tensors still use MXFP4 `.scale` entries.
-   Target and draft loader dispatch must be verified independently. This
-   remains a source-identified integration risk, not a reproduced GPU failure.
+   CPU dispatch is now fixed and tested; actual mixed-format checkpoint
+   loading remains an integration gate, not a reproduced GPU failure.
    Target FlashInfer CUTLASS plus draft B12X is a candidate configuration,
    contingent on independent quantization dispatch and GPU validation.
 3. **Complete multimodal parameters and explicit configuration.** Include

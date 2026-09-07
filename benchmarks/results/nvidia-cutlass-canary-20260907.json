@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "kind": "synthetic_gpu_component_not_model_inference",
+  "status": "failed_component_before_moe_execution",
+  "hardware": "DGX Spark / GB10 SM121, one GPU",
+  "image_id": "sha256:d768bb8b27788bb046a10b54c7df7de7d0d0e3f26b1ee0c7aab04b2c69b9cd1b",
+  "image_source_commit": "d3195176f9c98daee9a2592714f0eb2af4ecf032",
+  "canary_source_sha256": "cd199d9dbf51c5cd86fa03e874be40402003a4b526eb0b27fbbc0f1abed45083",
+  "container_started_utc": "2026-09-07T04:43:38.437384741Z",
+  "container_finished_utc": "2026-09-07T04:43:42.970414319Z",
+  "component_elapsed_s": 1.1687142921146005,
+  "exit_code": 1,
+  "oom_killed": false,
+  "first_shape": {"tokens": 4, "hidden_size": 128, "intermediate_size": 128, "experts": 8, "topk": 2},
+  "quantization": "NVFP4 W4A4, BF16 output",
+  "swiglu_limit": 10,
+  "seed": 5205,
+  "completed_numerical_rows": [],
+  "error": "Mismatched number of arguments when calling: `init(0: DataType, 1: DataType, 2: DataType, 3: bool, 4: bool, 5: bool, 6: bool) -> ffi.Module`. Expected 7 but got 8 arguments",
+  "installed_packages": {
+    "flashinfer-python": "0.6.15",
+    "flashinfer-jit-cache": "0.6.13+cu130",
+    "apache-tvm-ffi": "0.1.9"
+  },
+  "installed_core_matches_pinned_source": true,
+  "flashinfer_source_commit": "0472b9b3f2fba11b463f8526f390297d52a8aad7",
+  "installed_and_pinned_core_sha256": "ba2478746d1c5de82f2aa05ad6af1bed64be25baac87804ae06a02485c30fe42",
+  "diagnosis": "Pinned Python expects an eight-argument runner initializer but the inherited prebuilt CUTLASS module exposes seven. The image retains an older flashinfer-jit-cache package while disabling package version checks.",
+  "gpu_hybrid_inference_run": false,
+  "vision_quality_validated": false,
+  "text_decode_tps": null,
+  "dspark_acceptance": null,
+  "cpu_mixed_quantization_fix": {
+    "description": "Honor the explicit NVIDIA per-layer manifest: main target NVFP4, explicitly excluded and unchanged MXFP4 DSpark experts. Missing target entries and malformed formats fail closed.",
+    "target_layers_checked": 43,
+    "draft_layers_checked": 3,
+    "new_unit_tests_passed": 7,
+    "full_repository_tests_passed": 65,
+    "gpu_checkpoint_loading_validated": false,
+    "deployed": false
+  },
+  "preexisting_service_recovery": {
+    "before_candidate": true,
+    "symptoms": "Both ranks reported TCPStore/NCCL broken-pipe warnings; an eight-token READY request timed out after 20.006 seconds with no response bytes despite health=200.",
+    "action": "Stop exact existing head then worker, verify stop barrier, start identical worker then head. No image, model, or environment-file changes.",
+    "restored_image_id": "sha256:dd79b04562de82ec4195f14f20b67693fa82b25fa63bf757900576faa373bcaf",
+    "head_restarted_utc": "2026-09-07T04:36:51.525424399Z",
+    "worker_restarted_utc": "2026-09-07T04:36:22.970427404Z",
+    "api_ready_utc": "2026-09-07T04:40:52Z",
+    "health_version_models_dashboard_passed": true,
+    "ready_completion_passed": true,
+    "streaming_passed": true,
+    "streaming_elapsed_s": 0.2606187080964446,
+    "tool_call_passed": true,
+    "tool_call_elapsed_s": 1.938100750092417,
+    "post_recovery_rank_error_scan_clear": true
+  },
+  "cleanup": {
+    "failed_container_removed_after_evidence_capture": true,
+    "both_owned_experiment_locks_released": true,
+    "images_and_checkpoints_preserved": true,
+    "only_original_text_service_running_on_each_node": true
+  },
+  "evidence": {
+    "raw_failure_log_sha256": "7d84cde0421090d76fdaba4d4b1e2fdf1dcdbedec9bdbcd7deff385381b49a20",
+    "raw_container_inspect_sha256": "3089e58d14d86336552a5a8432bf509cd44adc247d599c994d7f6cee19fc4c8f"
+  },
+  "remaining_gates": [
+    "Build a matching CUTLASS module against the exact pinned FlashInfer source, then rerun the component canary.",
+    "Authenticated read-only TB36 mounts on both Sparks; user was asked to perform authentication without sharing passwords.",
+    "Mixed-format checkpoint loading and known-answer hybrid vision canaries before throughput or DSpark acceptance measurements."
+  ]
+}
