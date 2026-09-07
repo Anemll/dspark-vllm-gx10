@@ -1,0 +1,11 @@
+{
+  "wheel_url": "https://github.com/flashinfer-ai/flashinfer/releases/download/v0.6.15/flashinfer_jit_cache-0.6.15+cu130-cp39-abi3-manylinux_2_28_aarch64.whl",
+  "wheel_sha256": "39e4f52378a34107ee277907bdec8bf8528c13a84143de8469d6da42ad937db3",
+  "wheel_version": "0.6.15+cu130",
+  "metadata_member": "flashinfer_jit_cache-0.6.15+cu130.dist-info/METADATA",
+  "module_member": "flashinfer_jit_cache-0.6.15+cu130.data/purelib/flashinfer_jit_cache/jit_cache/fused_moe_120/fused_moe_120.so",
+  "module_bytes": 55683200,
+  "module_sha256": "7e681d0073b9695f9f0f18f3d6c2f2992d6dfb8401d7da6d2f74f01cc1fc2e85",
+  "python_source_commit": "0472b9b3f2fba11b463f8526f390297d52a8aad7",
+  "python_core_sha256": "ba2478746d1c5de82f2aa05ad6af1bed64be25baac87804ae06a02485c30fe42"
+}

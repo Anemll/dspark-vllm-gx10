@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: MIT
+# BuildKit named context cache_artifacts contains only the pinned wheel.
+# A component artifact repair, not an in-place upgrade of the production image.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE} AS extract
+ARG SOURCE_REVISION
+COPY --from=cache_artifacts /flashinfer_jit_cache-0.6.15+cu130-cp39-abi3-manylinux_2_28_aarch64.whl /cache.whl
+COPY scripts/extract-cutlass-module.py /extract.py
+COPY config/flashinfer-cutlass.lock.json /cutlass.lock.json
+RUN python3 /extract.py --wheel /cache.whl --lock /cutlass.lock.json \
+    --output /cutlass-output --source-revision "${SOURCE_REVISION}" \
+    --python-root /usr/local/lib/python3.12/dist-packages/flashinfer
+
+FROM ${BASE_IMAGE}
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.licenses="MIT AND Apache-2.0 AND BSD-3-Clause"
+LABEL ai.anemll.component-repair="flashinfer-fused-moe-120-0.6.15-cu130"
+COPY --from=extract /cutlass-output/fused_moe_120.so /usr/local/lib/python3.12/dist-packages/flashinfer_jit_cache/jit_cache/fused_moe_120/fused_moe_120.so
+COPY --from=extract /cutlass-output/manifest.json /opt/dspark-cutlass/manifest.json
+COPY overlay/vllm/models/deepseek_v4/quant_config.py /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/quant_config.py
+COPY overlay/vllm/models/deepseek_v4/mixed_expert_quant.py /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/mixed_expert_quant.py
+COPY tests/nvfp4_cutlass_canary.py /opt/dspark-cutlass/canary.py
+RUN python3 -m compileall -q /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4
