@@ -27,6 +27,13 @@ that file and its binding retain their BSD-3-Clause notices (see below).
 - Pinned revision: `0472b9b3f2fba11b463f8526f390297d52a8aad7`
 - License: Apache-2.0
 
+The experimental NVIDIA W4A4 image reuses FlashInfer's official
+`flashinfer-jit-cache` 0.6.15 CUDA 13 ARM `fused_moe_120.so` artifact to
+repair a Python/compiled-module ABI mismatch. It does not introduce a new
+MoE kernel. [Exact artifact provenance](config/flashinfer-cutlass.lock.json)
+and [the bounded GPU retest](benchmarks/results/nvidia-cutlass-retest-20260907.json)
+are recorded separately from the unchanged production cache.
+
 ### DeepSeek V4 vision backport
 
 - vLLM model integration: Isotr0py and vLLM contributors,

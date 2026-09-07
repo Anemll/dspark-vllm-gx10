@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "kind": "synthetic_gpu_component_not_model_inference",
+  "status": "passed_component_only",
+  "hardware": "DGX Spark / GB10 SM121, one GPU",
+  "source_commit": "b2d902b8ea8e69b46e41c34e99d6f302e6e4a53a",
+  "image_id": "sha256:7a30f22955f8a5e3018ef05e7c8b4c9eadbfb039d30edc7e36f0ca2360c55977",
+  "base_image_id": "sha256:d768bb8b27788bb046a10b54c7df7de7d0d0e3f26b1ee0c7aab04b2c69b9cd1b",
+  "prior_failure": "nvidia-cutlass-canary-20260907.json",
+  "repair": {
+    "description": "Replace only fused_moe_120.so from the official checksum-pinned 0.6.15 CUDA 13 ARM wheel. Preserve the pinned FlashInfer Python source and every other inherited compiled cache module.",
+    "artifact_lock": "config/flashinfer-cutlass.lock.json",
+    "module_sha256": "7e681d0073b9695f9f0f18f3d6c2f2992d6dfb8401d7da6d2f74f01cc1fc2e85",
+    "python_core_sha256": "ba2478746d1c5de82f2aa05ad6af1bed64be25baac87804ae06a02485c30fe42",
+    "cache_distribution_metadata_still_reports": "0.6.13+cu130",
+    "component_manifest_in_image": "/opt/dspark-cutlass/manifest.json",
+    "also_includes_cpu_tested_mixed_quantization_dispatch": true
+  },
+  "canary_source_sha256": "cd199d9dbf51c5cd86fa03e874be40402003a4b526eb0b27fbbc0f1abed45083",
+  "canary_unchanged_from_failed_run": true,
+  "container_started_utc": "2026-09-07T14:48:06.100704303Z",
+  "container_finished_utc": "2026-09-07T14:48:09.934597550Z",
+  "component_elapsed_s": 0.8776286030188203,
+  "exit_code": 0,
+  "oom_killed": false,
+  "quantization": "NVFP4 W4A4, BF16 output",
+  "swiglu_limit": 10,
+  "seed": 5205,
+  "thresholds": {"relative_l2_lt": 0.08, "cosine_gt": 0.995, "finite_output": true, "positive_clipped_elements": true},
+  "rows": [
+    {
+      "tokens": 4, "hidden_size": 128, "intermediate_size": 128, "experts": 8, "topk": 2,
+      "clipped_elements": 358,
+      "relative_l2": 0.01869402639567852,
+      "cosine": 0.9998253583908081,
+      "elapsed_with_setup_s": 0.6123995359521359,
+      "peak_cuda_bytes": 9553408
+    },
+    {
+      "tokens": 6, "hidden_size": 4096, "intermediate_size": 1024, "experts": 8, "topk": 6,
+      "clipped_elements": 33438,
+      "relative_l2": 0.020383594557642937,
+      "cosine": 0.9997936487197876,
+      "elapsed_with_setup_s": 0.05356022599153221,
+      "peak_cuda_bytes": 321036288
+    }
+  ],
+  "limits": {"inner_seconds": 180, "outer_seconds": 210, "container_ram_gib": 4, "container_swap_gib": 0, "cuda_allocator_cap_gib": 2, "cpus": 2},
+  "not_measured": ["full checkpoint loading", "full expert count or TP2 execution", "hybrid vision quality", "text decode TPS", "DSpark acceptance", "candidate text-speed regression"],
+  "full_repository_unit_tests_passed": 69,
+  "control_service": {
+    "image_id": "sha256:dd79b04562de82ec4195f14f20b67693fa82b25fa63bf757900576faa373bcaf",
+    "same_containers_and_start_times_before_after": true,
+    "restarts": 0,
+    "health_version_models_dashboard_passed_before_after": true,
+    "idle_before_after": true,
+    "streaming_passed_before_after": true,
+    "streaming_elapsed_before_s": 0.28714658389799297,
+    "streaming_elapsed_after_s": 0.2507716252002865,
+    "both_rank_error_scans_clear_since_turn_start": true,
+    "performance_comparison_claimed": false
+  },
+  "cleanup": {
+    "completed_download_and_canary_containers_removed": true,
+    "both_owned_experiment_locks_released": true,
+    "images_checkpoints_wheel_and_logs_retained": true,
+    "only_original_text_service_running_on_each_node": true
+  },
+  "evidence": {
+    "raw_canary_log_sha256": "22452f576c494c4ebbfc645e458424ff4d8ed80b544526e93fd8355a706caee5",
+    "raw_container_state_sha256": "6d8ba1e1141dab726f00e9c41357bd234a78d81c2b5d9c1f4786be2bf1608e05"
+  },
+  "remaining_gates": [
+    "Authenticated read-only TB36 mounts on both Sparks; checkpoint is present on the workstation NAS share but inaccessible to the Spark containers.",
+    "Assemble the explicitly requested NVIDIA text plus complete Vision-Exp-only parameter hybrid, retaining source provenance and configuration decisions.",
+    "Validate mixed NVFP4 target / MXFP4 DSpark checkpoint loading and complete multimodal inference on two identical candidate images.",
+    "Known-answer image correctness, then matched text and separate vision throughput and DSpark acceptance benchmarks."
+  ]
+}
