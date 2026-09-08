@@ -3,8 +3,9 @@
 Status (2026-09-08): **The CUTLASS ABI repair passed the real SM121 GPU
 retest; a separate V2 draft-backend routing fix now passes CPU tests.
 Hybrid model inference has not run.** Read-only TB36 checkpoint access is now
-verified on both Sparks. The corrected candidate is built and verified on the
-head only; transfer and full-model tests remain open. No hybrid vision-quality,
+verified on both Sparks. The corrected candidate is built once and its exact
+image ID and code/module hashes verified on both nodes; full-model tests remain
+open. No hybrid vision-quality,
 DSpark acceptance or decode-speed result is claimed. The original 0731 text
 service stayed running throughout this preparation.
 
@@ -55,15 +56,21 @@ The corrected candidate has now been built once from source
 `8cc38c3745935b422323b733a834f67e45a32d2c`, producing image
 `sha256:2a1a3f6b7d4e744790aecd79649e1e8e39d8054ebb2cb132f6135078b9a6bcf4`
 (`linux/arm64`). A no-GPU, read-only container verified the exact new loader
-hash and unchanged repaired CUTLASS module. The image remains head-only; it
-has not been published to a registry or run as the two-rank server. Both nodes
+hash and unchanged repaired CUTLASS module. The exact image has now been copied
+over the dedicated fabric and verified on the worker without rebuilding there.
+It has not been publicly published or run as the two-rank server. Both nodes
 can now read the pinned NVIDIA config and index, with hashes matching the
 saved preflight; 48 shards totaling 175,550,788,904 bytes are visible from the
 head. These are presence and metadata checks, not fresh whole-shard checksums.
-Preparation stopped before a full image export because its temporary storage
-could breach the declared free-space floor. No image, checkpoint, or rollback
-was deleted to bypass that gate. Next is a verified disk-bounded fabric
-transfer, then actual mixed-backend checkpoint loading and inference.
+Preparation initially stopped before a full image export because its temporary
+storage could breach the declared free-space floor. A temporary localhost-only
+registry, reached through an authenticated fabric SSH tunnel, completed the
+copy without a full archive. The worker reused its existing base layers and
+finished with the same image ID, source revision, loader hash and CUTLASS hash.
+Both transfer listeners/processes were stopped; 9.16 GiB of duplicate registry
+data was removed after verification, retaining all model/image/log artifacts.
+No serving restart or benchmark occurred. Next is actual mixed-backend
+checkpoint loading and inference under the bounded test/rollback procedure.
 
 ## Successful GPU retest
 
