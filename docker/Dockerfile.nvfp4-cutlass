@@ -20,5 +20,8 @@ COPY --from=extract /cutlass-output/fused_moe_120.so /usr/local/lib/python3.12/d
 COPY --from=extract /cutlass-output/manifest.json /opt/dspark-cutlass/manifest.json
 COPY overlay/vllm/models/deepseek_v4/quant_config.py /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/quant_config.py
 COPY overlay/vllm/models/deepseek_v4/mixed_expert_quant.py /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/mixed_expert_quant.py
+COPY overlay/vllm/v1/worker/gpu/spec_decode/dspark/utils.py /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/utils.py
 COPY tests/nvfp4_cutlass_canary.py /opt/dspark-cutlass/canary.py
-RUN python3 -m compileall -q /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4
+RUN python3 -m compileall -q \
+    /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4 \
+    /usr/local/lib/python3.12/dist-packages/vllm/v1/worker/gpu/spec_decode/dspark/utils.py

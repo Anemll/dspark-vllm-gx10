@@ -1,10 +1,54 @@
 # NVIDIA 0731 NVFP4 + Vision-Exp: compatibility test
 
-Status (2026-09-07, 14:48 UTC): **The CUTLASS ABI repair passed the real
-SM121 GPU retest. Hybrid model inference has not run.** TB36 still needs
+Status (2026-09-08): **The CUTLASS ABI repair passed the real SM121 GPU
+retest; a separate V2 draft-backend routing fix now passes CPU tests.
+Hybrid model inference has not run.** TB36 still needs
 authenticated read-only mounts on both Sparks. No hybrid vision-quality,
 DSpark acceptance or decode-speed result is claimed. The original 0731 text
 service stayed running throughout this repair and retest.
+
+## V2 DSpark mixed-backend correction
+
+The pinned runtime exposes `speculative_config.moe_backend`, and the legacy
+`LLMBaseProposer` honors it. Our V2 runner uses a different entry point:
+`DSparkSpeculator.load_draft_model` calls `load_dspark_model` directly.
+That loader originally copied only the draft attention settings, silently
+inheriting the target's MoE backend even when a draft override was requested.
+An executable CPU regression reproduces this with the pristine pinned loader:
+target `flashinfer_cutlass` plus draft `flashinfer_b12x` still passed
+`flashinfer_cutlass` to draft model construction.
+
+The [V2 loader overlay](../overlay/vllm/v1/worker/gpu/spec_decode/dspark/utils.py)
+now copies the kernel configuration only when an explicit draft override is
+present. It preserves the target configuration, non-causal draft attention,
+embedding/head sharing, and the no-override original text path. This runs at
+model load, not per decode token. Eight
+[CPU tests](../tests/test_dspark_draft_backend.py) cover the original failure,
+correct override delivery, target isolation, unchanged defaults, attention
+configuration, multimodal sharing, loader failure cleanup, and the existing
+pipeline-parallel guard, plus inclusion in the component image Dockerfile.
+
+The intended candidate settings are:
+
+```json
+{
+  "moe_backend": "flashinfer_cutlass",
+  "speculative_config": {
+    "method": "dspark",
+    "num_speculative_tokens": 5,
+    "draft_sample_method": "probabilistic",
+    "moe_backend": "flashinfer_b12x"
+  }
+}
+```
+
+These are configuration fields, not a standalone launch command. Use a new
+immutable candidate image containing this overlay. The previously tested
+`7a30f22955f8...` image does **not** contain this later loader correction;
+do not relabel it or describe the correction as GPU-validated. The passed
+CUTLASS kernel result remains valid for that unchanged binary, but actual
+mixed-format weight loading, both-rank backend selection, DSpark acceptance,
+text speed and combined vision correctness still require integration tests.
 
 ## Successful GPU retest
 
@@ -154,7 +198,9 @@ does not establish learned image/text alignment.
    CPU dispatch is now fixed and tested; actual mixed-format checkpoint
    loading remains an integration gate, not a reproduced GPU failure.
    Target FlashInfer CUTLASS plus draft B12X is a candidate configuration,
-   contingent on independent quantization dispatch and GPU validation.
+   contingent on independent quantization dispatch and GPU validation. The V2
+   loader also needs the explicit backend-override correction above; the
+   legacy proposer's existing support does not cover this runner.
 3. **Complete multimodal parameters and explicit configuration.** Include
    the routing biases and sentinel vectors, not just `vision.*`/`aligner.*`.
    Keep source identities separate and reject missing/duplicate weights.
