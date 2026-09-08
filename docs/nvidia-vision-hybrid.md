@@ -2,10 +2,11 @@
 
 Status (2026-09-08): **The CUTLASS ABI repair passed the real SM121 GPU
 retest; a separate V2 draft-backend routing fix now passes CPU tests.
-Hybrid model inference has not run.** TB36 still needs
-authenticated read-only mounts on both Sparks. No hybrid vision-quality,
+Hybrid model inference has not run.** Read-only TB36 checkpoint access is now
+verified on both Sparks. The corrected candidate is built and verified on the
+head only; transfer and full-model tests remain open. No hybrid vision-quality,
 DSpark acceptance or decode-speed result is claimed. The original 0731 text
-service stayed running throughout this repair and retest.
+service stayed running throughout this preparation.
 
 ## V2 DSpark mixed-backend correction
 
@@ -49,6 +50,20 @@ do not relabel it or describe the correction as GPU-validated. The passed
 CUTLASS kernel result remains valid for that unchanged binary, but actual
 mixed-format weight loading, both-rank backend selection, DSpark acceptance,
 text speed and combined vision correctness still require integration tests.
+
+The corrected candidate has now been built once from source
+`8cc38c3745935b422323b733a834f67e45a32d2c`, producing image
+`sha256:2a1a3f6b7d4e744790aecd79649e1e8e39d8054ebb2cb132f6135078b9a6bcf4`
+(`linux/arm64`). A no-GPU, read-only container verified the exact new loader
+hash and unchanged repaired CUTLASS module. The image remains head-only; it
+has not been published to a registry or run as the two-rank server. Both nodes
+can now read the pinned NVIDIA config and index, with hashes matching the
+saved preflight; 48 shards totaling 175,550,788,904 bytes are visible from the
+head. These are presence and metadata checks, not fresh whole-shard checksums.
+Preparation stopped before a full image export because its temporary storage
+could breach the declared free-space floor. No image, checkpoint, or rollback
+was deleted to bypass that gate. Next is a verified disk-bounded fabric
+transfer, then actual mixed-backend checkpoint loading and inference.
 
 ## Successful GPU retest
 
