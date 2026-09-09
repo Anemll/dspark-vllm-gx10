@@ -1,13 +1,31 @@
 # NVIDIA 0731 NVFP4 + Vision-Exp: compatibility test
 
 Status (2026-09-08): **The CUTLASS ABI repair passed the real SM121 GPU
-retest; a separate V2 draft-backend routing fix now passes CPU tests.
-Hybrid model inference has not run.** Read-only TB36 checkpoint access is now
-verified on both Sparks. The corrected candidate is built once and its exact
-image ID and code/module hashes verified on both nodes; full-model tests remain
-open. No hybrid vision-quality,
-DSpark acceptance or decode-speed result is claimed. The original 0731 text
-service stayed running throughout this preparation.
+retest; a separate V2 draft-backend routing fix now passes CPU tests.** The
+mixed-backend TP=2 candidate loaded its target checkpoint, then was safely
+aborted before inference when its DSpark draft began a second complete CIFS
+checkpoint scan. The original 0731 text service was restored and passed
+health, dashboard, metrics and streaming checks. No hybrid vision-quality,
+DSpark acceptance or decode-speed result is claimed.
+
+## DSpark local-shard loading correction
+
+The NVIDIA 0731-NVFP4 checkpoint index maps all 4,705 `mtp.*` draft tensors
+to only `model-00046` through `model-00048` (three of 48 safetensors shards).
+The target load completed in 1,346.46 seconds from the read-only CIFS mount,
+then the unmodified generic loader began opening all 48 files again before the
+DSpark model could discard non-`mtp.*` tensors. The decision run was stopped
+at six of 48 draft shards because the projected completion would consume the
+recovery window; no inference request was issued.
+
+The new NVIDIA DSpark overlay uses vLLM's existing model-level
+`allow_patterns_overrides` hook only when a local, valid safetensors index is
+available. It derives the exact MTP shard names from `weight_map`, so the
+draft should open the three required shards rather than scan the target
+checkpoint twice. Missing, malformed, unindexed, or Hub-hosted checkpoints
+fall back unchanged to vLLM's complete-file loader. Five CPU tests validate
+selection, de-duplication, fail-open behavior and image inclusion. This change
+has not yet been run on TP=2; it is the next bounded readiness gate.
 
 ## V2 DSpark mixed-backend correction
 
@@ -52,6 +70,24 @@ CUTLASS kernel result remains valid for that unchanged binary, but actual
 mixed-format weight loading, both-rank backend selection, DSpark acceptance,
 text speed and combined vision correctness still require integration tests.
 
+The repository Compose launcher now accepts separate optional environment
+settings for this candidate:
+
+```dotenv
+TARGET_MOE_BACKEND=flashinfer_cutlass
+DSPARK_MOE_BACKEND=flashinfer_b12x
+```
+
+These settings require the corrected candidate image; they do not make the
+default production image support NVIDIA's mixed-format checkpoint. Without
+overrides, the target remains B12X and the draft override is omitted, preserving
+the existing text configuration. This is startup wiring, not a measured speed
+improvement. Keep each rank's known-good fabric, model/cache mounts, scheduler,
+five-token DSpark configuration and benchmark KV-cache budget when preparing
+the isolated test profile; the generic example environment is not the exact
+matched benchmark profile. No node environment or running service was changed
+while validating these options.
+
 The corrected candidate has now been built once from source
 `8cc38c3745935b422323b733a834f67e45a32d2c`, producing image
 `sha256:2a1a3f6b7d4e744790aecd79649e1e8e39d8054ebb2cb132f6135078b9a6bcf4`
@@ -69,8 +105,9 @@ copy without a full archive. The worker reused its existing base layers and
 finished with the same image ID, source revision, loader hash and CUTLASS hash.
 Both transfer listeners/processes were stopped; 9.16 GiB of duplicate registry
 data was removed after verification, retaining all model/image/log artifacts.
-No serving restart or benchmark occurred. Next is actual mixed-backend
-checkpoint loading and inference under the bounded test/rollback procedure.
+The subsequent mixed-backend load exercised both target CUTLASS and draft
+B12X routes but was aborted before inference as described above. The next run
+uses the local-shard correction under the same bounded test/rollback procedure.
 
 ## Successful GPU retest
 
