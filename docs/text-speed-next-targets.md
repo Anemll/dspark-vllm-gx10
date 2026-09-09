@@ -86,7 +86,14 @@ flags—to that factory. No serving code or node profile was changed.
 
 All 51 local tests pass, including eight new harness-contract tests. These
 offline checks do not validate GPU compilation, numerical parity or speed.
-The corrected harness has not yet completed a GPU run.
+
+On 2026-09-09, the corrected harness completed its first real-weight GPU gate
+at M6. Both the control and TC-decode outputs passed the upstream-style,
+independent FP32 W4A16 oracle check (worst candidate cosine 0.99998462 versus
+a 0.9975 minimum). The candidate was nevertheless slower: 1051.38 µs versus
+1014.95 µs cold-L2 and 1005.17 µs versus 971.88 µs warm-L2. It fails the
+component speed gate, was not enabled in serving, and the native TP2 profile
+was restored. See [the measured gate](../benchmarks/results/moe-tc-oracle-gate-20260909.md).
 
 [Sanitized failure and recovery evidence](../benchmarks/results/moe-tc-component-failures-20260906.json)
 retains both runner hashes, zero timing rows, exact errors, source and model
