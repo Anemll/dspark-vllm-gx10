@@ -1,6 +1,8 @@
 VLLM_REPOSITORY=https://github.com/vllm-project/vllm.git
 VLLM_TAG=v0.25.1
-VLLM_COMMIT=752a3a504485790a2e8491cacbb35c137339ad34
+# Includes vLLM #48137: avoid the first-layer mHC repeat/copy on NVIDIA
+# DeepSeek-V4, with an upstream 1.8% end-to-end TPOT measurement.
+VLLM_COMMIT=442c421e794317c37ab5e15feff1b05a035a5a18
 FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
 FLASHINFER_COMMIT=0472b9b3f2fba11b463f8526f390297d52a8aad7
 B12X_REPOSITORY=https://github.com/lukealonso/b12x.git
