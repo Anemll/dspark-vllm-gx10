@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
 
-from benchmarks.benchmark_moe_tc_decode import TC_ENV, make_run_kwargs, make_scratch_plan, parity_gate, tc_mode, timing_decision, validate_dispatch
+from benchmarks.benchmark_moe_tc_decode import TC_ENV, TILE_ENV, make_run_kwargs, make_scratch_plan, parity_gate, tc_mode, tile_mode, timing_decision, validate_dispatch
 
 
 class MoETCContractTests(unittest.TestCase):
@@ -96,6 +96,14 @@ class MoETCContractTests(unittest.TestCase):
                 self.assertEqual(os.environ[TC_ENV],'0')
             self.assertNotIn(TC_ENV,os.environ)
 
+    def test_tile_environment_restored_after_failure(self):
+        with patch.dict(os.environ, {TILE_ENV:'64,128,128'}):
+            with self.assertRaises(ValueError):
+                with tile_mode('128,64,128'):
+                    self.assertEqual(os.environ[TILE_ENV], '128,64,128')
+                    raise ValueError('stop')
+            self.assertEqual(os.environ[TILE_ENV], '64,128,128')
+
     def test_dispatch_requires_observed_actual_path(self):
         for tokens in (1,6,8,12):
             for enabled in (False,True):
@@ -107,6 +115,16 @@ class MoETCContractTests(unittest.TestCase):
                     validate_dispatch([good|{'weight_layout':'modelopt'}],tokens,enabled)
         with self.assertRaises(RuntimeError):
             validate_dispatch([],6,True)
+
+    def test_tile_dispatch_requires_the_forced_layout(self):
+        row = {
+            'token_count':6, 'weight_layout':'packed', 'tc_decode_fused_sum':False,
+            'fc1_tile_k':128, 'fc1_tile_n':64, 'fc2_tile_k':128,
+            'fc2_tile_n':64, 'blocks_per_sm':2,
+        }
+        validate_dispatch([row], 6, False, '128,64,128')
+        with self.assertRaises(RuntimeError):
+            validate_dispatch([row | {'fc1_tile_n':128}], 6, False, '128,64,128')
 
     def test_nonfinite_or_inaccurate_oracle_output_rejected(self):
         good = {'cos':0.9975,'rmse':0.2,'max_abs':1.0,'mean_abs':0.1}

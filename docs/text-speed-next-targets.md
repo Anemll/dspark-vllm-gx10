@@ -95,6 +95,11 @@ a 0.9975 minimum). The candidate was nevertheless slower: 1051.38 µs versus
 component speed gate, was not enabled in serving, and the native TP2 profile
 was restored. See [the measured gate](../benchmarks/results/moe-tc-oracle-gate-20260909.md).
 
+The next one-variable gate forced FC1 to B12X K128/N64/128-thread tiles while
+retaining FC2's legal K64/N128 tile. It passed the same independent oracle but
+improved the M6 component by only 1.2% cold and warm, below the 10% gate. It
+was not deployed; see [the tile result](../benchmarks/results/moe-tile-k128-n64-20260909.md).
+
 [Sanitized failure and recovery evidence](../benchmarks/results/moe-tc-component-failures-20260906.json)
 retains both runner hashes, zero timing rows, exact errors, source and model
 fingerprints, and hashes of the raw logs and memory recordings. The attempts

@@ -23,6 +23,7 @@ import sys
 import time
 
 TC_ENV = "B12X_W4A16_TC_DECODE"
+TILE_ENV = "VLLM_B12X_W4A16_FORCE_TILE_CONFIG"
 PINNED_SOURCES = {
     "b12x/integration/tp_moe.py": "49cd151aa80f4fdfa603eafe21b792b51a6483fa6f39452892ed2240fd79da34",
     "b12x/moe/fused/w4a16/kernel.py": "28872ab5e474f13212a9e57b22a06e1ccba8fef012ba183bf69208d8f8c9e677",
@@ -43,12 +44,35 @@ def tc_mode(enabled):
             os.environ[TC_ENV] = original
 
 
-def validate_dispatch(observed, tokens, enabled):
+@contextmanager
+def tile_mode(value: str):
+    """Temporarily select a B12X tile override after the adapter is imported."""
+    original = os.environ.get(TILE_ENV)
+    os.environ[TILE_ENV] = value
+    try:
+        yield
+    finally:
+        if original is None:
+            os.environ.pop(TILE_ENV, None)
+        else:
+            os.environ[TILE_ENV] = original
+
+
+def validate_dispatch(observed, tokens, enabled, tile_config=None):
     expected = bool(enabled and tokens <= 8)
     if not observed or any(r["tc_decode_fused_sum"] != expected or
                            r["weight_layout"] != "packed" or
                            r["token_count"] != tokens for r in observed):
         raise RuntimeError(f"dispatch mismatch: tokens={tokens}, enabled={enabled}, observed={observed}")
+    if tile_config is not None:
+        tile_k, tile_n, _cta_threads = (int(part) for part in tile_config.split(","))
+        if any(
+            r["fc1_tile_k"] != tile_k or r["fc1_tile_n"] != tile_n
+            for r in observed
+        ):
+            raise RuntimeError(
+                f"FC1 tile override did not engage: expected={tile_config}, observed={observed}"
+            )
 
 
 def parity_gate(metrics):
@@ -110,15 +134,15 @@ def real_weight_oracle(reference, x, weights, spec, ids, scores):
     )
 
 
-def timing_decision(rows, tokens):
+def timing_decision(rows, tokens, candidate="tc_decode"):
     ratios = {}
     for cache in ("cold_l2", "warm_l2"):
         group = {r["variant"]: r for r in rows if r["tokens"] == tokens and r["cache"] == cache}
         control = group["control"]["median_us"]
-        candidate = group["tc_decode"]["median_us"]
-        if not (math.isfinite(control) and math.isfinite(candidate) and min(control, candidate) > 0):
+        candidate_us = group[candidate]["median_us"]
+        if not (math.isfinite(control) and math.isfinite(candidate_us) and min(control, candidate_us) > 0):
             raise RuntimeError("invalid component timings")
-        ratios[cache] = candidate / control
+        ratios[cache] = candidate_us / control
     passed = ratios["cold_l2"] <= (0.90 if tokens == 6 else 1.03) and ratios["warm_l2"] <= 1.03
     return {"tokens": tokens, "candidate_over_control": ratios, "worthwhile_component_gate": passed}
 
@@ -158,6 +182,10 @@ def main():
     parser.add_argument("--seed", type=int, default=4104)
     parser.add_argument("--budget-seconds", type=int, default=360)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--candidate-tile-config",
+        help="Optional TILE_K,TILE_N,CTA_THREADS B12X candidate; compared to the default path.",
+    )
     parser.add_argument("--plan-only", action="store_true")
     args = parser.parse_args()
     tokens_list = [int(t) for t in args.tokens.split(",")]
@@ -165,6 +193,13 @@ def main():
         parser.error("tokens must start with 6 and be unique members of 1,6,8,12")
     if not 1 <= args.budget_seconds <= 360 or args.layer != 3:
         parser.error("budget must be 1..360 seconds; audited layer is 3")
+    if args.candidate_tile_config is not None:
+        try:
+            tile_values = tuple(int(part.strip()) for part in args.candidate_tile_config.split(","))
+        except ValueError as exc:
+            parser.error(f"invalid candidate tile config: {exc}")
+        if len(tile_values) != 3 or any(value <= 0 for value in tile_values):
+            parser.error("candidate tile config must be three positive integers")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     # Exclusive creation protects earlier evidence. Later checkpoints update
     # only this invocation's own report and retain every completed result.
@@ -177,7 +212,8 @@ def main():
         "layer": args.layer, "budget_seconds": args.budget_seconds,
         "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "rows": [], "decisions": [], "dispatch": [], "progress": [],
-        "contract": "TP2 rank0 shard; bf16 activations, MXFP4 E8M0K32 weights, real model router on seeded synthetic activations; routing/compilation/weight load excluded. Independent captured buffers, 4 alternating repeats x20 CUDA events. Control and TC outputs each require cosine>=.9975 against the independent FP32 W4A16 oracle, matching upstream TC-decode coverage; M6 cold gain>=10%, warm and later shapes regress<=3%. Not a serving-TPS prediction.",
+        "contract": "TP2 rank0 shard; bf16 activations, MXFP4 E8M0K32 weights, real model router on seeded synthetic activations; routing/compilation/weight load excluded. Independent captured buffers, 4 alternating repeats x20 CUDA events. Each variant requires cosine>=.9975 against the independent FP32 W4A16 oracle; M6 cold gain>=10%, warm and later shapes regress<=3%. Not a serving-TPS prediction.",
+        "candidate_tile_config": args.candidate_tile_config,
     }
 
     def save():
@@ -216,6 +252,11 @@ def main():
         report['source_hashes'] = {name: hashlib.sha256((args.b12x_source/name).read_bytes()).hexdigest() for name in PINNED_SOURCES}
         if report['source_hashes'] != PINNED_SOURCES:
             raise RuntimeError('component source fingerprint mismatch')
+        # The adapter installs its selector wrapper at import time only. Seed
+        # the candidate once so its control/candidate contexts can toggle the
+        # environment dynamically while retaining one real loaded layer.
+        if args.candidate_tile_config is not None:
+            os.environ[TILE_ENV] = args.candidate_tile_config
         sys.path.insert(0, str(args.b12x_source))
         import torch
         from benchmarks import benchmark_moe as helper
@@ -252,19 +293,33 @@ def main():
         observed = []
         def dispatch(*a,**kw):
             launches = original_dispatch(*a,**kw)
-            observed.append({'token_count':kw['token_count'],'weight_layout':kw['weight_layout'],
-                             'tc_decode_fused_sum':bool(getattr(launches[0],'tc_decode_fused_sum',False))})
+            launch = launches[0]
+            observed.append({
+                'token_count':kw['token_count'], 'weight_layout':kw['weight_layout'],
+                'tc_decode_fused_sum':bool(getattr(launch,'tc_decode_fused_sum',False)),
+                'fc1_tile_k':getattr(launch,'fc1_tile_k',None),
+                'fc1_tile_n':getattr(launch,'fc1_tile_n',None),
+                'fc2_tile_k':getattr(launch,'fc2_tile_k',None),
+                'fc2_tile_n':getattr(launch,'fc2_tile_n',None),
+                'blocks_per_sm':getattr(launch,'blocks_per_sm',None),
+            })
             return launches
         tp_moe._w4a16_preplanned_launches = dispatch
+        variants = (
+            [(False, 'control', ''), (False, 'tile_candidate', args.candidate_tile_config)]
+            if args.candidate_tile_config is not None
+            else [(False, 'control', ''), (True, 'tc_decode', '')]
+        )
+        candidate_label = variants[1][1]
         for tokens in tokens_list:
             x,ids,scores = helper.make_profile_routed_inputs(profile,weights,spec,tokens,args.seed,torch.device('cuda'))
             ids = ids.to(torch.int32).contiguous()
             scores = scores.to(torch.float32).contiguous()
             report['dispatch'].append({'tokens':tokens,'route_ids':ids.cpu().tolist(),'variants':[]})
             graphs = []
-            for enabled,label in [(False,'control'),(True,'tc_decode')]:
+            for enabled,label,tile_config in variants:
                 observed.clear()
-                with tc_mode(enabled):
+                with tc_mode(enabled), tile_mode(tile_config):
                     plan = make_scratch_plan(adapter,spec,x,weights)
                     scratch = torch.empty(adapter._b12x_scratch_nbytes(plan),device='cuda',dtype=torch.uint8)
                     out = torch.empty_like(x)
@@ -277,8 +332,8 @@ def main():
                     graph = torch.cuda.CUDAGraph()
                     with torch.cuda.graph(graph):
                         run()
-                    validate_dispatch(observed,tokens,enabled)
-                    report['dispatch'][-1]['variants'].append({'variant':label,'observed':list(observed),'scratch_bytes':scratch.numel()})
+                    validate_dispatch(observed,tokens,enabled,tile_config or None)
+                    report['dispatch'][-1]['variants'].append({'variant':label,'tile_config':tile_config or None,'observed':list(observed),'scratch_bytes':scratch.numel()})
                     graphs.append((label,graph,run,out))
             # Distinct seeded inputs use the same captured addresses; no new
             # allocations occur in replay. Both paths see identical tensors.
@@ -296,7 +351,7 @@ def main():
                 candidate_metrics = compare_to_oracle(graphs[1][3], expected)
                 parity_gate(control_metrics)
                 parity_gate(candidate_metrics)
-                parity.append({'seed':seed,'control_oracle':control_metrics,'tc_decode_oracle':candidate_metrics})
+                parity.append({'seed':seed,'control_oracle':control_metrics,'candidate_oracle':candidate_metrics})
             x0,ids0,scores0 = helper.make_profile_routed_inputs(profile,weights,spec,tokens,args.seed,torch.device('cuda'))
             x.copy_(x0);ids.copy_(ids0);scores.copy_(scores0)
             expected = real_weight_oracle(moe_reference_w4a16_fp4_e8m0_k32, x, weights, spec, ids, scores)
@@ -319,7 +374,7 @@ def main():
                         raise RuntimeError('nonfinite post-timing output')
                 parity_gate(compare_to_oracle(graphs[0][3], expected))
                 parity_gate(compare_to_oracle(graphs[1][3], expected))
-            decision = timing_decision(report['rows'],tokens)
+            decision = timing_decision(report['rows'],tokens,candidate=candidate_label)
             report['decisions'].append(decision)
             gate(f'measured-M{tokens}')
             if not decision['worthwhile_component_gate']:
