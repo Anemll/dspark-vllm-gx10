@@ -100,12 +100,25 @@ def _local_mtp_safetensors_patterns(model_path: str) -> list[str] | None:
     if not shards:
         return None
 
+    # DefaultModelLoader treats entries in allow_patterns_overrides as fallback
+    # patterns and stops after the first one that matches. Collapse equal-width
+    # filenames into one exact character-class glob so every selected shard is
+    # opened in that first (and only) pattern.
+    if len({len(shard) for shard in shards}) != 1:
+        return None
+    pattern = "".join(
+        chars.pop() if len(chars := {shard[i] for shard in shards}) == 1
+        else "[" + "".join(sorted(chars)) + "]"
+        for i in range(len(shards[0]))
+    )
     logger.info_once(
-        "DSpark draft will load %d MTP safetensors shard(s), selected from %s",
+        "DSpark draft will load %d MTP safetensors shard(s) through %s, "
+        "selected from %s",
         len(shards),
+        pattern,
         index_path,
     )
-    return shards
+    return [pattern]
 
 
 class DSparkDeepseekV4Model(nn.Module):

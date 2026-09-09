@@ -62,11 +62,7 @@ class DSparkWeightShardTests(unittest.TestCase):
             )
             self.assertEqual(
                 self.selector(directory),
-                [
-                    "model-00046-of-00048.safetensors",
-                    "model-00047-of-00048.safetensors",
-                    "model-00048-of-00048.safetensors",
-                ],
+                ["model-0004[678]-of-00048.safetensors"],
             )
 
     def test_missing_non_mtp_and_invalid_indexes_fail_open(self):
