@@ -108,10 +108,10 @@ class MoETCContractTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             validate_dispatch([],6,True)
 
-    def test_nonfinite_or_inaccurate_output_rejected(self):
-        good = {'cos':1.0,'rmse':0.0005,'max_abs':0.002,'mean_abs':0.0002}
+    def test_nonfinite_or_inaccurate_oracle_output_rejected(self):
+        good = {'cos':0.9975,'rmse':0.2,'max_abs':1.0,'mean_abs':0.1}
         parity_gate(good)
-        for bad in (good|{'cos':0.99},good|{'rmse':0.002},good|{'rmse':math.nan},good|{'max_abs':math.inf}):
+        for bad in (good|{'cos':0.9974},good|{'rmse':math.nan},good|{'max_abs':math.inf}):
             with self.assertRaises(RuntimeError):
                 parity_gate(bad)
 

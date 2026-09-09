@@ -52,10 +52,62 @@ def validate_dispatch(observed, tokens, enabled):
 
 
 def parity_gate(metrics):
+    """Apply B12X's TC-decode oracle criterion, not output identity.
+
+    The fused epilogue atomically reduces six expert contributions, whereas the
+    control path performs a separate ordered top-k sum. Those are intentionally
+    different accumulation orders in bf16. Each result must therefore be
+    compared independently with the FP32 W4A16 oracle. This mirrors the
+    upstream TC-decode test's SiLU cosine threshold.
+    """
     if not all(math.isfinite(float(v)) for v in metrics.values()):
         raise RuntimeError("nonfinite parity metrics")
-    if metrics["cos"] < 0.9999 or metrics["rmse"] > 0.001:
-        raise RuntimeError(f"numerical parity failed: {metrics}")
+    if metrics["cos"] < 0.9975:
+        raise RuntimeError(f"numerical oracle parity failed: {metrics}")
+
+
+def compare_to_oracle(actual, expected):
+    """Return upstream-compatible per-token cosine plus diagnostic errors."""
+    import torch
+
+    actual_fp32 = actual.float()
+    expected_fp32 = expected.float()
+    difference = actual_fp32 - expected_fp32
+    actual_rows = actual_fp32.reshape(actual_fp32.shape[0], -1)
+    expected_rows = expected_fp32.reshape(expected_fp32.shape[0], -1)
+    dot = (actual_rows * expected_rows).sum(dim=1)
+    denominator = actual_rows.norm(dim=1) * expected_rows.norm(dim=1)
+    both_zero = (actual_rows.norm(dim=1) <= 1e-12) & (expected_rows.norm(dim=1) <= 1e-12)
+    row_cosines = torch.where(
+        both_zero,
+        torch.ones_like(dot),
+        torch.where(denominator > 1e-24, dot / denominator, torch.zeros_like(dot)),
+    )
+    return {
+        "max_abs": difference.abs().max().item(),
+        "rmse": difference.square().mean().sqrt().item(),
+        "mean_abs": difference.abs().mean().item(),
+        "cos": row_cosines.mean().item(),
+    }
+
+
+def real_weight_oracle(reference, x, weights, spec, ids, scores):
+    """Independent FP32 W4A16 oracle for the loaded DeepSeek E8M0-K32 shard."""
+    import torch
+
+    if any(value is None for value in (
+        weights.oracle_w13_weight, weights.oracle_w13_scale,
+        weights.oracle_w2_weight, weights.oracle_w2_scale,
+    )):
+        raise RuntimeError("missing immutable pre-pack E8M0-K32 oracle weights")
+    return reference(
+        x, weights.oracle_w13_weight, weights.oracle_w13_scale,
+        torch.ones(spec.num_experts, device=x.device, dtype=torch.float32),
+        weights.oracle_w2_weight, weights.oracle_w2_scale,
+        torch.ones(spec.num_experts, device=x.device, dtype=torch.float32),
+        ids, scores, spec.num_experts, spec.hidden_size, spec.I_tp,
+        activation="silu", swiglu_limit=10.0, w13_layout=weights.w13_layout,
+    )
 
 
 def timing_decision(rows, tokens):
@@ -125,7 +177,7 @@ def main():
         "layer": args.layer, "budget_seconds": args.budget_seconds,
         "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "rows": [], "decisions": [], "dispatch": [], "progress": [],
-        "contract": "TP2 rank0 shard; bf16 activations, MXFP4 E8M0K32 weights, real model router on seeded synthetic activations; routing/compilation/weight load excluded. Independent captured buffers, 4 alternating repeats x20 CUDA events. Parity cos>=.9999, RMSE<=.001; M6 cold gain>=10%, warm and later shapes regress<=3%. Not a serving-TPS prediction.",
+        "contract": "TP2 rank0 shard; bf16 activations, MXFP4 E8M0K32 weights, real model router on seeded synthetic activations; routing/compilation/weight load excluded. Independent captured buffers, 4 alternating repeats x20 CUDA events. Control and TC outputs each require cosine>=.9975 against the independent FP32 W4A16 oracle, matching upstream TC-decode coverage; M6 cold gain>=10%, warm and later shapes regress<=3%. Not a serving-TPS prediction.",
     }
 
     def save():
@@ -169,6 +221,7 @@ def main():
         from benchmarks import benchmark_moe as helper
         from b12x.integration import prepare_b12x_fp4_moe_weights
         from b12x.integration import tp_moe
+        from b12x.moe.fused.reference import moe_reference_w4a16_fp4_e8m0_k32
         from vllm.model_executor.layers.fused_moe.experts import b12x_mxfp4_moe as adapter
         if torch.cuda.get_device_capability() != (12, 1):
             raise RuntimeError('requires SM121')
@@ -181,7 +234,7 @@ def main():
         report['device'] = {'name':torch.cuda.get_device_name(), 'SMs':torch.cuda.get_device_properties(0).multi_processor_count}
         report['adapter_sha256'] = hashlib.sha256(Path(adapter.__file__).read_bytes()).hexdigest()
         gate('before-one-layer-load')
-        weights = helper.load_expert_weights(args.model_dir,spec,layer_idx=args.layer,checkpoint_family=profile.checkpoint_family)
+        weights = helper.load_expert_weights(args.model_dir,spec,layer_idx=args.layer,checkpoint_family=profile.checkpoint_family,keep_flashinfer_oracle_copy=True)
         gate('after-one-layer-load')
         unit = torch.ones(spec.num_experts,device='cuda',dtype=torch.float32)
         prepared = prepare_b12x_fp4_moe_weights(source_format=weights.source_format,w13_layout=weights.w13_layout,
@@ -233,16 +286,20 @@ def main():
             for seed in [args.seed,args.seed+1]:
                 new_x,new_ids,new_scores = helper.make_profile_routed_inputs(profile,weights,spec,tokens,seed,torch.device('cuda'))
                 x.copy_(new_x); ids.copy_(new_ids); scores.copy_(new_scores)
+                expected = real_weight_oracle(moe_reference_w4a16_fp4_e8m0_k32, x, weights, spec, ids, scores)
                 for _,graph,_,out in graphs:
                     graph.replay()
                     torch.cuda.synchronize()
                     if not bool(torch.isfinite(out).all()):
                         raise RuntimeError('nonfinite component output')
-                metrics = asdict(helper.compare_graph_replay_outputs(graphs[1][3],graphs[0][3]))
-                parity_gate(metrics)
-                parity.append({'seed':seed,**metrics})
+                control_metrics = compare_to_oracle(graphs[0][3], expected)
+                candidate_metrics = compare_to_oracle(graphs[1][3], expected)
+                parity_gate(control_metrics)
+                parity_gate(candidate_metrics)
+                parity.append({'seed':seed,'control_oracle':control_metrics,'tc_decode_oracle':candidate_metrics})
             x0,ids0,scores0 = helper.make_profile_routed_inputs(profile,weights,spec,tokens,args.seed,torch.device('cuda'))
             x.copy_(x0);ids.copy_(ids0);scores.copy_(scores0)
+            expected = real_weight_oracle(moe_reference_w4a16_fp4_e8m0_k32, x, weights, spec, ids, scores)
             for cache,l2 in [('cold_l2',flush),('warm_l2',None)]:
                 samples = {label:[] for label,*_ in graphs}
                 for repeat in range(4):
@@ -260,7 +317,8 @@ def main():
                     torch.cuda.synchronize()
                     if not bool(torch.isfinite(out).all()):
                         raise RuntimeError('nonfinite post-timing output')
-                parity_gate(asdict(helper.compare_graph_replay_outputs(graphs[1][3],graphs[0][3])))
+                parity_gate(compare_to_oracle(graphs[0][3], expected))
+                parity_gate(compare_to_oracle(graphs[1][3], expected))
             decision = timing_decision(report['rows'],tokens)
             report['decisions'].append(decision)
             gate(f'measured-M{tokens}')
