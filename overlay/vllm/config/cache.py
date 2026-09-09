@@ -54,6 +54,13 @@ class CacheConfig:
     """Whether block_size was explicitly provided. Derived automatically."""
     user_specified_mamba_block_size: bool = field(default=False, init=False)
     """Whether mamba_block_size was explicitly provided. Derived automatically."""
+    prefix_match_unit: int | None = Field(default=None, gt=0)
+    """Finest token boundary used for prefix-cache matching.
+
+    Newer vLLM callers use this name for the prefix-cache key granularity.
+    Keep the existing ``hash_block_size`` field below for the pinned Spark
+    cache implementation, which still consumes that spelling internally.
+    """
     hash_block_size: int | None = Field(default=None, gt=0)
     """Block size (in tokens) used for computing Request's block_hashes.
 
