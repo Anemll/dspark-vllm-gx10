@@ -139,6 +139,22 @@ base it changed 26 implementation files, with roughly 6,900 insertions and
 rejected as an end-to-end runtime update. Do not retry it or interpret the
 result as a measurement of a one-line pre-zero optimization.
 
+## Rejected DSpark K=7 block (2026-09-10)
+
+The 0731 checkpoint declares `dspark_block_size=5`; the pinned DSpark
+validator permits a larger block, so a K=7 candidate was tested without an
+image or weight change. The only effective launch changes were
+`num_speculative_tokens=5` to `7` and the required uniform CUDA-graph ceiling
+from `12 * (5 + 1) = 72` to `12 * (7 + 1) = 96`. Startup verified
+`next_n=8` and warmed the new 80/88/96-token shapes, ruling out a silent K=5
+fallback.
+
+The text smoke request completed correctly, but the fixed C1 512-token trials
+were 24.72, 25.86 and 25.01 aggregate tok/s. This is materially below the
+fresh K=5 measurements and far from the >80 target. The K=7 logs were
+preserved and K=5 was restored. Do not retry K=7 or combine it with greedy
+drafting: the available separate greedy A/B evidence has no measurable win.
+
 Never run this diagnostic beside the loaded API. Prepare and verify rollback,
 reserve an explicit outage window and stop both serving ranks first. Use an
 immutable existing image, read-only weights and script, independent cache,
