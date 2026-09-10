@@ -123,6 +123,22 @@ No serving optimization was accepted. The >80 tok/s goal remains open. Under
 the bounded A/B workflow, another GPU attempt requires a fresh decision window
 after this complete restoration; do not continue retrying inside this one.
 
+## Rejected B12X runtime update (2026-09-10)
+
+The later B12X revision `67712997` was built once and tested against the
+unchanged TP2 0731/DSpark-5 control profile. Its three C4 explanation trials
+returned 28.92, 27.85 and 25.79 aggregate tok/s, versus the prior control
+median of 52.56 tok/s. The candidate was stopped, both rank logs were saved,
+and the native control was restored.
+
+This was not a valid test of the advertised TC-decode fused-output path:
+the exact control profile retains `B12X_W4A16_TC_DECODE=0`. More importantly,
+the revision was not a surgical kernel backport: relative to the pinned B12X
+base it changed 26 implementation files, with roughly 6,900 insertions and
+2,800 deletions across attention, MoE and integration. It is therefore
+rejected as an end-to-end runtime update. Do not retry it or interpret the
+result as a measurement of a one-line pre-zero optimization.
+
 Never run this diagnostic beside the loaded API. Prepare and verify rollback,
 reserve an explicit outage window and stop both serving ranks first. Use an
 immutable existing image, read-only weights and script, independent cache,

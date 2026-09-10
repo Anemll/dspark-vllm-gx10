@@ -49,6 +49,15 @@ fabricated. Our >80 target remains repeated C1 text explanation decoding;
 neither concurrency aggregate nor a favorable coding maximum satisfies it.
 Vision has separate correctness/stability gates and may decode more slowly.
 
+On 2026-09-10, the current public `bench-miaai.py` methodology was replayed
+unchanged against the restored native TP2 control: 256-token unique prompts,
+C1, five sequential 128-token requests, temperature 0.6 and first-to-last
+stream timing. The median-of-trials was **44.8 tok/s** (43.0--51.8); aggregate
+whole-wave throughput was 22.2--36.3 tok/s. This is a direct local comparison
+of the client metric, not a claim about Mia's hardware. It rules out treating
+the public benchmark procedure itself as a route to the requested >80 TPS on
+this control stack.
+
 ## Code differences worth testing
 
 | Difference | Our action | Evidence / limit |
