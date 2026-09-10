@@ -1,12 +1,12 @@
 VLLM_REPOSITORY=https://github.com/vllm-project/vllm.git
 VLLM_TAG=v0.25.1
-# Includes vLLM #48137: avoid the first-layer mHC repeat/copy on NVIDIA
-# DeepSeek-V4, with an upstream 1.8% end-to-end TPOT measurement.
-VLLM_COMMIT=442c421e794317c37ab5e15feff1b05a035a5a18
+VLLM_COMMIT=752a3a504485790a2e8491cacbb35c137339ad34
 FLASHINFER_REPOSITORY=https://github.com/flashinfer-ai/flashinfer.git
 FLASHINFER_COMMIT=0472b9b3f2fba11b463f8526f390297d52a8aad7
 B12X_REPOSITORY=https://github.com/lukealonso/b12x.git
-B12X_COMMIT=7dc6fb8fcc6446ea093537d1657df81985fa5f43
+# Includes the W4A16 packed TC-decode fused-output initialization used by
+# DeepSeek-V4-Flash TP=2 small-M decode on Spark.
+B12X_COMMIT=67712997ba01ddb4a924d54c0a757137cfd6f67a
 B12X_VERSION=0.15.3
 CUTLASS_DSL_VERSION=4.5.2
 CUDA_PYTHON_VERSION=13.3.1
