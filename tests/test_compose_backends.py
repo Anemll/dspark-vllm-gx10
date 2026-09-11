@@ -67,6 +67,13 @@ class ComposeBackendTests(unittest.TestCase):
         self.assertIn('--moe-backend "$${TARGET_MOE_BACKEND}"', COMPOSE)
         self.assertEqual(COMPOSE.count('--moe-backend '), 1)
 
+    def test_two_node_nccl_small_collective_defaults(self):
+        self.assertIn('NCCL_PROTO: "${NCCL_PROTO:-Simple}"', COMPOSE)
+        self.assertIn('NCCL_MIN_NCHANNELS: "${NCCL_MIN_NCHANNELS:-2}"',
+                      COMPOSE)
+        self.assertIn('NCCL_MAX_NCHANNELS: "${NCCL_MAX_NCHANNELS:-2}"',
+                      COMPOSE)
+
     def test_json_builder_failure_aborts_launch(self):
         fragment = speculative_fragment().replace('python3 -c', 'false -c')
         result = subprocess.run(

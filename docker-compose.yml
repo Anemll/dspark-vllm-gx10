@@ -85,6 +85,12 @@ services:
       NCCL_IB_ROCE_VERSION_NUM: "${NCCL_IB_ROCE_VERSION_NUM:-2}"
       NCCL_IB_ADDR_RANGE: "${NCCL_IB_ADDR_RANGE:-}"
       NCCL_CROSS_NIC: "${NCCL_CROSS_NIC:-1}"
+      # DSv4 TP=2 decode launches many latency-sensitive small all-reduces.
+      # NCCL's 64-channel GB10 auto-selection regressed those collectives;
+      # one channel per direct RoCE rail with Simple is the measured default.
+      NCCL_PROTO: "${NCCL_PROTO:-Simple}"
+      NCCL_MIN_NCHANNELS: "${NCCL_MIN_NCHANNELS:-2}"
+      NCCL_MAX_NCHANNELS: "${NCCL_MAX_NCHANNELS:-2}"
       NCCL_CUMEM_ENABLE: "${NCCL_CUMEM_ENABLE:-0}"
       NCCL_IGNORE_CPU_AFFINITY: "${NCCL_IGNORE_CPU_AFFINITY:-1}"
       NCCL_DEBUG: "${NCCL_DEBUG:-WARN}"
