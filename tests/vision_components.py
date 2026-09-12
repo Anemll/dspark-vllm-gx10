@@ -25,6 +25,34 @@ from vllm.tokenizers.deepseek_v4_encoding import encode_messages, flatten_conten
 
 
 class VisionComponents(unittest.TestCase):
+    def test_text_embedding_path_skips_all_image_sentinel_work(self):
+        class TextBackbone(torch.nn.Module):
+            def embed_input_ids(self, input_ids):
+                return torch.nn.functional.one_hot(input_ids, num_classes=16).float()
+
+        model = DeepseekV4ForConditionalGeneration.__new__(
+            DeepseekV4ForConditionalGeneration
+        )
+        torch.nn.Module.__init__(model)
+        model.language_model = TextBackbone()
+        model.image_start = torch.nn.Parameter(torch.randn(16))
+        model.image_end = torch.nn.Parameter(torch.randn(16))
+        model.image_newline = torch.nn.Parameter(torch.randn(16))
+        model.image_pad = torch.nn.Parameter(torch.randn(16))
+        input_ids = torch.tensor([1, 2, 3])
+        expected = model.language_model.embed_input_ids(input_ids)
+
+        with patch(
+            "vllm.models.deepseek_v4.nvidia.vl_model.image_sentinel_mask",
+            side_effect=AssertionError("text path reached image sentinel work"),
+        ):
+            torch.testing.assert_close(
+                model.embed_input_ids(input_ids, multimodal_embeddings=None), expected
+            )
+            torch.testing.assert_close(
+                model.embed_input_ids(input_ids, multimodal_embeddings=[]), expected
+            )
+
     def test_real_scheduler_keeps_images_atomic_even_on_cache_hits(self):
         from vllm.v1.core.sched.scheduler import Scheduler
         from vllm.multimodal.inputs import PlaceholderRange

@@ -108,6 +108,36 @@ OCI source/revision labels and bundled license notices to an image that has
 already passed the two-node validation. It does not replace the reproducible
 source build above and does not change runtime code.
 
+### Experimental B12X 1.3 Vision runtime
+
+The native B12X sparse-MLA experiment uses a matched September vLLM/B12X
+runtime, rather than installing B12X 1.3 into the July vLLM image. B12X 1.3
+removed the legacy integration APIs used by the released overlay, so mixing
+those generations is intentionally unsupported. The immutable base digest,
+vLLM commit, package versions, and wrapper hashes are recorded in
+`config/b12x-vision.lock.json`.
+
+Build the small, hash-guarded Vision candidate on top of that exact base:
+
+```bash
+BASE_IMAGE=$(python3 -c 'import json; print(json.load(open("config/b12x-vision.lock.json"))["base_image"])')
+WRAPPER_SHA=$(python3 -c 'import json; print(json.load(open("config/b12x-vision.lock.json"))["vision_wrapper_sha256"])')
+SOURCE_REVISION=$(git rev-parse HEAD)
+
+docker build --network none \
+  --build-arg BASE_IMAGE="$BASE_IMAGE" \
+  --build-arg SOURCE_REVISION="$SOURCE_REVISION" \
+  --build-arg EXPECTED_VL_MODEL_SHA256="$WRAPPER_SHA" \
+  --file docker/Dockerfile.b12x-vision \
+  --tag "dspark-vllm-gx10:b12x-vision-${SOURCE_REVISION:0:12}" .
+```
+
+For native sparse MLA, set `TARGET_ATTENTION_BACKEND=B12X`,
+`DSPARK_ATTENTION_BACKEND=B12X`, `TARGET_MOE_BACKEND=b12x`,
+`TARGET_LINEAR_BACKEND=b12x`, and `KV_CACHE_DTYPE=fp8` in both role-specific
+environment files. Keep the two ranks on the same image ID and configuration.
+The default Compose values remain the released July configuration.
+
 ## Performance
 
 Benchmark model:

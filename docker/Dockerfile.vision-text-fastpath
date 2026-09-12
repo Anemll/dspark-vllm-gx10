@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: MIT
+# Overlay-only candidate for the currently qualified July Vision runtime.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+ARG SOURCE_REVISION
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.licenses="MIT AND Apache-2.0 AND BSD-3-Clause"
+COPY overlay/vllm/models/deepseek_v4/nvidia/vl_model.py /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/vl_model.py
+RUN python3 -m py_compile /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/vl_model.py
+COPY LICENSE NOTICE CREDITS.md /usr/share/licenses/dspark-vllm-gx10/
+COPY LICENSES/ /usr/share/licenses/dspark-vllm-gx10/

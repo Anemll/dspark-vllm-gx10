@@ -212,6 +212,14 @@ class DeepseekV4ForConditionalGeneration(
         # reserved tokens (their embedding rows are always overwritten below).
         inputs_embeds = self.language_model.embed_input_ids(input_ids)
 
+        # Text-only requests and decode steps do not carry encoder embeddings.
+        # Return before building the image-sentinel mask/table so the Vision
+        # wrapper has the same embedding hot path as the text model.  DeepSeek
+        # V4 image spans are scheduled atomically, therefore a scheduled image
+        # prefill always supplies at least one multimodal embedding here.
+        if multimodal_embeddings is None or len(multimodal_embeddings) == 0:
+            return inputs_embeds
+
         if self.image_start is not None:
             # Branch-free sentinel overwrite: safe inside compiled/captured
             # regions (no data-dependent control flow).
@@ -232,9 +240,6 @@ class DeepseekV4ForConditionalGeneration(
             inputs_embeds = torch.where(
                 sentinel_mask.unsqueeze(-1), table[idx], inputs_embeds
             )
-
-        if multimodal_embeddings is None or len(multimodal_embeddings) == 0:
-            return inputs_embeds
 
         assert is_multimodal is not None
         return _merge_multimodal_embeddings(

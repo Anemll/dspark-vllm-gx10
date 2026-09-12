@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: MIT
+# The base must be an immutable image containing a matched newer vLLM+B12X pair.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+ARG SOURCE_REVISION
+ARG EXPECTED_VL_MODEL_SHA256
+LABEL org.opencontainers.image.revision="${SOURCE_REVISION}"
+LABEL org.opencontainers.image.licenses="MIT AND Apache-2.0 AND BSD-3-Clause"
+COPY scripts/patch-vision-text-fastpath.py /opt/dsv4-vision/patch-vision-text-fastpath.py
+RUN python3 /opt/dsv4-vision/patch-vision-text-fastpath.py \
+      --expected-sha256 "${EXPECTED_VL_MODEL_SHA256}" && \
+    python3 -m py_compile /usr/local/lib/python3.12/dist-packages/vllm/models/deepseek_v4/nvidia/vl_model.py
+COPY LICENSE NOTICE CREDITS.md /usr/share/licenses/dspark-vllm-gx10/
+COPY LICENSES/ /usr/share/licenses/dspark-vllm-gx10/

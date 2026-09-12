@@ -1,0 +1,24 @@
+{
+  "base_image": "eugr/spark-vllm-b12x@sha256:693a1d778e998ccf9d9268d70f5af0f1f397e4a8c0d2ce6e54bb75e22bd1b36b",
+  "base_image_id": "sha256:6d01fec064f7443a0d82360f918f6774212d4701f6bd08a2d338e10dafb696a2",
+  "build_date": "2026-09-10T10:15:58Z",
+  "vllm": {
+    "repository": "https://github.com/local-inference-lab/vllm",
+    "commit": "4b276a363c94bbf7eb99b1e32c5ee2a88d839809",
+    "version": "0.1.dev20610+g4b276a363.d20260910"
+  },
+  "flashinfer": {
+    "commit": "556679b27fa4957c31f9b466d6ac5ed3b3476061",
+    "version": "0.7.0"
+  },
+  "b12x": {
+    "repository": "https://github.com/lukealonso/b12x.git",
+    "ref_recorded_by_image": "master",
+    "version": "1.3.0"
+  },
+  "torch": "2.13.0+cu130",
+  "nvidia_cutlass_dsl": "4.7.0",
+  "vision_wrapper_sha256": "669e68340993771aeb04de0c0c204bd368747fa12cb0a5181974ed849ba35bdc",
+  "patched_vision_wrapper_sha256": "6071848139f9aeebb1e51846c90cf68d23a78d7fd6588e1c9fdcf37907f8dc2a",
+  "notes": "The image metadata records the B12X source ref as master but not its source commit. The immutable image digest and image ID are therefore the reproducibility boundary."
+}
