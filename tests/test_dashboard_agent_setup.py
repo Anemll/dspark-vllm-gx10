@@ -56,7 +56,8 @@ class DashboardAgentSetupTests(unittest.TestCase):
 
     def test_droid_card_uses_chat_completion_provider_and_output_cap(self):
         self.assertIn('provider: "generic-chat-completion-api"', INDEX)
-        self.assertIn('model: "claude-sonnet-4-5-20250929"', INDEX)
+        self.assertIn('model: "gemini-3-flash-preview"', INDEX)
+        self.assertNotIn('model: "claude-sonnet-4-5-20250929"', INDEX)
         self.assertNotIn("_comment: droidConfigurationNote", INDEX)
         self.assertIn("noImageSupport: false", INDEX)
         self.assertIn("maxContextLimit: agentContextWindow", INDEX)
@@ -77,10 +78,10 @@ class DashboardAgentSetupTests(unittest.TestCase):
         self.assertIn("Read tool", INDEX)
         self.assertIn("@/path/to/image.png", INDEX)
         self.assertIn("noImageSupport: false", INDEX)
-        self.assertIn("intentional local capability alias", INDEX)
+        self.assertIn("intentional local image-capability alias", INDEX)
         self.assertIn("extraArgs.model", INDEX)
-        self.assertIn("does not contact Claude", INDEX)
-        self.assertIn("must not be changed back", INDEX)
+        self.assertIn("does not contact Google", INDEX)
+        self.assertIn("Keep both fields as shown", INDEX)
         self.assertIn("restores Read-tool, paste, and drag-and-drop images", INDEX)
 
     def test_dashboard_does_not_embed_a_private_lan_address(self):

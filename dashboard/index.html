@@ -194,7 +194,7 @@
             <pre class="agent-code"><code id="droidSnippet">Waiting for model metadata…</code></pre>
           </article>
         </div>
-        <div class="agent-note agent-note-below">Edit the reachable LAN URL or served model name if needed, then copy the matching JSON into the configuration on the machine running your client. Output is capped at <span id="agentOutputLimit">32,768</span> tokens for this <span id="agentContextWindow">350,000</span>-token server context. In Pi, open <code>/model</code> with no arguments, wait for the list to refresh, and reselect this model after editing its configuration. Set <code>input: ["text", "image"]</code> and ensure <code>images.blockImages</code> is not enabled in global or project settings. Pi can read an image path with its Read tool; <code>@/path/to/image.png</code> is also supported. Droid 0.218.1 incorrectly strips tool-returned images when an unknown local model name is used, even with <code>noImageSupport: false</code>. In the Droid JSON, the top-level Claude <code>model</code> value is an intentional local capability alias only: it does not contact Claude and must not be changed back. <code>extraArgs.model</code> is the real model sent to vLLM. This restores Read-tool, paste, and drag-and-drop images while inference remains on DeepSeek V4 Flash Vision + DSpark.</div>
+        <div class="agent-note agent-note-below">Edit the reachable LAN URL or served model name if needed, then copy the matching JSON into the configuration on the machine running your client. Output is capped at <span id="agentOutputLimit">32,768</span> tokens for this <span id="agentContextWindow">350,000</span>-token server context. In Pi, open <code>/model</code> with no arguments, wait for the list to refresh, and reselect this model after editing its configuration. Set <code>input: ["text", "image"]</code> and ensure <code>images.blockImages</code> is not enabled in global or project settings. Pi can read an image path with its Read tool; <code>@/path/to/image.png</code> is also supported. Droid 0.218.1 incorrectly strips tool-returned images when an unknown local model name is used, even with <code>noImageSupport: false</code>. In the Droid JSON, the top-level Gemini <code>model</code> value is an intentional local image-capability alias only: it does not contact Google. <code>extraArgs.model</code> is the real DeepSeek model sent to vLLM. Keep both fields as shown. This restores Read-tool, paste, and drag-and-drop images while inference remains on DeepSeek V4 Flash Vision + DSpark.</div>
       </section>
 
       <section class="bottom-grid">
@@ -280,7 +280,7 @@
         };
         const droid = {
           customModels: [{
-            model: "claude-sonnet-4-5-20250929",
+            model: "gemini-3-flash-preview",
             displayName: "DeepSeek V4 Flash Vision · 2× Spark",
             baseUrl: apiBase,
             provider: "generic-chat-completion-api",
