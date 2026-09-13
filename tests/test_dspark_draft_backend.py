@@ -83,6 +83,9 @@ class LoaderHarness:
             "replace": replace, "get_model": get_model,
             "get_pp_group": lambda: SimpleNamespace(world_size=pp),
             "_should_share": lambda *args: share,
+            "get_target_lm_head": lambda target, language: getattr(
+                language, "lm_head", getattr(target, "lm_head", None)
+            ),
             "__builtins__": {**vars(builtins), "__import__": fake_import},
         }
         exec(compile(ast.Module(body=[*future, *funcs], type_ignores=[]),
