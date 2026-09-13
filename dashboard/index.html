@@ -178,7 +178,7 @@
       <section class="agent-panel">
         <div class="agent-head">
           <div><div class="section-kicker">Use this server</div><div class="agent-title">Add DSpark to Pi or Droid</div></div>
-          <div class="agent-note">Edit the reachable LAN URL or model name if needed, then copy the matching JSON into your client configuration. Output is capped at <span id="agentOutputLimit">32,768</span> tokens for this <span id="agentContextWindow">350,000</span>-token server context. Re-select the model or start a new session after updating the file. In Pi, attach an image as <code>@/path/to/image.png</code>; in Droid, paste it with Ctrl+V or drag it into the prompt.</div>
+          <div class="agent-note">Edit the reachable LAN URL or model name if needed, then copy the matching JSON into your client configuration. Output is capped at <span id="agentOutputLimit">32,768</span> tokens for this <span id="agentContextWindow">350,000</span>-token server context. Restart the client after updating its model file. For Pi, exit and run <code>pi -c</code> to resume the same conversation; <code>/reload</code> does not refresh model metadata. Attach an image as <code>@/path/to/image.png</code>. In Droid, paste it with Ctrl+V or drag it into the prompt.</div>
         </div>
         <div class="agent-controls">
           <div class="agent-field"><label for="agentBaseUrl">OpenAI-compatible API base</label><input id="agentBaseUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" /></div>

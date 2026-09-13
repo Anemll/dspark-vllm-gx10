@@ -64,7 +64,9 @@ class DashboardAgentSetupTests(unittest.TestCase):
     def test_agent_card_explains_model_reload_and_image_attachment(self):
         self.assertIn('id="agentContextWindow">350,000</span>', INDEX)
         self.assertIn('id="agentOutputLimit">32,768</span>', INDEX)
-        self.assertIn("Re-select the model or start a new session", INDEX)
+        self.assertIn("pi -c", INDEX)
+        self.assertIn("/reload", INDEX)
+        self.assertIn("does not refresh model metadata", INDEX)
         self.assertIn("@/path/to/image.png", INDEX)
         self.assertIn("paste it with Ctrl+V", INDEX)
 
