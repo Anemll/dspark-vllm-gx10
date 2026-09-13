@@ -56,9 +56,11 @@ class DashboardAgentSetupTests(unittest.TestCase):
 
     def test_droid_card_uses_chat_completion_provider_and_output_cap(self):
         self.assertIn('provider: "generic-chat-completion-api"', INDEX)
+        self.assertIn('model: "claude-sonnet-4-5-20250929"', INDEX)
         self.assertIn("noImageSupport: false", INDEX)
         self.assertIn("maxContextLimit: agentContextWindow", INDEX)
         self.assertIn('maxOutputTokens: agentMaxOutputTokens', INDEX)
+        self.assertIn("extraArgs: { model }", INDEX)
         self.assertIn("~/.factory/settings.json", INDEX)
 
     def test_agent_card_explains_model_reload_and_image_attachment(self):
@@ -72,9 +74,9 @@ class DashboardAgentSetupTests(unittest.TestCase):
         self.assertIn("Read tool", INDEX)
         self.assertIn("@/path/to/image.png", INDEX)
         self.assertIn("noImageSupport: false", INDEX)
-        self.assertIn("attach the image directly with Ctrl+V", INDEX)
-        self.assertIn("Typing only a local image path", INDEX)
-        self.assertIn("text-only omission before vLLM receives it", INDEX)
+        self.assertIn("vision-capable capability alias", INDEX)
+        self.assertIn("extraArgs.model", INDEX)
+        self.assertIn("restores Read-tool, paste, and drag-and-drop images", INDEX)
 
     def test_dashboard_does_not_embed_a_private_lan_address(self):
         self.assertNotRegex(INDEX, r"192\.168\.\d+\.\d+")

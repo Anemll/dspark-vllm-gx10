@@ -178,7 +178,7 @@
       <section class="agent-panel">
         <div class="agent-head">
           <div><div class="section-kicker">Use this server</div><div class="agent-title">Add DSpark to Pi or Droid</div></div>
-          <div class="agent-note">Edit the reachable LAN URL or model name if needed, then copy the matching JSON into the configuration on the machine running your client. Output is capped at <span id="agentOutputLimit">32,768</span> tokens for this <span id="agentContextWindow">350,000</span>-token server context. In Pi, open <code>/model</code> with no arguments, wait for the list to refresh, and reselect this model after editing its configuration. Set <code>input: ["text", "image"]</code> and ensure <code>images.blockImages</code> is not enabled in global or project settings. Pi can read an image path with its Read tool; <code>@/path/to/image.png</code> is also supported. For Droid, keep <code>noImageSupport: false</code> and attach the image directly with Ctrl+V or drag-and-drop. Typing only a local image path makes Droid call its Read tool; in the tested custom-model path, Droid replaces that tool image with a text-only omission before vLLM receives it.</div>
+          <div class="agent-note">Edit the reachable LAN URL or served model name if needed, then copy the matching JSON into the configuration on the machine running your client. Output is capped at <span id="agentOutputLimit">32,768</span> tokens for this <span id="agentContextWindow">350,000</span>-token server context. In Pi, open <code>/model</code> with no arguments, wait for the list to refresh, and reselect this model after editing its configuration. Set <code>input: ["text", "image"]</code> and ensure <code>images.blockImages</code> is not enabled in global or project settings. Pi can read an image path with its Read tool; <code>@/path/to/image.png</code> is also supported. Droid 0.218.1 incorrectly strips tool-returned images when an unknown local model name is used, even with <code>noImageSupport: false</code>. The generated Droid JSON uses a vision-capable capability alias and sends the real served model through <code>extraArgs.model</code>; keep both fields as generated. This restores Read-tool, paste, and drag-and-drop images without changing the vLLM model.</div>
         </div>
         <div class="agent-controls">
           <div class="agent-field"><label for="agentBaseUrl">OpenAI-compatible API base</label><input id="agentBaseUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" /></div>
@@ -279,13 +279,14 @@
         };
         const droid = {
           customModels: [{
-            model,
+            model: "claude-sonnet-4-5-20250929",
             displayName: "DeepSeek V4 Flash Vision · 2× Spark",
             baseUrl: apiBase,
             provider: "generic-chat-completion-api",
             noImageSupport: false,
             maxContextLimit: agentContextWindow,
-            maxOutputTokens: agentMaxOutputTokens
+            maxOutputTokens: agentMaxOutputTokens,
+            extraArgs: { model }
           }]
         };
         $("piSnippet").textContent = JSON.stringify(pi, null, 2);
