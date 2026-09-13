@@ -123,6 +123,9 @@ services:
       TARGET_LINEAR_BACKEND: "${TARGET_LINEAR_BACKEND:-}"
       DSPARK_ATTENTION_BACKEND: "${DSPARK_ATTENTION_BACKEND:-}"
       KV_CACHE_DTYPE: "${KV_CACHE_DTYPE:-nvfp4_ds_mla}"
+      # Optional exact KV-cache budget. Empty preserves vLLM's normal
+      # gpu-memory-utilization sizing path.
+      KV_CACHE_MEMORY_BYTES: "${KV_CACHE_MEMORY_BYTES:-}"
       LOAD_FORMAT: "${LOAD_FORMAT:-}"
       COMPILATION_CONFIG: "${COMPILATION_CONFIG:-}"
 
@@ -135,6 +138,14 @@ services:
         export CUDA_PATH="$${CUDA_PATH:-$${CUDA_HOME}}";
         export CUDAToolkit_ROOT="$${CUDAToolkit_ROOT:-$${CUDA_HOME}}";
         export LD_LIBRARY_PATH="/usr/local/cuda/lib64:$${LD_LIBRARY_PATH:-}";
+        KV_CACHE_ARGS=();
+        if [ -n "$${KV_CACHE_MEMORY_BYTES:-}" ]; then
+          if [[ ! "$${KV_CACHE_MEMORY_BYTES}" =~ ^[1-9][0-9]*$$ ]]; then
+            printf 'Invalid KV_CACHE_MEMORY_BYTES=%q; expected a positive integer\n' "$${KV_CACHE_MEMORY_BYTES}" >&2;
+            exit 64;
+          fi;
+          KV_CACHE_ARGS=(--kv-cache-memory-bytes "$${KV_CACHE_MEMORY_BYTES}");
+        fi;
         SPECULATIVE_CONFIG="{\"method\":\"dspark\",\"num_speculative_tokens\":${MTP_NUM_TOKENS:-3},\"draft_sample_method\":\"probabilistic\"}";
         if [ -n "$${DSPARK_MOE_BACKEND:-}" ]; then
           SPECULATIVE_CONFIG=$$(python3 -c 'import json, os, sys; config = json.loads(sys.argv[1]); config["moe_backend"] = os.environ["DSPARK_MOE_BACKEND"]; print(json.dumps(config))' "$${SPECULATIVE_CONFIG}") || exit $$?;
@@ -166,6 +177,7 @@ services:
         --max-num-batched-tokens ${MAX_NUM_BATCHED_TOKENS:-8192}
         --max-cudagraph-capture-size $$(( ${MAX_NUM_SEQS:-6} * (${MTP_NUM_TOKENS:-3} + 1) ))
         --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION:-0.80}
+        "$${KV_CACHE_ARGS[@]}"
         --enable-prefix-caching
         --async-scheduling
         --enable-chunked-prefill

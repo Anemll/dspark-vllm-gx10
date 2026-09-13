@@ -9,12 +9,21 @@ gates also pass. The [image evidence](vision-image-validation.md) preserves
 earlier JSON-type/presentation failures and reports separate, partial vision
 timing rather than rewriting those failures.
 
-The candidate is **not accepted as a replacement for the text service**.
-An earlier matched 0731 test failed text non-regression; later changes have
-not passed a new matched text gate. Extended stability and the complete visual
-timing matrix also remain open. The validated text image is the rollback;
-see the [loading-memory diagnosis](vision-loading-memory.md) for startup
-constraints. Image correctness does not satisfy the >80 TPS text target.
+## Accepted serving profile (2026-09-13)
+
+The operator-selected winner now serves the complete official
+`deepseek-ai/DeepSeek-V4-Flash-Vision-Exp` checkpoint on the newer B12X vision
+runtime. Its exact checkpoint revision, immutable local image ID, serving
+limits, backends and canary results are pinned in
+[`config/vision-winner.lock.json`](../config/vision-winner.lock.json), and its
+publication attribution is in the
+[`vision-winner-model-card`](vision-winner-model-card.md).
+
+This selection does not retroactively accept the older `f4596d54e122`
+candidate measured below. That experiment used a different serving image and
+remains useful historical evidence. The winner is neither the rejected
+NVIDIA-0731/vision tensor transplant nor the rejected community Vision-Exp
+NVFP4 conversion.
 
 ## Text regression result (2026-09-05)
 

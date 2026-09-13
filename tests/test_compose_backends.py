@@ -85,6 +85,14 @@ class ComposeBackendTests(unittest.TestCase):
         self.assertIn('--moe-backend "$${TARGET_MOE_BACKEND}"', COMPOSE)
         self.assertEqual(COMPOSE.count('--moe-backend '), 1)
 
+    def test_optional_fixed_kv_cache_budget_is_validated_and_quoted(self):
+        self.assertIn('KV_CACHE_MEMORY_BYTES: "${KV_CACHE_MEMORY_BYTES:-}"',
+                      COMPOSE)
+        self.assertIn('KV_CACHE_ARGS=(--kv-cache-memory-bytes '
+                      '"$${KV_CACHE_MEMORY_BYTES}")', COMPOSE)
+        self.assertIn('"$${KV_CACHE_ARGS[@]}"', COMPOSE)
+        self.assertNotIn('--limit-mm-per-prompt', COMPOSE)
+
     def test_two_node_nccl_small_collective_defaults(self):
         self.assertIn('NCCL_PROTO: "${NCCL_PROTO:-Simple}"', COMPOSE)
         self.assertIn('NCCL_MIN_NCHANNELS: "${NCCL_MIN_NCHANNELS:-2}"',
