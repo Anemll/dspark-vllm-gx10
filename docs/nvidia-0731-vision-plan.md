@@ -1,7 +1,8 @@
 # Plan: NVIDIA 0731 NVFP4 + original DSpark + official Vision-Exp modules
 
-Date: 2026-09-13. Status: planning only; no candidate assembled or deployed by
-this plan. The existing Vision-Exp deployment remains the recovery target.
+Date: 2026-09-13. Status: executed and rejected at the first vision-correctness
+gate. The accepted Vision-Exp deployment was restored. See the
+[execution report](../benchmarks/results/nvidia-0731-vision-transplant-20260913.md).
 
 ## Objective and checkpoint identity
 
