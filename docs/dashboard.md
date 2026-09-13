@@ -21,8 +21,8 @@ export DASHBOARD_PORT=11001
 export VLLM_METRICS_URL=http://127.0.0.1:8888/metrics
 export DASHBOARD_PUBLIC_API_BASE_URL=http://HEAD_HOST:8888/v1
 export DASHBOARD_AGENT_MODEL=deepseek-v4-flash-vision-exp-dspark
-export DASHBOARD_AGENT_CONTEXT_WINDOW=16384
-export DASHBOARD_AGENT_MAX_OUTPUT_TOKENS=4096
+export DASHBOARD_AGENT_CONTEXT_WINDOW=350000
+export DASHBOARD_AGENT_MAX_OUTPUT_TOKENS=32768
 export DASHBOARD_HEAD_LABEL=SPARK-head
 export DASHBOARD_WORKER_LABEL=SPARK-worker
 export DASHBOARD_WORKER_SSH=user@10.200.0.2
@@ -37,10 +37,10 @@ the dashboard and uses the model reported by vLLM metrics. Set
 (for example, a DNS name or reverse proxy), and set `DASHBOARD_AGENT_MODEL`
 to prefer a compatibility alias. The fields remain editable in the browser;
 no API key is displayed or stored. Keep `DASHBOARD_AGENT_CONTEXT_WINDOW`
-equal to the server's `--max-model-len`. The smaller
-`DASHBOARD_AGENT_MAX_OUTPUT_TOKENS` becomes the client request ceiling, which
-prevents a client with a 32K default from requesting 32K output from a 16K
-server.
+equal to the server's `--max-model-len` (350K for the standard deployment).
+`DASHBOARD_AGENT_MAX_OUTPUT_TOKENS` is a separate per-response generation
+ceiling. The client must still ensure that input plus requested output fits
+inside the server context window.
 
 To start it automatically at boot on a systemd-based Spark/GX10 host:
 

@@ -32,10 +32,10 @@ def isolated_setup(**overrides):
 
 
 class DashboardAgentSetupTests(unittest.TestCase):
-    def test_server_publishes_restored_64k_client_limits(self):
+    def test_server_publishes_350k_context_and_separate_output_limit(self):
         setup = isolated_setup()
         self.assertEqual(setup["apiBaseUrl"], "http://spark.test:8888/v1")
-        self.assertEqual(setup["contextWindow"], 65536)
+        self.assertEqual(setup["contextWindow"], 350000)
         self.assertEqual(setup["maxOutputTokens"], 32768)
         self.assertLess(setup["maxOutputTokens"], setup["contextWindow"])
 
@@ -56,8 +56,17 @@ class DashboardAgentSetupTests(unittest.TestCase):
 
     def test_droid_card_uses_chat_completion_provider_and_output_cap(self):
         self.assertIn('provider: "generic-chat-completion-api"', INDEX)
+        self.assertIn("noImageSupport: false", INDEX)
+        self.assertIn("maxContextLimit: agentContextWindow", INDEX)
         self.assertIn('maxOutputTokens: agentMaxOutputTokens', INDEX)
         self.assertIn("~/.factory/settings.json", INDEX)
+
+    def test_agent_card_explains_model_reload_and_image_attachment(self):
+        self.assertIn('id="agentContextWindow">350,000</span>', INDEX)
+        self.assertIn('id="agentOutputLimit">32,768</span>', INDEX)
+        self.assertIn("Re-select the model or start a new session", INDEX)
+        self.assertIn("@/path/to/image.png", INDEX)
+        self.assertIn("paste it with Ctrl+V", INDEX)
 
     def test_dashboard_does_not_embed_a_private_lan_address(self):
         self.assertNotRegex(INDEX, r"192\.168\.\d+\.\d+")
