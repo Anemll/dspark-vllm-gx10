@@ -74,8 +74,10 @@ class DashboardAgentSetupTests(unittest.TestCase):
         self.assertIn("Read tool", INDEX)
         self.assertIn("@/path/to/image.png", INDEX)
         self.assertIn("noImageSupport: false", INDEX)
-        self.assertIn("vision-capable capability alias", INDEX)
+        self.assertIn("intentional local capability alias", INDEX)
         self.assertIn("extraArgs.model", INDEX)
+        self.assertIn("does not contact Claude", INDEX)
+        self.assertIn("must not be changed back", INDEX)
         self.assertIn("restores Read-tool, paste, and drag-and-drop images", INDEX)
 
     def test_dashboard_does_not_embed_a_private_lan_address(self):
