@@ -66,6 +66,8 @@ class DashboardAgentSetupTests(unittest.TestCase):
         self.assertIn("~/.factory/settings.json", INDEX)
 
     def test_agent_card_explains_model_reload_and_image_attachment(self):
+        note_index = INDEX.index('<div class="agent-note agent-note-below">')
+        self.assertGreater(note_index, INDEX.index('id="droidSnippet"'))
         self.assertIn('id="agentContextWindow">350,000</span>', INDEX)
         self.assertIn('id="agentOutputLimit">32,768</span>', INDEX)
         self.assertIn("machine running your client", INDEX)
