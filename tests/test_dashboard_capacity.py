@@ -41,6 +41,14 @@ class DashboardCapacityTests(unittest.TestCase):
         self.assertIn('data.running === 1 ? "1 active request"', INDEX)
         self.assertIn('`${integer(data.running)} active requests`', INDEX)
 
+    def test_hero_shows_prefill_and_decode_phase(self):
+        self.assertIn('id="activityState"', INDEX)
+        self.assertIn('phase = "PREFILLING"', INDEX)
+        self.assertIn('phase = "DECODING"', INDEX)
+        self.assertIn('phase = "PREFILL + DECODE"', INDEX)
+        self.assertIn('requestsActive && !decodeActive', INDEX)
+        self.assertIn("Prefilling prompt context", INDEX)
+
     def test_prefill_histogram_sums_are_collected(self):
         metrics = parse_prometheus(
             "\n".join(
