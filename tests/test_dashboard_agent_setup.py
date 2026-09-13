@@ -32,11 +32,11 @@ def isolated_setup(**overrides):
 
 
 class DashboardAgentSetupTests(unittest.TestCase):
-    def test_server_publishes_safe_16k_client_limits(self):
+    def test_server_publishes_restored_64k_client_limits(self):
         setup = isolated_setup()
         self.assertEqual(setup["apiBaseUrl"], "http://spark.test:8888/v1")
-        self.assertEqual(setup["contextWindow"], 16384)
-        self.assertEqual(setup["maxOutputTokens"], 4096)
+        self.assertEqual(setup["contextWindow"], 65536)
+        self.assertEqual(setup["maxOutputTokens"], 32768)
         self.assertLess(setup["maxOutputTokens"], setup["contextWindow"])
 
     def test_output_limit_never_exceeds_context_window(self):

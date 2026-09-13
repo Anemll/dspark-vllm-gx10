@@ -226,8 +226,8 @@
       const oneDecimal = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
       let latest = null;
       let agentSetupInitialized = false;
-      let agentContextWindow = 16384;
-      let agentMaxOutputTokens = 4096;
+      let agentContextWindow = 65536;
+      let agentMaxOutputTokens = 32768;
 
       const value = (number, suffix = "", fallback = "—") => number == null || !Number.isFinite(number) ? fallback : `${oneDecimal.format(number)}${suffix}`;
       const integer = (number) => number == null || !Number.isFinite(number) ? "—" : formatter.format(number);
@@ -295,8 +295,8 @@
         const setup = data.agentSetup || {};
         const model = setup.model || data.model;
         if (!model || model === "vLLM") return;
-        agentContextWindow = Math.max(1, Number(setup.contextWindow) || 16384);
-        agentMaxOutputTokens = Math.min(agentContextWindow, Math.max(1, Number(setup.maxOutputTokens) || 4096));
+        agentContextWindow = Math.max(1, Number(setup.contextWindow) || 65536);
+        agentMaxOutputTokens = Math.min(agentContextWindow, Math.max(1, Number(setup.maxOutputTokens) || 32768));
         $("agentContextWindow").textContent = formatter.format(agentContextWindow);
         $("agentOutputLimit").textContent = formatter.format(agentMaxOutputTokens);
         $("agentBaseUrl").value = setup.apiBaseUrl || browserApiBase();
