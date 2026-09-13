@@ -93,13 +93,57 @@ class HybridAssemblyTests(unittest.TestCase):
         vision_index = {"metadata": {"total_size": sum(map(len, additions.values()))}, "weight_map": vision_map}
         (nvidia / "model.safetensors.index.json").write_text(json.dumps(nvidia_index))
         (vision / "model.safetensors.index.json").write_text(json.dumps(vision_index))
-        (nvidia / "tokenizer.json").write_text("nvidia-tokenizer")
+        tokenizer_common = {
+            "version": "1.0",
+            "model": {"type": "BPE", "vocab": {"hello": 0}},
+        }
+        nvidia_tokenizer = {
+            **tokenizer_common,
+            "added_tokens": [
+                {
+                    "id": MODULE.IMAGE_PLACEHOLDER_ID,
+                    "content": MODULE.NVIDIA_IMAGE_PLACEHOLDER,
+                    "normalized": False,
+                    "special": False,
+                },
+                {
+                    "id": 128799,
+                    "content": "<reserved-nvidia>",
+                    "normalized": False,
+                    "special": True,
+                },
+            ],
+        }
+        vision_tokenizer = {
+            **tokenizer_common,
+            "added_tokens": [
+                {
+                    "id": MODULE.IMAGE_PLACEHOLDER_ID,
+                    "content": MODULE.VISION_IMAGE_PLACEHOLDER,
+                    "normalized": False,
+                    "special": False,
+                },
+                {
+                    "id": 128799,
+                    "content": "<donor-system-token>",
+                    "normalized": True,
+                    "special": False,
+                },
+            ],
+        }
+        (nvidia / "tokenizer.json").write_text(json.dumps(nvidia_tokenizer))
+        (vision / "tokenizer.json").write_text(json.dumps(vision_tokenizer))
+        (nvidia / "tokenizer_config.json").write_text("{}")
+        (vision / "tokenizer_config.json").write_text("{}")
         names = sorted(additions)
         pins = MODULE.Pins(
             nvidia_config=sha(nvidia / "config.json"),
             nvidia_index=sha(nvidia / "model.safetensors.index.json"),
             vision_config=sha(vision / "config.json"),
             vision_index=sha(vision / "model.safetensors.index.json"),
+            nvidia_tokenizer=sha(nvidia / "tokenizer.json"),
+            vision_tokenizer=sha(vision / "tokenizer.json"),
+            tokenizer_config=sha(nvidia / "tokenizer_config.json"),
             tensor_count=len(names),
             tensor_names=MODULE.tensor_names_digest(names),
             payload_bytes=sum(map(len, additions.values())),
@@ -129,7 +173,18 @@ class HybridAssemblyTests(unittest.TestCase):
             self.assertEqual(config["rms_norm_eps"], 1e-6)
             self.assertEqual(config["num_nextn_predict_layers"], 1)
             self.assertEqual(config["vision_n_layers"], 8)
-            self.assertEqual((output / "tokenizer.json").read_text(), "nvidia-tokenizer")
+            tokenizer = json.loads((output / "tokenizer.json").read_text())
+            self.assertEqual(tokenizer["model"], {"type": "BPE", "vocab": {"hello": 0}})
+            self.assertEqual(
+                tokenizer["added_tokens"][0]["content"],
+                MODULE.VISION_IMAGE_PLACEHOLDER,
+            )
+            self.assertEqual(
+                tokenizer["added_tokens"][1]["content"], "<reserved-nvidia>"
+            )
+            self.assertEqual(
+                result["image_placeholder_token_id"], MODULE.IMAGE_PLACEHOLDER_ID
+            )
 
     def test_existing_output_and_manifest_drift_fail_closed(self):
         with tempfile.TemporaryDirectory(dir=ROOT) as temporary:

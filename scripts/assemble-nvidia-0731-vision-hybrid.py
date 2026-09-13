@@ -29,11 +29,17 @@ NVIDIA_CONFIG_SHA256 = "bb0d2286d6761439e41d3cef31d16489411b816ed8688922f59730bb
 NVIDIA_INDEX_SHA256 = "5d2ad3076e04081d6c0728cb4b004dc832850ec5ae732f3adb06cf87c4b437a5"
 VISION_CONFIG_SHA256 = "6cd841bdd6702f5e2ac34671bc78047ed80817102465525ae2a41c502abbcd75"
 VISION_INDEX_SHA256 = "507977e3d3818865264e68c0fdab139aa7f3929d0d0cf693dacc47428da56395"
+NVIDIA_TOKENIZER_SHA256 = "8f9f37ca37fdc4f5fd36d5cf4d3b0e8392edb4e894fd10cc0d70b4957c8633cf"
+VISION_TOKENIZER_SHA256 = "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b"
+TOKENIZER_CONFIG_SHA256 = "6ac8c8dc065ed118161d02dd532749ae3f52c243deac27872134fae2f50d8547"
 VISION_TENSOR_COUNT = 316
 VISION_TENSOR_NAMES_SHA256 = "7a941d04caeb96f06925d08d815a081596142e64dfbca7bd98c0cb78cc3663b7"
 VISION_PAYLOAD_BYTES = 932_836_352
 DONOR_SHARD = "model-vision-donor.safetensors"
 MANIFEST_FILE = "HYBRID_MANIFEST.json"
+IMAGE_PLACEHOLDER_ID = 129264
+NVIDIA_IMAGE_PLACEHOLDER = "<｜image2｜>"
+VISION_IMAGE_PLACEHOLDER = "<｜deepseek_image｜>"
 
 VISION_CONFIG_FIELDS = (
     "vision_dim",
@@ -52,7 +58,6 @@ SUPPORT_FILES = (
     "LICENSE",
     "generation_config.json",
     "hf_quant_config.json",
-    "tokenizer.json",
     "tokenizer_config.json",
 )
 
@@ -63,6 +68,9 @@ class Pins:
     nvidia_index: str = NVIDIA_INDEX_SHA256
     vision_config: str = VISION_CONFIG_SHA256
     vision_index: str = VISION_INDEX_SHA256
+    nvidia_tokenizer: str = NVIDIA_TOKENIZER_SHA256
+    vision_tokenizer: str = VISION_TOKENIZER_SHA256
+    tokenizer_config: str = TOKENIZER_CONFIG_SHA256
     tensor_count: int = VISION_TENSOR_COUNT
     tensor_names: str = VISION_TENSOR_NAMES_SHA256
     payload_bytes: int = VISION_PAYLOAD_BYTES
@@ -87,6 +95,59 @@ def require_sha256(path: Path, expected: str) -> None:
     actual = sha256_file(path)
     if actual != expected:
         raise ValueError(f"SHA-256 mismatch for {path.name}: {actual} != {expected}")
+
+
+def build_tokenizer(nvidia_path: Path, vision_path: Path, destination: Path) -> str:
+    """Add only the donor image placeholder while preserving NVIDIA text IDs."""
+    nvidia = load_json(nvidia_path)
+    vision = load_json(vision_path)
+    nvidia_added = nvidia.get("added_tokens")
+    vision_added = vision.get("added_tokens")
+    if not isinstance(nvidia_added, list) or not isinstance(vision_added, list):
+        raise ValueError("tokenizer JSON must contain added_tokens lists")
+
+    # The underlying BPE model and every non-added-token tokenizer component
+    # must match. The pinned checkpoints differ only in reserved-token labels.
+    nvidia_core = dict(nvidia)
+    vision_core = dict(vision)
+    del nvidia_core["added_tokens"]
+    del vision_core["added_tokens"]
+    if nvidia_core != vision_core:
+        raise ValueError("NVIDIA and vision tokenizer cores differ")
+
+    def token_at(items: list, token_id: int) -> dict:
+        matches = [item for item in items if isinstance(item, dict) and item.get("id") == token_id]
+        if len(matches) != 1:
+            raise ValueError(f"expected one tokenizer entry for id {token_id}")
+        return matches[0]
+
+    source_item = token_at(nvidia_added, IMAGE_PLACEHOLDER_ID)
+    donor_item = token_at(vision_added, IMAGE_PLACEHOLDER_ID)
+    if source_item.get("content") != NVIDIA_IMAGE_PLACEHOLDER:
+        raise ValueError("unexpected NVIDIA image placeholder token")
+    if donor_item.get("content") != VISION_IMAGE_PLACEHOLDER:
+        raise ValueError("unexpected vision image placeholder token")
+    if {**source_item, "content": VISION_IMAGE_PLACEHOLDER} != donor_item:
+        raise ValueError("image placeholder metadata differs beyond its label")
+
+    # Preserve every NVIDIA tokenizer entry except for this one reserved label.
+    # This avoids importing the donor's unrelated System/table token remaps into
+    # the NVIDIA language checkpoint.
+    if any(
+        isinstance(item, dict) and item.get("content") == VISION_IMAGE_PLACEHOLDER
+        for item in nvidia_added
+    ):
+        raise ValueError("vision image placeholder already exists in NVIDIA tokenizer")
+    source_item["content"] = VISION_IMAGE_PLACEHOLDER
+    destination.write_text(
+        json.dumps(nvidia, separators=(",", ":"), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    merged = load_json(destination)
+    merged_item = token_at(merged["added_tokens"], IMAGE_PLACEHOLDER_ID)
+    if merged_item != donor_item:
+        raise ValueError("written image placeholder does not match donor metadata")
+    return sha256_file(destination)
 
 
 def is_vision_tensor(name: str) -> bool:
@@ -220,6 +281,10 @@ def validate_sources(
         (nvidia_dir / "model.safetensors.index.json", pins.nvidia_index),
         (vision_dir / "config.json", pins.vision_config),
         (vision_dir / "model.safetensors.index.json", pins.vision_index),
+        (nvidia_dir / "tokenizer.json", pins.nvidia_tokenizer),
+        (vision_dir / "tokenizer.json", pins.vision_tokenizer),
+        (nvidia_dir / "tokenizer_config.json", pins.tokenizer_config),
+        (vision_dir / "tokenizer_config.json", pins.tokenizer_config),
     ):
         require_sha256(path, expected)
 
@@ -349,6 +414,12 @@ def assemble(
             if source.is_file():
                 shutil.copy2(source, temporary / name)
 
+        tokenizer_sha256 = build_tokenizer(
+            nvidia_dir / "tokenizer.json",
+            vision_dir / "tokenizer.json",
+            temporary / "tokenizer.json",
+        )
+
         donor_sha256, written_payload = write_donor_shard(
             vision_dir, temporary / DONOR_SHARD, entries
         )
@@ -380,6 +451,14 @@ def assemble(
                     temporary / "model.safetensors.index.json"
                 ),
                 "total_tensor_payload_bytes": total_size + payload_bytes,
+                "tokenizer_sha256": tokenizer_sha256,
+                "image_placeholder_token_id": IMAGE_PLACEHOLDER_ID,
+                "tokenizer_changes": {
+                    str(IMAGE_PLACEHOLDER_ID): {
+                        "from": NVIDIA_IMAGE_PLACEHOLDER,
+                        "to": VISION_IMAGE_PLACEHOLDER,
+                    }
+                },
             }
         )
         (temporary / MANIFEST_FILE).write_text(
