@@ -57,8 +57,7 @@ class DashboardAgentSetupTests(unittest.TestCase):
     def test_droid_card_uses_chat_completion_provider_and_output_cap(self):
         self.assertIn('provider: "generic-chat-completion-api"', INDEX)
         self.assertIn('model: "claude-sonnet-4-5-20250929"', INDEX)
-        self.assertIn("_comment: droidConfigurationNote", INDEX)
-        self.assertIn("The top-level Claude model value is an intentional local capability alias only", INDEX)
+        self.assertNotIn("_comment: droidConfigurationNote", INDEX)
         self.assertIn("noImageSupport: false", INDEX)
         self.assertIn("maxContextLimit: agentContextWindow", INDEX)
         self.assertIn('maxOutputTokens: agentMaxOutputTokens', INDEX)
