@@ -38,6 +38,7 @@ POLL_CACHE_SECONDS = float(os.environ.get("DASHBOARD_POLL_CACHE_SECONDS", "0.45"
 HARDWARE_CACHE_SECONDS = float(os.environ.get("DASHBOARD_HARDWARE_CACHE_SECONDS", "2"))
 LOAD_CACHE_SECONDS = 2.0
 VERSION_CACHE_SECONDS = 10.0
+CAPACITY_CACHE_SECONDS = 5.0
 HEAD_NODE_LABEL = os.environ.get("DASHBOARD_HEAD_LABEL", "SPARK-head")
 WORKER_NODE_LABEL = os.environ.get("DASHBOARD_WORKER_LABEL", "SPARK-worker")
 WORKER_SSH = os.environ.get("DASHBOARD_WORKER_SSH", "")
@@ -64,6 +65,12 @@ def agent_setup(model: str) -> dict[str, Any]:
         "maxOutputTokens": AGENT_MAX_OUTPUT_TOKENS,
     }
 
+
+def parse_max_num_seqs(command: str) -> int | None:
+    """Read vLLM's configured active-sequence limit from its launch command."""
+    match = re.search(r"(?:^|\s)--max-num-seqs(?:=|\s+)(\d+)(?=\s|$)", command)
+    return int(match.group(1)) if match else None
+
 METRIC_LINE = re.compile(
     r"^([A-Za-z_:][A-Za-z0-9_:]*)(?:\{([^}]*)\})?\s+"
     r"([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|NaN|[+-]?Inf)$"
@@ -83,6 +90,10 @@ COUNTER_METRICS = {
     "vllm:inter_token_latency_seconds_count": "itl_count",
     "vllm:e2e_request_latency_seconds_sum": "e2e_sum",
     "vllm:e2e_request_latency_seconds_count": "e2e_count",
+    "vllm:request_prefill_time_seconds_sum": "prefill_time_sum",
+    "vllm:request_prefill_time_seconds_count": "prefill_time_count",
+    "vllm:request_prefill_kv_computed_tokens_sum": "prefill_kv_tokens_sum",
+    "vllm:request_prefill_kv_computed_tokens_count": "prefill_kv_tokens_count",
 }
 
 GAUGE_METRICS = {
@@ -106,6 +117,10 @@ def _empty_metrics() -> dict[str, Any]:
         "itl_count": 0.0,
         "e2e_sum": 0.0,
         "e2e_count": 0.0,
+        "prefill_time_sum": 0.0,
+        "prefill_time_count": 0.0,
+        "prefill_kv_tokens_sum": 0.0,
+        "prefill_kv_tokens_count": 0.0,
         "running": 0.0,
         "waiting": 0.0,
         "waiting_capacity": 0.0,
@@ -365,6 +380,44 @@ class VersionSampler:
 
 VERSION_SAMPLER = VersionSampler()
 
+
+class CapacitySampler:
+    """Reads the live container's maximum simultaneous sequence setting."""
+
+    def __init__(self) -> None:
+        self._latest: int | None = None
+        self._at = 0.0
+        self._lock = threading.Lock()
+
+    def snapshot(self) -> int | None:
+        with self._lock:
+            now = time.monotonic()
+            if self._latest is not None and now - self._at < CAPACITY_CACHE_SECONDS:
+                return self._latest
+            try:
+                completed = subprocess.run(
+                    [
+                        "/usr/bin/docker",
+                        "inspect",
+                        "--format",
+                        "{{json .Config.Cmd}}",
+                        CONTAINER_NAME,
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+                command = " ".join(json.loads(completed.stdout))
+                self._latest = parse_max_num_seqs(command)
+                self._at = now
+            except (OSError, ValueError, TypeError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                pass
+            return self._latest
+
+
+CAPACITY_SAMPLER = CapacitySampler()
+
 class LoadSampler:
     """Reads vLLM startup state from each container's recent log lines."""
     _shards = re.compile(r"Loading safetensors checkpoint shards:\s*(\d+)% Completed \| (\d+)/(\d+)")
@@ -430,6 +483,7 @@ class MetricsSampler:
         self._previous: tuple[dict[str, Any], float] | None = None
         self._latest: dict[str, Any] | None = None
         self._last_fetch = 0.0
+        self._last_completed_prefill_tps: float | None = None
         self._history: deque[dict[str, Any]] = deque(maxlen=121)
 
     @staticmethod
@@ -477,6 +531,7 @@ class MetricsSampler:
                         "history": list(self._history),
                         "load": LOAD_SAMPLER.snapshot(api_ready=False),
                         "vllmVersion": VERSION_SAMPLER.snapshot(),
+                        "maxActiveRequests": CAPACITY_SAMPLER.snapshot(),
                         "agentSetup": agent_setup(str(unavailable.get("model", ""))),
                     }
                 )
@@ -487,6 +542,7 @@ class MetricsSampler:
             previous = self._previous
             generated_tps: float | None = None
             prefill_tps: float | None = None
+            completed_prefill_tps: float | None = None
             dspark_acceptance: float | None = None
             ttft_seconds: float | None = None
             itl_seconds: float | None = None
@@ -504,6 +560,14 @@ class MetricsSampler:
                     current["prompt_tokens"], old["prompt_tokens"], elapsed
                 )
                 counter_reset = counter_reset or reset
+                prefill_time_delta = current["prefill_time_sum"] - old["prefill_time_sum"]
+                prefill_tokens_delta = (
+                    current["prefill_kv_tokens_sum"] - old["prefill_kv_tokens_sum"]
+                )
+                if prefill_time_delta > 0 and prefill_tokens_delta >= 0:
+                    completed_prefill_tps = prefill_tokens_delta / prefill_time_delta
+                elif prefill_time_delta < 0 or prefill_tokens_delta < 0:
+                    counter_reset = True
                 accepted_delta = current["accepted_tokens"] - old["accepted_tokens"]
                 draft_delta = current["draft_tokens"] - old["draft_tokens"]
                 if accepted_delta >= 0 and draft_delta > 0:
@@ -520,11 +584,15 @@ class MetricsSampler:
 
             if counter_reset:
                 self._history.clear()
+                self._last_completed_prefill_tps = None
+            elif completed_prefill_tps is not None:
+                self._last_completed_prefill_tps = completed_prefill_tps
 
             point = {
                 "time": int(time.time() * 1000),
                 "generationTps": generated_tps,
                 "prefillTps": prefill_tps,
+                "completedPrefillTps": completed_prefill_tps,
                 "running": current["running"],
                 "waiting": current["waiting"],
                 "kvCachePct": current["kv_cache_pct"],
@@ -542,8 +610,10 @@ class MetricsSampler:
                 "model": current["model"],
                 "agentSetup": agent_setup(current["model"]),
                 "vllmVersion": VERSION_SAMPLER.snapshot(),
+                "maxActiveRequests": CAPACITY_SAMPLER.snapshot(),
                 "generationTps": generated_tps,
                 "prefillTps": prefill_tps,
+                "completedPrefillTps": self._last_completed_prefill_tps,
                 "dsparkAcceptancePct": dspark_acceptance,
                 "running": current["running"],
                 "waiting": current["waiting"],
