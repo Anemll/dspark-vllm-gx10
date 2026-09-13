@@ -36,6 +36,11 @@ class DashboardCapacityTests(unittest.TestCase):
         self.assertIn("FP8 DS-MLA cache utilization", INDEX)
         self.assertNotIn("NVFP4 DS MLA cache utilization", INDEX)
 
+    def test_aggregate_rate_shows_active_request_count(self):
+        self.assertIn('id="aggregateRequests"', INDEX)
+        self.assertIn('data.running === 1 ? "1 active request"', INDEX)
+        self.assertIn('`${integer(data.running)} active requests`', INDEX)
+
     def test_prefill_histogram_sums_are_collected(self):
         metrics = parse_prometheus(
             "\n".join(

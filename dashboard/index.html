@@ -51,9 +51,10 @@
       .hero { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; padding: 24px 26px; margin-bottom: 14px; overflow: hidden; position: relative; }
       .hero::after { content: ""; position: absolute; inset: auto -60px -90px auto; width: 260px; height: 260px; border-radius: 50%; background: rgba(68, 217, 230, 0.08); filter: blur(4px); }
       .hero-label, .metric-label, .section-kicker { color: var(--muted); font-size: 10px; letter-spacing: 0.13em; text-transform: uppercase; font-weight: 700; }
-      .big-rate { margin-top: 8px; display: flex; align-items: baseline; gap: 11px; }
+      .big-rate { margin-top: 8px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 11px; }
       .big-rate strong { color: var(--green); font-size: clamp(47px, 7.5vw, 91px); letter-spacing: -0.075em; line-height: .85; font-family: ui-sans-serif, system-ui, sans-serif; }
       .big-rate span { color: #a5c6d2; font-size: clamp(14px, 1.7vw, 20px); }
+      .big-rate .request-count { align-self: center; margin-left: 4px; padding: 6px 9px; border: 1px solid rgba(68, 217, 230, .28); border-radius: 999px; color: var(--cyan); background: rgba(68, 217, 230, .08); font-size: 11px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
       .hero-note { margin-top: 12px; color: var(--muted); font-size: 11px; }
       .hero-side { z-index: 1; text-align: right; min-width: 195px; }
       .hero-side b { display: block; color: var(--cyan); font-size: 22px; margin: 6px 0; }
@@ -137,7 +138,7 @@
       <section class="hero">
         <div>
           <div class="hero-label">Aggregate live generation rate</div>
-          <div class="big-rate"><strong id="generationTps">—</strong><span>tokens / second</span></div>
+          <div class="big-rate"><strong id="generationTps">—</strong><span>tokens / second</span><span class="request-count" id="aggregateRequests">— active requests</span></div>
           <div class="hero-note" id="heroNote">Waiting for the first two vLLM counter samples…</div>
         </div>
         <div class="hero-side">
@@ -347,6 +348,7 @@
         $("modelName").textContent = data.model || "vLLM";
         $("vllmVersion").textContent = data.vllmVersion || "unavailable";
         $("generationTps").textContent = value(rate, "", "—");
+        $("aggregateRequests").textContent = data.running === 1 ? "1 active request" : `${integer(data.running)} active requests`;
         $("perRequest").textContent = data.running > 0 && rate != null ? `${oneDecimal.format(rate / data.running)} t/s` : "—";
         $("requests").textContent = integer(data.running);
         $("waiting").textContent = integer(data.waiting);
