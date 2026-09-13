@@ -73,6 +73,30 @@ DeepSeek V4 path, but that earlier integration deserves explicit credit.
 
 ## Model and serving lineage
 
+### Accepted Vision-Exp checkpoint — DeepSeek AI
+
+The accepted vision profile loads the complete checkpoint published at
+[deepseek-ai/DeepSeek-V4-Flash-Vision-Exp](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-Vision-Exp),
+pinned to revision `6821d6ad3681a4b137b066b76094fa82ebd0a380`. The immediate
+source of its language model, vision tower and aligner, tokenizer, image
+routing tensors, and DSpark draft layers is that official release. Its model
+card declares the MIT license. This repository does not include or relicense
+those weights.
+
+DeepSeek states that the model incorporates visual modules and underwent
+continued training, but its published card and reference implementation do not
+identify a GLM, MoonViT, or other upstream donor for those modules. We
+therefore credit DeepSeek as the checkpoint publisher and leave earlier visual
+module lineage explicitly undisclosed rather than inferring it from
+architectural similarity.
+
+The accepted source checkpoint declares FP8 general quantization and source
+FP4/MXFP4 routed experts. It is distinct from the separately evaluated
+msuiche ModelOpt NVFP4/W4A4 conversion and from NVIDIA's text-only 0731 NVFP4
+checkpoint; neither candidate's weights are present in the accepted profile.
+See the [machine-readable winner lock](config/vision-winner.lock.json) and
+[upload-ready model card](docs/vision-winner-model-card.md).
+
 ### Keys / drowzeys
 
 The optional abliterated model was created and published by Keys / drowzeys:

@@ -1,12 +1,16 @@
 # DSpark vLLM for two DGX Spark / ASUS GX10 nodes
 
-This is a tested two-node GB10 port of the DeepSeek V4 Flash DSpark/NVFP4
-serving path to vLLM 0.25.1. It bridges vLLM's DeepSeek V4 runtime to
-FlashInfer's native SM120/SM121 sparse-MLA kernel, adds a b12x native-MXFP4 MoE
-backend, and packages reproducible deployment, a live dashboard, version
-switching, and benchmark evidence.
+This repository contains the released two-node GB10 DeepSeek V4 Flash
+DSpark/NVFP4-DS-MLA port and the newer experimental vision-serving work. The
+current branch's accepted vision profile serves the complete official
+DeepSeek-V4-Flash-Vision-Exp checkpoint in its source FP8/MXFP4 layout with an
+FP8 KV cache; it is not the rejected NVIDIA-style NVFP4/W4A4 vision candidate.
 
-## Validated configuration
+The integration bridges vLLM's DeepSeek V4 runtime to SM120/SM121 kernels,
+adds a b12x native-MXFP4 MoE backend, and packages reproducible deployment, a
+live dashboard, version switching, and benchmark evidence.
+
+## Released v0.1.1 baseline
 
 - 2 × NVIDIA DGX Spark or ASUS Ascent GX10 (GB10, SM121, ARM64)
 - dedicated high-speed fabric between nodes
@@ -16,6 +20,25 @@ switching, and benchmark evidence.
   `0.25.2.dev0+g752a3a504.d20260714`
 - FlashInfer pinned to `0472b9b3f2fba11b463f8526f390297d52a8aad7`
 - b12x pinned to `7dc6fb8fcc6446ea093537d1657df81985fa5f43`
+
+## Current accepted vision profile
+
+- checkpoint: [`deepseek-ai/DeepSeek-V4-Flash-Vision-Exp`](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-Vision-Exp), revision `6821d6ad3681a4b137b066b76094fa82ebd0a380`;
+- source checkpoint precision: FP8 general quantization plus MXFP4 routed
+  experts—not NVIDIA NVFP4/W4A4;
+- serving KV cache: FP8;
+- tensor parallelism: TP=2 on two GB10 nodes;
+- B12X target MoE, linear and attention backends;
+- DSpark probabilistic speculative decoding with five draft tokens;
+- vLLM runtime `0.1.dev20610+g4b276a363.d20260910`;
+- exact image, dependency and serving settings pinned in
+  [`config/vision-winner.lock.json`](config/vision-winner.lock.json).
+
+The model files are published by DeepSeek AI as one Vision-Exp checkpoint.
+DeepSeek's source card does not disclose a GLM, MoonViT, or other earlier donor
+for its visual modules, so this repository does not invent that attribution.
+See the [upload-ready model card](docs/vision-winner-model-card.md) for the
+precise provenance statement.
 
 ## What this port changes
 
@@ -284,7 +307,10 @@ runtime that restores vLLM's default allowance of 999 images per prompt; the
 350,000-token context window remains the natural request bound. Do not add an
 empty or zero image limit: zero disables image inputs.
 
-## Performance
+## Historical release-baseline performance
+
+The measurements in this section describe the earlier text-serving baseline,
+not the accepted Vision-Exp profile above.
 
 Benchmark model:
 
@@ -379,6 +405,7 @@ remain Apache-2.0; the complete Apache text is included at
 [LICENSES/Apache-2.0.txt](LICENSES/Apache-2.0.txt).
 
 See [CREDITS.md](CREDITS.md) for exact dependency revisions and explicit credit
-to vLLM, FlashInfer, Luke Alonso/b12x, voipmonitor, Keys/drowzeys, Rafael
-Caricio, MiaAI-Lab, TonyD2Wild, Fraser Price, and roady001. Model weights are
-not included or relicensed.
+to DeepSeek AI, vLLM, FlashInfer, NVIDIA, local-inference-lab/b12x, eugr,
+Luke Alonso/b12x, voipmonitor, Keys/drowzeys, Rafael Caricio, MiaAI-Lab,
+TonyD2Wild, Fraser Price, and roady001. Model weights are not included or
+relicensed.
