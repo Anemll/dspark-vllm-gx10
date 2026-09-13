@@ -8,7 +8,14 @@ import tempfile
 from types import SimpleNamespace
 import unittest
 
-from benchmarks.audit_dsv4_hybrid import Checkpoint, sample_ranges, vision_part
+from benchmarks.audit_dsv4_hybrid import (
+    Checkpoint,
+    full_passthrough_audit,
+    nvfp4_expert_schema,
+    sample_ranges,
+    target_expert_part,
+    vision_part,
+)
 
 
 class HybridAuditTests(unittest.TestCase):
@@ -43,6 +50,28 @@ class HybridAuditTests(unittest.TestCase):
             self.assertEqual(result['shape'],[4])
             self.assertFalse(checkpoint.identity()['whole_checkpoint_checksum_verified'])
 
+    def test_full_tensor_hash_is_explicit_and_complete(self):
+        with tempfile.TemporaryDirectory() as root:
+            checkpoint = self.make_checkpoint(root)
+            hashes, payload_bytes = checkpoint.tensor_hashes(['norm.weight'], chunk_size=3)
+            self.assertEqual(payload_bytes, 8)
+            self.assertEqual(
+                hashes['norm.weight']['sha256'],
+                '9c56cc51b374c3ba189210d5b6d4bf57790d351c96c47c02190ecf1e430635ab',
+            )
+            self.assertEqual(checkpoint.payload_read, 0)
+
+    def test_full_passthrough_audit_compares_complete_payloads(self):
+        with tempfile.TemporaryDirectory() as source_root, tempfile.TemporaryDirectory() as candidate_root:
+            source = self.make_checkpoint(source_root)
+            candidate = self.make_checkpoint(candidate_root)
+            report = full_passthrough_audit(
+                source, candidate, {'norm.weight'}
+            )
+            self.assertTrue(report['complete_match'])
+            self.assertEqual(report['matching_tensor_count'], 1)
+            self.assertEqual(report['payload_bytes']['vision_exp'], 8)
+
     def test_truncated_offsets_and_oversized_header_fail_closed(self):
         with tempfile.TemporaryDirectory() as root:
             checkpoint=self.make_checkpoint(root,offsets=[0,99])
@@ -67,6 +96,30 @@ class HybridAuditTests(unittest.TestCase):
             self.assertTrue(vision_part(name),name)
         for name in ('layers.3.ffn.experts.0.w1.weight','mtp.0.ffn.gate.weight','head.weight'):
             self.assertFalse(vision_part(name),name)
+
+    def test_target_expert_selector_excludes_mtp(self):
+        self.assertEqual(
+            target_expert_part('layers.3.ffn.experts.7.w2.weight_scale_2'),
+            (3, 7, 'w2', 'weight_scale_2'),
+        )
+        self.assertIsNone(
+            target_expert_part('mtp.0.layers.0.ffn.experts.7.w2.weight')
+        )
+        self.assertIsNone(target_expert_part('layers.3.ffn.shared_experts.w1.weight'))
+
+    def test_nvfp4_schema_requires_all_four_components(self):
+        names = {
+            f'layers.0.ffn.experts.0.{projection}.{component}'
+            for projection in ('w1', 'w2', 'w3')
+            for component in ('weight', 'weight_scale', 'weight_scale_2', 'input_scale')
+        }
+        complete = nvfp4_expert_schema(names, layers=1, experts=1)
+        self.assertTrue(complete['complete'])
+        self.assertEqual(complete['expected_group_count'], 3)
+        names.remove('layers.0.ffn.experts.0.w2.input_scale')
+        incomplete = nvfp4_expert_schema(names, layers=1, experts=1)
+        self.assertFalse(incomplete['complete'])
+        self.assertEqual(incomplete['incomplete_groups'][0]['missing'], ['input_scale'])
 
     def test_pinned_real_nvfp4_selector_rejects_missing_b12x_clamp(self):
         path=Path(__file__).resolve().parents[1]/'.build/vllm-upstream/vllm/model_executor/layers/fused_moe/oracle/nvfp4.py'

@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "status": "vision_pass_dspark_performance_reject",
+  "branch": "nvidia-nvfp4-0731-vision-transplant",
+  "source_commit": "9b3de5d677bfb1857aa4dded44c002fe8d42d83c",
+  "candidate": {
+    "repository": "msuiche/DeepSeek-V4-Flash-Vision-Exp-NVFP4",
+    "revision": "a807708335b28da39b629c38377b3d169827b360",
+    "language_checkpoint": "DeepSeek-V4-Flash-Vision-Exp",
+    "publisher": "msuiche",
+    "nvidia_official_checkpoint": false,
+    "precision_scope": {
+      "routed_experts": "NVFP4 weights with FP4 activations (W4A4), group size 16",
+      "kv_cache": "FP8",
+      "excluded_from_nvfp4": [
+        "attention",
+        "shared experts",
+        "head",
+        "three MTP layers",
+        "embeddings",
+        "vision tower",
+        "aligner",
+        "sentinels",
+        "vision routing biases"
+      ]
+    },
+    "shards": 42,
+    "shard_bytes": 176483421216
+  },
+  "integrity": {
+    "both_nodes_have_exact_shard_count_and_bytes": true,
+    "all_42_lfs_sha256_verified_on_both_nodes": true,
+    "tokenizer_matches_official_vision_exp": true,
+    "non_expert_tensors_byte_equal_to_official_vision_exp": {
+      "tensors": 6585,
+      "bytes": 20641634040,
+      "mismatches": 0
+    },
+    "sampled_expert_transcodes_exact": {
+      "experts": 4,
+      "logical_values": 100663296,
+      "mismatches": 0
+    },
+    "input_scale_audit": {
+      "total": 33024,
+      "different_from_nvidia_base": 32421,
+      "different_from_nvidia_0731": 32878,
+      "interpretation": "Activation scales are calibration artifacts, not implied by exact weight transcoding."
+    }
+  },
+  "runtime": {
+    "image": "dspark-vllm-gx10:b12x-vision-afbf768",
+    "image_id": "sha256:8deadf84e3960f1df47843f7a04a4fea8e1467f2688e144cd065dd7e9331725d",
+    "vllm": "0.1.dev20610+g4b276a363.d20260910",
+    "tensor_parallel": 2,
+    "model_architecture": "DeepseekV4ForConditionalGeneration",
+    "expert_backend": "B12X native NVFP4 MoE",
+    "max_model_len": 350000,
+    "max_num_seqs": 4,
+    "max_num_batched_tokens": 2048,
+    "kv_cache_bytes_per_rank": 10737418240
+  },
+  "target_only": {
+    "speculation": false,
+    "load_seconds": 493.807709,
+    "model_memory_gib_per_rank": 79.45,
+    "vision_correctness": {
+      "passed": 10,
+      "failed": 0,
+      "categories": ["ocr", "chart", "document", "spatial", "two-image comparison"]
+    },
+    "image_swap": {
+      "passed": 4,
+      "failed": 0,
+      "same_prompt_answers": ["A/17", "B/29"]
+    },
+    "streaming_text": "pass",
+    "parsed_tool_call": "pass",
+    "matched_text_speed": "not measured; target-only was the bounded correctness isolation phase"
+  },
+  "dspark_k5": {
+    "speculative_tokens": 5,
+    "load_seconds": 500.967547,
+    "model_memory_gib_per_rank": 85.3,
+    "vision_correctness": {"passed": 10, "failed": 0},
+    "image_swap": {"passed": 4, "failed": 0},
+    "streaming_text": "pass",
+    "parsed_tool_call": "pass",
+    "matched_c1": {
+      "prompt": "upstream-explanation",
+      "completion_tokens": 512,
+      "trials": 2,
+      "accepted_baseline": {
+        "aggregate_tok_s_median": 40.85912530953766,
+        "server_decode_tok_s_median": 41.70572033909571,
+        "draft_acceptance_median": 0.3273309419423409,
+        "server_prefill_tok_s_median": 136.31321705329314
+      },
+      "candidate": {
+        "aggregate_tok_s_trials": [14.465343493660237, 14.34485000288519],
+        "aggregate_tok_s_median": 14.405096748272713,
+        "server_decode_tok_s_trials": [14.537355893886064, 14.419457822709125],
+        "server_decode_tok_s_median": 14.478406858297595,
+        "draft_acceptance_trials": [0.003992015968063872, 0.002376237623762376],
+        "draft_acceptance_median": 0.003184126795913124,
+        "draft_steps": [501, 505],
+        "accepted_draft_tokens": [10, 6],
+        "server_prefill_tok_s_median": 143.84991003891763
+      },
+      "aggregate_regression_fraction": -0.6474448084939752,
+      "three_percent_gate": "fail"
+    }
+  },
+  "finding": {
+    "proven": "Vision plumbing and the transplanted Vision-Exp relationship survive routed-expert NVFP4; current DSpark K5 is unusable because draft acceptance collapses.",
+    "proximate_cause": "The DSpark draft proposes almost no tokens accepted by the W4A4 target, multiplying verification work.",
+    "likely_underlying_cause": "Activation-precision/calibration mismatch between the NVFP4 target path and the preserved MXFP4 MTP path; this remains a hypothesis until target/draft logit and target-only text diagnostics are run.",
+    "not_supported": [
+      "NCCL or RoCE regression",
+      "thermal or frequency throttling",
+      "vision blindness",
+      "a claim that all model components are NVFP4"
+    ]
+  },
+  "recovery": {
+    "accepted_service_restored": true,
+    "served_models": [
+      "deepseek-v4-flash-vision-exp-dspark",
+      "deepseek-v4-flash-0731-dspark"
+    ],
+    "max_model_len": 350000,
+    "dashboard_http": 200,
+    "ocr": "pass",
+    "streaming_text": "pass",
+    "parsed_tool_call": "pass",
+    "c1_recovery_tok_s": [39.611815427115005, 36.41255560544915, 41.573046959472926],
+    "gpu_throttle_flags": false
+  },
+  "raw_evidence": ".local/results/msuiche-q0-20260913T175512Z"
+}

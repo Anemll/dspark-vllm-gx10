@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "kind": "checkpoint_header_audit_for_plan_review",
+  "method": {
+    "implementation": "benchmarks/audit_dsv4_hybrid.py:Checkpoint.header and Checkpoint.identity",
+    "description": "Read each indexed safetensors header, sum data_offsets[1]-data_offsets[0] by dtype, and sum shape products for aligner.* tensors. No tensor payload comparison, model loading, GPU allocation, or inference.",
+    "whole_checkpoint_checksum_verified": false,
+    "embedding_geometry_regenerated": false,
+    "per_layer_numeric_drift_computed": false
+  },
+  "models": {
+    "text_0731": {
+      "repository": "deepseek-ai/DeepSeek-V4-Flash-0731",
+      "revision": "9e165c30e2704aec5d9d593cce3eebd58bbef1cb",
+      "config_sha256": "6c8f3d2d3b48707541b88f32f22ef3f0f8a6b57d8523281e2b8d3cdb0ae9a023",
+      "index_sha256": "98efab455cf08dfbbbaaba6f570e1bf10bf927d2b4c3c453a59c2f6f0e3be92b",
+      "shard_count": 48,
+      "present_shard_bytes": 166886535336,
+      "payload_bytes_by_dtype": {
+        "BF16": 2967134976,
+        "I64": 18616320,
+        "F32": 150966520,
+        "F8_E8M0": 9261408000,
+        "F8_E4M3": 6304038912,
+        "I8": 148176371712
+      }
+    },
+    "nvidia_nvfp4": {
+      "repository": "nvidia/DeepSeek-V4-Flash-0731-NVFP4",
+      "revision": "f1caa71142bd0be02f728c79f75042ac1e461579",
+      "config_sha256": "bb0d2286d6761439e41d3cef31d16489411b816ed8688922f59730bbd5567cdb",
+      "index_sha256": "5d2ad3076e04081d6c0728cb4b004dc832850ec5ae732f3adb06cf87c4b437a5",
+      "shard_count": 48,
+      "present_shard_bytes": 175550788904,
+      "payload_bytes_by_dtype": {
+        "BF16": 2967134976,
+        "I64": 18616320,
+        "F32": 151230712,
+        "F8_E8M0": 604364544,
+        "F8_E4M3": 23618125824,
+        "U8": 138512695296,
+        "I8": 9663676416
+      }
+    },
+    "vision_exp": {
+      "repository": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+      "revision": "6821d6ad3681a4b137b066b76094fa82ebd0a380",
+      "config_sha256": "6cd841bdd6702f5e2ac34671bc78047ed80817102465525ae2a41c502abbcd75",
+      "index_sha256": "507977e3d3818865264e68c0fdab139aa7f3929d0d0cf693dacc47428da56395",
+      "shard_count": 48,
+      "present_shard_bytes": 167819404368,
+      "payload_bytes_by_dtype": {
+        "BF16": 3899921152,
+        "I64": 18616320,
+        "F32": 151016696,
+        "F8_E8M0": 9261408000,
+        "F8_E4M3": 6304038912,
+        "I8": 148176371712
+      },
+      "aligner_tensors": {
+        "aligner.w1.weight": {
+          "dtype": "BF16",
+          "shape": [
+            4096,
+            9216
+          ]
+        },
+        "aligner.w1.bias": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ]
+        },
+        "aligner.w2.weight": {
+          "dtype": "BF16",
+          "shape": [
+            4096,
+            4096
+          ]
+        },
+        "aligner.w2.bias": {
+          "dtype": "BF16",
+          "shape": [
+            4096
+          ]
+        }
+      },
+      "aligner_parameters": 54534144,
+      "aligner_bf16_bytes": 109068288
+    }
+  },
+  "memory_planning": {
+    "advertised_0731_parameters_approximate": 304000000000,
+    "bf16_bytes_per_parameter": 2,
+    "bf16_304b_weight_bytes": 608000000000,
+    "bf16_304b_weight_GiB": 566.2441253662109,
+    "target_routed_expert_formula": "43 layers * 256 experts * 3 matrices * 4096 * 2048 logical weights * 2 BF16 bytes",
+    "target_routed_expert_only_bf16_bytes": 554050781184,
+    "target_routed_expert_only_bf16_GiB": 516,
+    "conservative_combined_spark_capacity_upper_bound_GiB": 256,
+    "conclusion": "Even target routed experts alone exceed two Sparks' total nominal memory before activations and runtime allocations. Resident full-BF16 projector SFT does not fit; compressed differentiable or offloaded training is a separate unvalidated route."
+  }
+}

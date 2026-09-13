@@ -1,0 +1,99 @@
+{
+  "torch": "2.5.0",
+  "device": "cpu",
+  "reference_revision": "6821d6ad3681a4b137b066b76094fa82ebd0a380",
+  "excerpt_sha256": "ca8ee0524b3c9f42ca682ce3d38b93e509b566c88afc9c60fd2ca10aaede0f7c",
+  "full_model_run": false,
+  "gpu_test": false,
+  "compatibility_adjustment": "Hash lookup indices use int64 for PyTorch 2.5 CPU gather; routing values unchanged.",
+  "gate_gradient_checks": [
+    {
+      "layer": 0,
+      "bias_vl_gradient": null,
+      "input_gradient_norm": 0.576633870601654
+    },
+    {
+      "layer": 3,
+      "bias_vl_gradient": null,
+      "input_gradient_norm": 0.2858748733997345
+    }
+  ],
+  "compressed_selection_checks": [
+    {
+      "tokens": 4,
+      "compressed_entries": 1,
+      "selected_sets_equal": true
+    },
+    {
+      "tokens": 127,
+      "compressed_entries": 31,
+      "selected_sets_equal": true
+    },
+    {
+      "tokens": 128,
+      "compressed_entries": 32,
+      "selected_sets_equal": true
+    },
+    {
+      "tokens": 129,
+      "compressed_entries": 32,
+      "selected_sets_equal": true
+    },
+    {
+      "tokens": 511,
+      "compressed_entries": 127,
+      "selected_sets_equal": true
+    },
+    {
+      "tokens": 512,
+      "compressed_entries": 128,
+      "selected_sets_equal": true
+    },
+    {
+      "tokens": 1024,
+      "compressed_entries": 256,
+      "selected_sets_equal": true
+    },
+    {
+      "tokens": 2048,
+      "compressed_entries": 512,
+      "selected_sets_equal": true
+    }
+  ],
+  "sink_identity": {
+    "with_sink_max_error": 1.1102230246251565e-16,
+    "omitting_sink_max_error": 0.26904329866471377
+  },
+  "memory_arithmetic": {
+    "checkpoint_boundaries_bf16_bytes": 2885681152,
+    "checkpoint_boundaries_fp32_bytes": 5771362304,
+    "full_position_fp32_logits_bytes": 1059061760,
+    "half_original_disk_size_GiB": 77.71259887889028,
+    "three_packed_weight_reads_at_273GBps_s": 0.9230769230769231
+  },
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "kind": "cpu_component_contracts_and_training_plan_review",
+  "test_scope": [
+    "Tiny float32 routing gates from pinned source excerpts; not quantized model execution.",
+    "Ratio-4 compressed selection sets with synthetic scores and start_pos=0.",
+    "Float64 algebraic attention-sink identity; not full masked attention or GPU kernel parity.",
+    "Memory arithmetic only; no measured Spark allocation or training time."
+  ],
+  "nvidia_checkpoint_contract": {
+    "config_sha256": "bb0d2286d6761439e41d3cef31d16489411b816ed8688922f59730bbd5567cdb",
+    "index_sha256": "5d2ad3076e04081d6c0728cb4b004dc832850ec5ae732f3adb06cf87c4b437a5",
+    "source_revision": "f1caa71142bd0be02f728c79f75042ac1e461579",
+    "target_expert_quant_algo": "NVFP4",
+    "group_size": 16,
+    "stored_scale_keys": [
+      "weight_scale",
+      "weight_scale_2",
+      "input_scale"
+    ],
+    "present_shard_bytes_from_header_audit": 175550788904,
+    "half_shard_bytes_GiB": 81.74720634892583,
+    "resident_memory_measured": false,
+    "dequantizer_tested": false
+  }
+}

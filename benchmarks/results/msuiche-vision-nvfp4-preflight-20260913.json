@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-13",
+  "kind": "public_metadata_and_tokenizer_preflight_not_weight_audit",
+  "candidate": {
+    "repository": "msuiche/DeepSeek-V4-Flash-Vision-Exp-NVFP4",
+    "revision": "a807708335b28da39b629c38377b3d169827b360",
+    "shard_count": 42,
+    "tokenizer_files": [
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ],
+    "architecture_from_public_config": [
+      "DeepseekV4ForCausalLM"
+    ],
+    "vision_n_layers_from_public_config": 32,
+    "main_expert_layer_count_from_public_config": 43,
+    "expert_group_size_from_public_config": 16,
+    "expert_quant_algo_from_public_config": "NVFP4"
+  },
+  "upstream_conversion_receipt": {
+    "stage": "done",
+    "lossy_tensors": [],
+    "checks": [
+      {
+        "expert": "layers.0.ffn.experts.0",
+        "exact": true
+      },
+      {
+        "expert": "layers.21.ffn.experts.137",
+        "exact": true
+      },
+      {
+        "expert": "layers.42.ffn.experts.255",
+        "exact": true
+      }
+    ],
+    "shards": 42,
+    "total_bytes": 176483421216,
+    "locally_verified": false
+  },
+  "tokenizer_checks": {
+    "official_repository": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+    "official_revision": "6821d6ad3681a4b137b066b76094fa82ebd0a380",
+    "method": "Stream each pinned public file through SHA-256; no model weight payload downloaded.",
+    "files": [
+      {
+        "file": "msuiche/tokenizer.json",
+        "sha256": "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+        "command_exit": 0
+      },
+      {
+        "file": "msuiche/tokenizer_config.json",
+        "sha256": "6ac8c8dc065ed118161d02dd532749ae3f52c243deac27872134fae2f50d8547",
+        "command_exit": 0
+      },
+      {
+        "file": "official/tokenizer.json",
+        "sha256": "c90dfa01249db1be4245780a052ede752e1361c612ac6d08e2bdada7d599476b",
+        "command_exit": 0
+      },
+      {
+        "file": "official/tokenizer_config.json",
+        "sha256": "6ac8c8dc065ed118161d02dd532749ae3f52c243deac27872134fae2f50d8547",
+        "command_exit": 0
+      }
+    ],
+    "both_files_match": true
+  },
+  "scale_provenance": {
+    "card_names": "nvidia/DeepSeek-V4-Flash-NVFP4",
+    "card_does_not_name": "nvidia/DeepSeek-V4-Flash-0731-NVFP4",
+    "input_scale_origin_value_check_performed": false
+  },
+  "claims_not_established": [
+    "Complete candidate non-expert tensor preservation",
+    "Candidate expert logical value equality to accepted Vision-Exp",
+    "NVIDIA 0731 expert logical value equality to original 0731",
+    "Vision correctness or speed on two Sparks",
+    "Exclusivity of this runtime's vision support",
+    "Activation-only explanation of any observed regression"
+  ],
+  "gpu_inference_run": false,
+  "model_shards_downloaded": false,
+  "service_changed": false,
+  "sources": {
+    "model_card": "https://huggingface.co/msuiche/DeepSeek-V4-Flash-Vision-Exp-NVFP4/blob/a807708335b28da39b629c38377b3d169827b360/README.md",
+    "config": "https://huggingface.co/msuiche/DeepSeek-V4-Flash-Vision-Exp-NVFP4/blob/a807708335b28da39b629c38377b3d169827b360/config.json",
+    "receipt": "https://huggingface.co/msuiche/DeepSeek-V4-Flash-Vision-Exp-NVFP4/blob/a807708335b28da39b629c38377b3d169827b360/_DONE.json",
+    "file_inventory": "https://huggingface.co/api/models/msuiche/DeepSeek-V4-Flash-Vision-Exp-NVFP4/revision/a807708335b28da39b629c38377b3d169827b360"
+  }
+}
