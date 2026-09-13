@@ -254,6 +254,7 @@
         const apiBase = $("agentBaseUrl").value.trim().replace(/\/$/, "");
         const model = $("agentModel").value.trim();
         if (!apiBase || !model) return;
+        const droidConfigurationNote = "Edit the reachable LAN URL or served model name if needed, then copy this JSON into the configuration on the machine running Droid. Output is capped at 32,768 tokens for this 350,000-token server context. Droid 0.218.1 incorrectly strips tool-returned images when an unknown local model name is used, even with noImageSupport: false. The top-level Claude model value is an intentional local capability alias only: it does not contact Claude and must not be changed back. extraArgs.model is the real model sent to vLLM. This restores Read-tool, paste, and drag-and-drop images while inference remains on DeepSeek V4 Flash Vision + DSpark.";
         const pi = {
           providers: {
             dspark: {
@@ -279,6 +280,7 @@
         };
         const droid = {
           customModels: [{
+            _comment: droidConfigurationNote,
             model: "claude-sonnet-4-5-20250929",
             displayName: "DeepSeek V4 Flash Vision · 2× Spark",
             baseUrl: apiBase,
