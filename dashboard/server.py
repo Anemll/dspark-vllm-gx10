@@ -13,6 +13,7 @@ import json
 import math
 import os
 import re
+import shlex
 import subprocess
 import threading
 import time
@@ -39,6 +40,7 @@ HARDWARE_CACHE_SECONDS = float(os.environ.get("DASHBOARD_HARDWARE_CACHE_SECONDS"
 LOAD_CACHE_SECONDS = 2.0
 VERSION_CACHE_SECONDS = 10.0
 CAPACITY_CACHE_SECONDS = 5.0
+RUNTIME_PROFILE_CACHE_SECONDS = 10.0
 HEAD_NODE_LABEL = os.environ.get("DASHBOARD_HEAD_LABEL", "SPARK-head")
 WORKER_NODE_LABEL = os.environ.get("DASHBOARD_WORKER_LABEL", "SPARK-worker")
 WORKER_SSH = os.environ.get("DASHBOARD_WORKER_SSH", "")
@@ -70,6 +72,49 @@ def parse_max_num_seqs(command: str) -> int | None:
     """Read vLLM's configured active-sequence limit from its launch command."""
     match = re.search(r"(?:^|\s)--max-num-seqs(?:=|\s+)(\d+)(?=\s|$)", command)
     return int(match.group(1)) if match else None
+
+
+def parse_cli_value(command: str, flag: str) -> str | None:
+    """Read a simple ``--flag value`` or ``--flag=value`` launch argument."""
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        tokens = command.split()
+    for index, token in enumerate(tokens):
+        if token == flag and index + 1 < len(tokens):
+            return tokens[index + 1]
+        prefix = f"{flag}="
+        if token.startswith(prefix):
+            return token[len(prefix):]
+    return None
+
+
+def describe_model_precision(config: dict[str, Any]) -> str:
+    """Describe checkpoint precision without conflating FP4 formats or KV."""
+    quantization = config.get("quantization_config") or {}
+    serialized = json.dumps(quantization, sort_keys=True).upper()
+    if "NVFP4" in serialized:
+        return "NVFP4/W4A4 experts"
+    quant_method = str(quantization.get("quant_method", "")).lower()
+    expert_dtype = str(config.get("expert_dtype", "")).lower()
+    if quant_method == "fp8" and expert_dtype == "fp4":
+        return "FP8 + MXFP4 experts"
+    if quant_method == "fp8":
+        return "FP8 weights"
+    if expert_dtype == "fp4":
+        return "MXFP4 experts"
+    return "checkpoint precision"
+
+
+def describe_kv_precision(value: str | None) -> str:
+    if not value:
+        return "KV format unavailable"
+    normalized = value.lower()
+    if normalized == "fp8":
+        return "FP8 KV"
+    if normalized == "nvfp4_ds_mla":
+        return "NVFP4 DS-MLA KV"
+    return f"{value.upper()} KV"
 
 METRIC_LINE = re.compile(
     r"^([A-Za-z_:][A-Za-z0-9_:]*)(?:\{([^}]*)\})?\s+"
@@ -418,6 +463,77 @@ class CapacitySampler:
 
 CAPACITY_SAMPLER = CapacitySampler()
 
+
+class RuntimeProfileSampler:
+    """Detect model and KV precision from the live container, not page text."""
+
+    def __init__(self) -> None:
+        self._latest: dict[str, str] | None = None
+        self._at = 0.0
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _host_model_config(inspect: dict[str, Any], model_path: str) -> Path | None:
+        for mount in inspect.get("Mounts", []):
+            destination = str(mount.get("Destination", "")).rstrip("/")
+            source = str(mount.get("Source", "")).rstrip("/")
+            if not destination or not source:
+                continue
+            if model_path == destination:
+                return Path(source) / "config.json"
+            if model_path.startswith(f"{destination}/"):
+                relative = model_path[len(destination) + 1:]
+                return Path(source) / relative / "config.json"
+        return None
+
+    def snapshot(self) -> dict[str, str] | None:
+        with self._lock:
+            now = time.monotonic()
+            if self._latest and now - self._at < RUNTIME_PROFILE_CACHE_SECONDS:
+                return self._latest
+            try:
+                completed = subprocess.run(
+                    ["/usr/bin/docker", "inspect", CONTAINER_NAME],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+                inspect = json.loads(completed.stdout)[0]
+                command = " ".join(inspect.get("Config", {}).get("Cmd") or [])
+                match = re.search(r"(?:^|\s)\S*vllm\s+serve\s+(\S+)", command)
+                model_path = match.group(1) if match else ""
+                config_path = self._host_model_config(inspect, model_path)
+                config = json.loads(config_path.read_text()) if config_path else {}
+                model_weights = describe_model_precision(config)
+                kv_cache = describe_kv_precision(
+                    parse_cli_value(command, "--kv-cache-dtype")
+                )
+                backend = parse_cli_value(command, "--moe-backend")
+                parts = [model_weights, kv_cache]
+                if backend:
+                    parts.append(backend.upper())
+                self._latest = {
+                    "summary": " · ".join(parts),
+                    "modelWeights": model_weights,
+                    "kvCache": kv_cache,
+                }
+                self._at = now
+            except (
+                OSError,
+                ValueError,
+                TypeError,
+                IndexError,
+                json.JSONDecodeError,
+                subprocess.CalledProcessError,
+                subprocess.TimeoutExpired,
+            ):
+                pass
+            return self._latest
+
+
+RUNTIME_PROFILE_SAMPLER = RuntimeProfileSampler()
+
 class LoadSampler:
     """Reads vLLM startup state from each container's recent log lines."""
     _shards = re.compile(r"Loading safetensors checkpoint shards:\s*(\d+)% Completed \| (\d+)/(\d+)")
@@ -532,6 +648,7 @@ class MetricsSampler:
                         "load": LOAD_SAMPLER.snapshot(api_ready=False),
                         "vllmVersion": VERSION_SAMPLER.snapshot(),
                         "maxActiveRequests": CAPACITY_SAMPLER.snapshot(),
+                        "runtimeProfile": RUNTIME_PROFILE_SAMPLER.snapshot(),
                         "agentSetup": agent_setup(str(unavailable.get("model", ""))),
                     }
                 )
@@ -611,6 +728,7 @@ class MetricsSampler:
                 "agentSetup": agent_setup(current["model"]),
                 "vllmVersion": VERSION_SAMPLER.snapshot(),
                 "maxActiveRequests": CAPACITY_SAMPLER.snapshot(),
+                "runtimeProfile": RUNTIME_PROFILE_SAMPLER.snapshot(),
                 "generationTps": generated_tps,
                 "prefillTps": prefill_tps,
                 "completedPrefillTps": self._last_completed_prefill_tps,

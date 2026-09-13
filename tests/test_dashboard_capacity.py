@@ -7,7 +7,15 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from dashboard.server import CapacitySampler, parse_max_num_seqs, parse_prometheus
+from dashboard.server import (
+    CapacitySampler,
+    RuntimeProfileSampler,
+    describe_kv_precision,
+    describe_model_precision,
+    parse_cli_value,
+    parse_max_num_seqs,
+    parse_prometheus,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,8 +41,32 @@ class DashboardCapacityTests(unittest.TestCase):
     def test_dashboard_renders_live_capacity(self):
         self.assertIn('id="maxActiveRequests"', INDEX)
         self.assertIn('integer(data.maxActiveRequests)', INDEX)
-        self.assertIn("FP8 DS-MLA cache utilization", INDEX)
-        self.assertNotIn("NVFP4 DS MLA cache utilization", INDEX)
+        self.assertIn('id="kvCacheDetail"', INDEX)
+        self.assertNotIn("NVFP4 DS MLA", INDEX)
+
+    def test_precision_labels_distinguish_source_mxfp4_from_nvfp4(self):
+        source = {
+            "expert_dtype": "fp4",
+            "quantization_config": {"quant_method": "fp8", "fmt": "e4m3"},
+        }
+        candidate = {
+            "expert_dtype": "fp4",
+            "quantization_config": {"quant_algo": "NVFP4"},
+        }
+        self.assertEqual(describe_model_precision(source), "FP8 + MXFP4 experts")
+        self.assertEqual(describe_model_precision(candidate), "NVFP4/W4A4 experts")
+        self.assertEqual(describe_kv_precision("fp8"), "FP8 KV")
+        self.assertEqual(
+            describe_kv_precision("nvfp4_ds_mla"), "NVFP4 DS-MLA KV"
+        )
+
+    def test_runtime_profile_parser_reads_live_launch_arguments(self):
+        command = "vllm serve /model --kv-cache-dtype=fp8 --moe-backend b12x"
+        self.assertEqual(parse_cli_value(command, "--kv-cache-dtype"), "fp8")
+        self.assertEqual(parse_cli_value(command, "--moe-backend"), "b12x")
+        constants = RuntimeProfileSampler.snapshot.__code__.co_consts
+        self.assertIn("/usr/bin/docker", constants)
+        self.assertNotIn("sudo", constants)
 
     def test_aggregate_rate_shows_active_request_count(self):
         self.assertIn('id="aggregateRequests"', INDEX)
