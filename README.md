@@ -138,6 +138,18 @@ For native sparse MLA, set `TARGET_ATTENTION_BACKEND=B12X`,
 environment files. Keep the two ranks on the same image ID and configuration.
 The default Compose values remain the released July configuration.
 
+The API can preserve older client model names without loading another model.
+Keep the preferred response name first and list compatibility names separated
+by spaces:
+
+```bash
+SERVED_MODEL_NAME=deepseek-v4-flash-vision-exp-dspark
+SERVED_MODEL_ALIASES=deepseek-v4-flash-0731-dspark
+```
+
+Every listed name is advertised by `/v1/models` and resolves to the same
+checkpoint. Prometheus metrics and response bodies use `SERVED_MODEL_NAME`.
+
 ## Performance
 
 Benchmark model:

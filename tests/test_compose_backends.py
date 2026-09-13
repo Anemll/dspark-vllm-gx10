@@ -33,6 +33,24 @@ def run_fragment(draft=None, tokens=3):
     ).stdout
 
 
+def served_names_fragment():
+    fragment = COMPOSE.split('        SERVED_MODEL_NAMES=', 1)[1]
+    fragment = 'SERVED_MODEL_NAMES=' + fragment.split(
+        '        exec /usr/local/bin/vllm', 1)[0]
+    return fragment.replace('$$', '$')
+
+
+def run_served_names(primary, aliases=''):
+    result = subprocess.run(
+        ['bash', '-c', served_names_fragment()
+         + '\nprintf "%s\\n" "${SERVED_MODEL_NAMES[@]}"'],
+        env={**os.environ, 'SERVED_MODEL_NAME': primary,
+             'SERVED_MODEL_ALIASES': aliases},
+        capture_output=True, text=True, timeout=10, check=True,
+    )
+    return result.stdout.splitlines()
+
+
 class ComposeBackendTests(unittest.TestCase):
     def test_original_default_json_is_byte_identical(self):
         expected = ('{"method":"dspark","num_speculative_tokens":3,'
@@ -83,6 +101,16 @@ class ComposeBackendTests(unittest.TestCase):
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('UNEXPECTED_LAUNCH', result.stdout)
+
+    def test_served_model_aliases_follow_primary_name(self):
+        self.assertEqual(
+            run_served_names('vision-primary', 'legacy-0731 legacy-short'),
+            ['vision-primary', 'legacy-0731', 'legacy-short'],
+        )
+
+    def test_empty_served_model_aliases_add_nothing(self):
+        self.assertEqual(run_served_names('vision-primary'),
+                         ['vision-primary'])
 
 
 if __name__ == '__main__':
