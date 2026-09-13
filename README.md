@@ -76,6 +76,102 @@ utilization, and optional NVMe temperature.
 
 See [docs/dashboard.md](docs/dashboard.md) for installation and configuration.
 
+## Connect Pi or Factory Droid with vision
+
+Both clients use the OpenAI-compatible endpoint on the head node. Replace
+`HEAD_HOST` below with a LAN address or hostname that is reachable from the
+machine running the client. Keep the served model name synchronized with
+`SERVED_MODEL_NAME` in `config/head.env`.
+
+### Pi
+
+Merge this provider into `~/.pi/agent/models.json`:
+
+```json
+{
+  "providers": {
+    "dspark": {
+      "baseUrl": "http://HEAD_HOST:8888/v1",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false,
+        "maxTokensField": "max_tokens"
+      },
+      "models": [
+        {
+          "id": "deepseek-v4-flash-vision-exp-dspark",
+          "name": "DeepSeek V4 Flash Vision · 2× Spark",
+          "reasoning": false,
+          "input": ["text", "image"],
+          "contextWindow": 350000,
+          "maxTokens": 32768,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+Open `/model` with no arguments, wait for the list to refresh, and reselect the
+model after changing this file. The `input` list must include both `text` and
+`image`, and `images.blockImages` must not be enabled in global or project
+settings. Pi can return an image through its Read tool; `@/path/to/image.png`
+is also supported.
+
+For optional client-side performance visibility, see the
+[model-neutral live decode TPS and TTFT extension](https://gist.github.com/Anemll/f95a14877862f289e19b12586850eded).
+It reports final client-observed decode TPS when the provider supplies token
+usage and labels its input/TTFT value as an estimate rather than server prefill
+throughput.
+
+### Factory Droid 0.218.1
+
+Add this entry under `customModels` in `~/.factory/settings.json`:
+
+```json
+{
+  "customModels": [
+    {
+      "model": "gemini-3-flash-preview",
+      "displayName": "DeepSeek V4 Flash Vision · 2× Spark",
+      "baseUrl": "http://HEAD_HOST:8888/v1",
+      "provider": "generic-chat-completion-api",
+      "noImageSupport": false,
+      "maxContextLimit": 350000,
+      "maxOutputTokens": 32768,
+      "extraArgs": {
+        "model": "deepseek-v4-flash-vision-exp-dspark"
+      }
+    }
+  ]
+}
+```
+
+The top-level Gemini model value is an intentional local capability alias for
+Droid 0.218.1. It makes Droid preserve image content for an otherwise unknown
+custom model; it does not contact Google. `baseUrl` still points to this local
+vLLM deployment, and `extraArgs.model` is the real model name sent to vLLM.
+Keep `provider` set to `generic-chat-completion-api`; a Claude-family alias
+triggers Droid's Anthropic-provider validation and is not a valid substitute.
+
+Fully quit and restart Droid after editing the file, start a new session, and
+select the custom model. Read-tool images, paste, and drag-and-drop are then
+forwarded to DeepSeek V4 Flash Vision. If a request says that it contains too
+many images, start a clean turn and add the image only once rather than both
+attaching it and reading the same file.
+
+The `350000` value is the server's total context window, while `32768` is only
+the maximum generated output. Input plus requested output must still fit in
+the context window.
+
 ## Update
 
 Pull the repository and prepare a new image tag on each node:
