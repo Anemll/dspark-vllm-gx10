@@ -11,12 +11,18 @@
     "repository": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
     "revision": "6821d6ad3681a4b137b066b76094fa82ebd0a380",
     "license": "MIT",
-    "weights_modified": false
+    "weights_modified": false,
+    "source_weight_layout": {
+      "general_quantization": "FP8 E4M3, dynamic activations, 128x128 blocks, UE8M0 scales",
+      "routed_experts": "source FP4/MXFP4 E2M1 with one E8M0 scale per 32 values",
+      "nvidia_nvfp4_w4a4": false
+    }
   },
   "provenance": {
     "model_and_vision_weights": {
-      "author": "DeepSeek AI",
+      "publisher": "DeepSeek AI",
       "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+      "vision_module_upstream_origin": "not disclosed by the official source model card or reference implementation",
       "contents": [
         "language model",
         "vision tower",
@@ -92,8 +98,9 @@
   },
   "notes": [
     "This profile uses the complete official Vision-Exp language and vision checkpoint.",
+    "DeepSeek distributes the vision tensors in the official checkpoint but does not identify a GLM, MoonViT, or other upstream vision-module donor; do not invent that attribution without tensor-level evidence.",
     "No NVIDIA DeepSeek-V4-Flash-0731-NVFP4 weights are part of this accepted profile.",
-    "FP8 describes the serving KV cache, not a new quantization of the uploaded model weights.",
+    "The accepted checkpoint is not NVIDIA-style NVFP4/W4A4: its config declares FP8 general quantization and source FP4/MXFP4 routed experts; the serving KV cache is also FP8.",
     "The local image ID is the immutable runtime boundary; the development tag is not a registry digest.",
     "Per-rank network interfaces, model paths, and cache paths remain private deployment settings."
   ]

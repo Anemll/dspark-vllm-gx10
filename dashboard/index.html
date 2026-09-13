@@ -129,7 +129,7 @@
     <main class="shell">
       <header class="topbar">
         <div>
-          <div class="eyebrow">vLLM <span id="vllmVersion">detecting…</span> · TP=2 · NVFP4 DS MLA</div>
+          <div class="eyebrow">vLLM <span id="vllmVersion">detecting…</span> · TP=2 · <span id="runtimeProfile">detecting precision…</span></div>
           <h1>DSpark Live Monitor</h1>
           <div class="subline"><span id="modelName">Connecting to vLLM…</span> · <code>GX10-30c1:8888</code></div>
         </div>
@@ -163,7 +163,7 @@
         <article class="card"><div class="metric-label">Model load · 3fe8</div><div class="value blue" id="workerLoad">—</div><div class="detail" id="workerLoadDetail">container log</div></article>
         <article class="card"><div class="metric-label">Requests</div><div class="value cyan" id="requests">—</div><div class="detail">running <span id="waiting">—</span> waiting</div></article>
         <article class="card"><div class="metric-label">Active capacity</div><div class="value cyan" id="maxActiveRequests">—</div><div class="detail">maximum simultaneous sequences</div></article>
-        <article class="card"><div class="metric-label">KV cache</div><div class="value blue" id="kvCache">—</div><div class="detail">FP8 DS-MLA cache utilization</div></article>
+        <article class="card"><div class="metric-label">KV cache</div><div class="value blue" id="kvCache">—</div><div class="detail" id="kvCacheDetail">cache utilization</div></article>
         <article class="card"><div class="metric-label">DSpark acceptance</div><div class="value yellow" id="acceptance">—</div><div class="detail">accepted DSpark drafts / proposed DSpark drafts</div></article>
         <article class="card"><div class="metric-label">Prefill rate</div><div class="value green" id="prefillTps">—</div><div class="detail">prompt tokens per second</div></article>
         <article class="card"><div class="metric-label">Completed prefill</div><div class="value green" id="completedPrefillTps">—</div><div class="detail">latest uncached KV tokens / vLLM prefill second</div></article>
@@ -351,6 +351,8 @@
         const rate = data.generationTps;
         $("modelName").textContent = data.model || "vLLM";
         $("vllmVersion").textContent = data.vllmVersion || "unavailable";
+        const runtimeProfile = data.runtimeProfile || {};
+        $("runtimeProfile").textContent = runtimeProfile.summary || "precision unavailable";
         $("generationTps").textContent = value(rate, "", "—");
         $("aggregateRequests").textContent = data.running === 1 ? "1 active request" : `${integer(data.running)} active requests`;
         $("perRequest").textContent = data.running > 0 && rate != null ? `${oneDecimal.format(rate / data.running)} t/s` : "—";
@@ -358,6 +360,7 @@
         $("waiting").textContent = integer(data.waiting);
         $("maxActiveRequests").textContent = integer(data.maxActiveRequests);
         $("kvCache").textContent = value(data.kvCachePct, "%");
+        $("kvCacheDetail").textContent = `${runtimeProfile.kvCache || "KV cache"} utilization`;
         $("acceptance").textContent = value(data.dsparkAcceptancePct, "%");
         $("prefillTps").textContent = value(data.prefillTps, " t/s");
         $("completedPrefillTps").textContent = value(data.completedPrefillTps, " t/s");

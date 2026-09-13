@@ -256,7 +256,8 @@ community Vision-Exp NVFP4 conversion. Use the
 [`docs/vision-winner-model-card.md`](docs/vision-winner-model-card.md) template
 when publishing the model or serving package; it records the exact sources,
 credits, weight provenance, and validation limits without attributing the
-DeepSeek vision weights to NVIDIA.
+DeepSeek-published vision tensors to NVIDIA or asserting an undisclosed donor
+lineage for those modules.
 
 Keep the role-specific network and filesystem values from each node, and use
 these identical serving values on both ranks:
