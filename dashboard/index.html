@@ -55,6 +55,10 @@
       .big-rate strong { color: var(--green); font-size: clamp(47px, 7.5vw, 91px); letter-spacing: -0.075em; line-height: .85; font-family: ui-sans-serif, system-ui, sans-serif; }
       .big-rate span { color: #a5c6d2; font-size: clamp(14px, 1.7vw, 20px); }
       .big-rate .request-count { align-self: center; margin-left: 4px; padding: 6px 9px; border: 1px solid rgba(68, 217, 230, .28); border-radius: 999px; color: var(--cyan); background: rgba(68, 217, 230, .08); font-size: 11px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+      .big-rate .activity-state { align-self: center; padding: 6px 9px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: rgba(148, 181, 203, .06); font-size: 11px; font-weight: 700; letter-spacing: .06em; white-space: nowrap; }
+      .big-rate .activity-state.prefill { border-color: rgba(255, 113, 133, .38); color: var(--red); background: rgba(255, 113, 133, .09); }
+      .big-rate .activity-state.decode { border-color: rgba(85, 230, 165, .36); color: var(--green); background: rgba(85, 230, 165, .09); }
+      .big-rate .activity-state.mixed { border-color: rgba(255, 209, 102, .4); color: var(--yellow); background: rgba(255, 209, 102, .09); }
       .hero-note { margin-top: 12px; color: var(--muted); font-size: 11px; }
       .hero-side { z-index: 1; text-align: right; min-width: 195px; }
       .hero-side b { display: block; color: var(--cyan); font-size: 22px; margin: 6px 0; }
@@ -138,7 +142,7 @@
       <section class="hero">
         <div>
           <div class="hero-label">Aggregate live generation rate</div>
-          <div class="big-rate"><strong id="generationTps">—</strong><span>tokens / second</span><span class="request-count" id="aggregateRequests">— active requests</span></div>
+          <div class="big-rate"><strong id="generationTps">—</strong><span>tokens / second</span><span class="request-count" id="aggregateRequests">— active requests</span><span class="activity-state" id="activityState">IDLE</span></div>
           <div class="hero-note" id="heroNote">Waiting for the first two vLLM counter samples…</div>
         </div>
         <div class="hero-side">
@@ -390,7 +394,23 @@
         $("hardwareStatus").textContent = hardware.available ? `${hardware.reportedNodes}/${hardware.expectedNodes} GB10 GPUs reporting · XFlash ${xflash.available ? value(xflash.temperatureC, "°C") : "unavailable"} · combined GPU-board power, not wall power` : "Hardware telemetry temporarily unavailable";
         $("refreshChip").textContent = `scrape ${value(data.scrapeMs, " ms", "—")}`;
         const elapsed = new Date(data.sampledAt).toLocaleTimeString();
-        const status = data.warmup ? "Sampling baseline…" : data.counterReset ? "vLLM counter reset detected; chart restarted" : rate === 0 ? "Server is idle — no tokens are currently generating" : "Live server-side aggregate decode throughput";
+        const prefillActive = Number.isFinite(data.prefillTps) && data.prefillTps > 0;
+        const decodeActive = Number.isFinite(rate) && rate > 0;
+        const requestsActive = Number.isFinite(data.running) && data.running > 0;
+        let phase = "IDLE", phaseClass = "", status = "Server is idle — no requests are currently running";
+        if (data.warmup) {
+          phase = "SAMPLING"; status = "Sampling the first vLLM counter interval…";
+        } else if (data.counterReset) {
+          phase = "SAMPLING"; status = "vLLM counter reset detected; chart restarted";
+        } else if (prefillActive && decodeActive) {
+          phase = "PREFILL + DECODE"; phaseClass = "mixed"; status = "Prompt prefill and token generation are active";
+        } else if (prefillActive || (requestsActive && !decodeActive)) {
+          phase = "PREFILLING"; phaseClass = "prefill"; status = prefillActive ? "Prefilling prompt context — first output token may still be pending" : "Request active — prompt prefill / first token pending";
+        } else if (decodeActive) {
+          phase = "DECODING"; phaseClass = "decode"; status = "Live server-side aggregate decode throughput";
+        }
+        $("activityState").textContent = phase;
+        $("activityState").className = `activity-state ${phaseClass}`.trim();
         $("heroNote").textContent = status;
         setHealth(Boolean(data.healthy), data.healthy ? `Last successful metric sample ${elapsed}` : (data.message || "Metrics unavailable"));
         drawChart(data.history || []);
