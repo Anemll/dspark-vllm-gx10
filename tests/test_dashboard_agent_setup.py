@@ -72,11 +72,9 @@ class DashboardAgentSetupTests(unittest.TestCase):
         self.assertIn("Read tool", INDEX)
         self.assertIn("@/path/to/image.png", INDEX)
         self.assertIn("noImageSupport: false", INDEX)
-        self.assertIn("remove older duplicate entries", INDEX)
-        self.assertIn("fully exit Droid", INDEX)
-        self.assertIn("start a new session", INDEX)
-        self.assertIn("reselect this exact custom model", INDEX)
-        self.assertIn("paste an image with Ctrl+V", INDEX)
+        self.assertIn("attach the image directly with Ctrl+V", INDEX)
+        self.assertIn("Typing only a local image path", INDEX)
+        self.assertIn("text-only omission before vLLM receives it", INDEX)
 
     def test_dashboard_does_not_embed_a_private_lan_address(self):
         self.assertNotRegex(INDEX, r"192\.168\.\d+\.\d+")
