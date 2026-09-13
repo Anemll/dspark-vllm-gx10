@@ -246,6 +246,43 @@ SERVED_MODEL_ALIASES=deepseek-v4-flash-0731-dspark
 Every listed name is advertised by `/v1/models` and resolves to the same
 checkpoint. Prometheus metrics and response bodies use `SERVED_MODEL_NAME`.
 
+### Accepted Vision-Exp serving profile
+
+The accepted two-Spark profile is recorded in
+[`config/vision-winner.lock.json`](config/vision-winner.lock.json). It serves
+the complete, jointly trained official Vision-Exp checkpoint with DSpark K5;
+it is not the rejected NVIDIA-0731/vision tensor transplant or the rejected
+community Vision-Exp NVFP4 conversion. Use the
+[`docs/vision-winner-model-card.md`](docs/vision-winner-model-card.md) template
+when publishing the model or serving package; it records the exact sources,
+credits, weight provenance, and validation limits without attributing the
+DeepSeek vision weights to NVIDIA.
+
+Keep the role-specific network and filesystem values from each node, and use
+these identical serving values on both ranks:
+
+```bash
+SERVED_MODEL_NAME=deepseek-v4-flash-vision-exp-dspark
+SERVED_MODEL_ALIASES=deepseek-v4-flash-0731-dspark
+MAX_MODEL_LEN=350000
+MAX_NUM_SEQS=4
+MAX_NUM_BATCHED_TOKENS=2048
+GPU_MEMORY_UTILIZATION=0.78
+KV_CACHE_MEMORY_BYTES=10737418240
+KV_CACHE_DTYPE=fp8
+MTP_NUM_TOKENS=5
+TARGET_MOE_BACKEND=b12x
+TARGET_LINEAR_BACKEND=b12x
+TARGET_ATTENTION_BACKEND=B12X
+DSPARK_ATTENTION_BACKEND=B12X
+COMPILATION_CONFIG={"cudagraph_mode":"FULL_AND_PIECEWISE","custom_ops":["all"]}
+```
+
+The accepted profile intentionally omits `--limit-mm-per-prompt`. In this
+runtime that restores vLLM's default allowance of 999 images per prompt; the
+350,000-token context window remains the natural request bound. Do not add an
+empty or zero image limit: zero disables image inputs.
+
 ## Performance
 
 Benchmark model:

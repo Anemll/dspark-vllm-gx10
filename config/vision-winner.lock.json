@@ -1,0 +1,100 @@
+{
+  "profile": "deepseek-v4-flash-vision-exp-dspark-tp2",
+  "status": "accepted",
+  "accepted_at": "2026-09-13",
+  "hardware": {
+    "accelerator": "NVIDIA GB10",
+    "nodes": 2,
+    "tensor_parallel_size": 2
+  },
+  "checkpoint": {
+    "repository": "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+    "revision": "6821d6ad3681a4b137b066b76094fa82ebd0a380",
+    "license": "MIT",
+    "weights_modified": false
+  },
+  "provenance": {
+    "model_and_vision_weights": {
+      "author": "DeepSeek AI",
+      "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-Vision-Exp",
+      "contents": [
+        "language model",
+        "vision tower",
+        "vision aligner",
+        "tokenizer",
+        "DSpark draft layers"
+      ]
+    },
+    "multimodal_vllm_support": {
+      "project": "vLLM",
+      "pull_request": "https://github.com/vllm-project/vllm/pull/54566"
+    },
+    "gb10_runtime": {
+      "vllm_fork": "https://github.com/local-inference-lab/vllm",
+      "b12x": "https://github.com/local-inference-lab/b12x",
+      "base_image": "https://hub.docker.com/r/eugr/spark-vllm-b12x",
+      "dependency_lock": "b12x-vision.lock.json"
+    },
+    "nvidia": {
+      "role": "DGX Spark/GB10 platform, CUDA and CUTLASS DSL runtime; separately evaluated 0731 NVFP4 reference",
+      "reference_model": "https://huggingface.co/nvidia/DeepSeek-V4-Flash-0731-NVFP4",
+      "reference_model_weights_included": false,
+      "reference_model_quantization_included": false
+    }
+  },
+  "runtime": {
+    "image_tag": "dspark-vllm-gx10:b12x-vision-afbf768",
+    "image_id": "sha256:8deadf84e3960f1df47843f7a04a4fea8e1467f2688e144cd065dd7e9331725d",
+    "vllm_version": "0.1.dev20610+g4b276a363.d20260910",
+    "dependency_lock": "b12x-vision.lock.json"
+  },
+  "serving": {
+    "served_model_name": "deepseek-v4-flash-vision-exp-dspark",
+    "served_model_aliases": [
+      "deepseek-v4-flash-0731-dspark"
+    ],
+    "max_model_len": 350000,
+    "max_num_seqs": 4,
+    "max_num_batched_tokens": 2048,
+    "max_cudagraph_capture_size": 24,
+    "gpu_memory_utilization": 0.78,
+    "kv_cache_dtype": "fp8",
+    "kv_cache_memory_bytes": 10737418240,
+    "limit_mm_per_prompt": null,
+    "effective_default_image_limit": 999,
+    "enable_prefix_caching": true,
+    "async_scheduling": true,
+    "enable_chunked_prefill": true,
+    "backends": {
+      "moe": "b12x",
+      "linear": "b12x",
+      "attention": "B12X",
+      "draft_attention": "B12X"
+    },
+    "speculative_decoding": {
+      "method": "dspark",
+      "num_speculative_tokens": 5,
+      "draft_sample_method": "probabilistic"
+    },
+    "compilation": {
+      "cudagraph_mode": "FULL_AND_PIECEWISE",
+      "custom_ops": [
+        "all"
+      ]
+    }
+  },
+  "acceptance": {
+    "three_image_request": "pass",
+    "streaming": "pass",
+    "parsed_tool_call": "pass",
+    "fatal_log_errors": 0,
+    "dashboard_prefill_decode_phase": "pass"
+  },
+  "notes": [
+    "This profile uses the complete official Vision-Exp language and vision checkpoint.",
+    "No NVIDIA DeepSeek-V4-Flash-0731-NVFP4 weights are part of this accepted profile.",
+    "FP8 describes the serving KV cache, not a new quantization of the uploaded model weights.",
+    "The local image ID is the immutable runtime boundary; the development tag is not a registry digest.",
+    "Per-rank network interfaces, model paths, and cache paths remain private deployment settings."
+  ]
+}
