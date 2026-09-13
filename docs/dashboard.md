@@ -19,12 +19,28 @@ Required environment variables for LAN access:
 export DASHBOARD_BIND=0.0.0.0
 export DASHBOARD_PORT=11001
 export VLLM_METRICS_URL=http://127.0.0.1:8888/metrics
+export DASHBOARD_PUBLIC_API_BASE_URL=http://HEAD_HOST:8888/v1
+export DASHBOARD_AGENT_MODEL=deepseek-v4-flash-vision-exp-dspark
+export DASHBOARD_AGENT_CONTEXT_WINDOW=16384
+export DASHBOARD_AGENT_MAX_OUTPUT_TOKENS=4096
 export DASHBOARD_HEAD_LABEL=SPARK-head
 export DASHBOARD_WORKER_LABEL=SPARK-worker
 export DASHBOARD_WORKER_SSH=user@10.200.0.2
 export DASHBOARD_WORKER_IDENTITY_FILE=$HOME/.ssh/dashboard_telemetry
 ./dashboard/run-dashboard.sh
 ```
+
+The dashboard includes ready-to-copy custom-model JSON for Pi and Factory
+Droid. By default it derives the client API URL from the hostname used to open
+the dashboard and uses the model reported by vLLM metrics. Set
+`DASHBOARD_PUBLIC_API_BASE_URL` when clients should use a different address
+(for example, a DNS name or reverse proxy), and set `DASHBOARD_AGENT_MODEL`
+to prefer a compatibility alias. The fields remain editable in the browser;
+no API key is displayed or stored. Keep `DASHBOARD_AGENT_CONTEXT_WINDOW`
+equal to the server's `--max-model-len`. The smaller
+`DASHBOARD_AGENT_MAX_OUTPUT_TOKENS` becomes the client request ceiling, which
+prevents a client with a 32K default from requesting 32K output from a 16K
+server.
 
 To start it automatically at boot on a systemd-based Spark/GX10 host:
 

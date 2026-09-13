@@ -47,6 +47,22 @@ CONTAINER_NAME = os.environ.get(
     "DASHBOARD_CONTAINER_NAME", "dspark-vllm-gx10-vllm-dspark-1"
 )
 XFLASH_DEVICE = os.environ.get("DASHBOARD_NVME_DEVICE", "/dev/nvme0")
+PUBLIC_API_BASE_URL = os.environ.get("DASHBOARD_PUBLIC_API_BASE_URL", "").rstrip("/")
+AGENT_MODEL = os.environ.get("DASHBOARD_AGENT_MODEL", "")
+AGENT_CONTEXT_WINDOW = int(os.environ.get("DASHBOARD_AGENT_CONTEXT_WINDOW", "16384"))
+AGENT_MAX_OUTPUT_TOKENS = min(
+    AGENT_CONTEXT_WINDOW,
+    int(os.environ.get("DASHBOARD_AGENT_MAX_OUTPUT_TOKENS", "4096")),
+)
+
+
+def agent_setup(model: str) -> dict[str, Any]:
+    return {
+        "apiBaseUrl": PUBLIC_API_BASE_URL or None,
+        "model": AGENT_MODEL or model,
+        "contextWindow": AGENT_CONTEXT_WINDOW,
+        "maxOutputTokens": AGENT_MAX_OUTPUT_TOKENS,
+    }
 
 METRIC_LINE = re.compile(
     r"^([A-Za-z_:][A-Za-z0-9_:]*)(?:\{([^}]*)\})?\s+"
@@ -461,6 +477,7 @@ class MetricsSampler:
                         "history": list(self._history),
                         "load": LOAD_SAMPLER.snapshot(api_ready=False),
                         "vllmVersion": VERSION_SAMPLER.snapshot(),
+                        "agentSetup": agent_setup(str(unavailable.get("model", ""))),
                     }
                 )
                 self._latest = unavailable
@@ -523,6 +540,7 @@ class MetricsSampler:
                 "warmup": previous is None,
                 "counterReset": counter_reset,
                 "model": current["model"],
+                "agentSetup": agent_setup(current["model"]),
                 "vllmVersion": VERSION_SAMPLER.snapshot(),
                 "generationTps": generated_tps,
                 "prefillTps": prefill_tps,

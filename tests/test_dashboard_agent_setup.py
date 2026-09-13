@@ -1,0 +1,67 @@
+# SPDX-License-Identifier: MIT
+"""Contract checks for the Pi/Droid dashboard configuration cards."""
+
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+INDEX = (ROOT / "dashboard" / "index.html").read_text()
+
+
+def isolated_setup(**overrides):
+    env = {
+        **os.environ,
+        "DASHBOARD_PUBLIC_API_BASE_URL": "http://spark.test:8888/v1/",
+        "DASHBOARD_AGENT_MODEL": "deepseek-v4-flash-vision-exp-dspark",
+        **overrides,
+    }
+    code = (
+        "import json; from dashboard.server import agent_setup; "
+        "print(json.dumps(agent_setup('metrics-model'), sort_keys=True))"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code], cwd=ROOT, env=env,
+        capture_output=True, text=True, timeout=10, check=True,
+    )
+    return json.loads(result.stdout)
+
+
+class DashboardAgentSetupTests(unittest.TestCase):
+    def test_server_publishes_safe_16k_client_limits(self):
+        setup = isolated_setup()
+        self.assertEqual(setup["apiBaseUrl"], "http://spark.test:8888/v1")
+        self.assertEqual(setup["contextWindow"], 16384)
+        self.assertEqual(setup["maxOutputTokens"], 4096)
+        self.assertLess(setup["maxOutputTokens"], setup["contextWindow"])
+
+    def test_output_limit_never_exceeds_context_window(self):
+        setup = isolated_setup(
+            DASHBOARD_AGENT_CONTEXT_WINDOW="8192",
+            DASHBOARD_AGENT_MAX_OUTPUT_TOKENS="32768",
+        )
+        self.assertEqual(setup["contextWindow"], 8192)
+        self.assertEqual(setup["maxOutputTokens"], 8192)
+
+    def test_pi_card_uses_chat_completions_and_explicit_max_tokens(self):
+        self.assertIn('api: "openai-completions"', INDEX)
+        self.assertIn('maxTokens: agentMaxOutputTokens', INDEX)
+        self.assertIn('contextWindow: agentContextWindow', INDEX)
+        self.assertIn('maxTokensField: "max_tokens"', INDEX)
+        self.assertIn("~/.pi/agent/models.json", INDEX)
+
+    def test_droid_card_uses_chat_completion_provider_and_output_cap(self):
+        self.assertIn('provider: "generic-chat-completion-api"', INDEX)
+        self.assertIn('maxOutputTokens: agentMaxOutputTokens', INDEX)
+        self.assertIn("~/.factory/settings.json", INDEX)
+
+    def test_dashboard_does_not_embed_a_private_lan_address(self):
+        self.assertNotRegex(INDEX, r"192\.168\.\d+\.\d+")
+
+
+if __name__ == "__main__":
+    unittest.main()

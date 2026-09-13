@@ -77,6 +77,24 @@
       .hardware-node-grid span { display: block; color: var(--muted); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
       .hardware-node-grid b { display: block; margin-top: 5px; font: 700 24px/.9 ui-sans-serif, system-ui, sans-serif; letter-spacing: -.05em; }
 
+      .agent-panel { padding: 20px 22px 22px; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); }
+      .agent-head { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 15px; }
+      .agent-title { margin-top: 6px; font: 700 19px ui-sans-serif, system-ui, sans-serif; letter-spacing: -.025em; }
+      .agent-note { max-width: 650px; color: var(--muted); font-size: 10px; line-height: 1.55; text-align: right; }
+      .agent-controls { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr); gap: 12px; margin-bottom: 12px; }
+      .agent-field label { display: block; margin-bottom: 6px; color: var(--muted); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+      .agent-field input { width: 100%; min-height: 38px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px; outline: none; color: var(--text); background: rgba(4, 13, 19, .7); font: 11px inherit; }
+      .agent-field input:focus { border-color: rgba(68, 217, 230, .55); box-shadow: 0 0 0 3px rgba(68, 217, 230, .08); }
+      .agent-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+      .agent-card { min-width: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: rgba(4, 13, 19, .55); }
+      .agent-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 12px; border-bottom: 1px solid var(--line); }
+      .agent-card-title { font: 700 13px ui-sans-serif, system-ui, sans-serif; }
+      .agent-path { color: var(--muted); font-size: 9px; overflow-wrap: anywhere; }
+      .copy-button { flex: 0 0 auto; min-width: 68px; padding: 7px 10px; border: 1px solid rgba(68, 217, 230, .3); border-radius: 7px; color: var(--cyan); background: rgba(68, 217, 230, .08); font: 700 10px inherit; cursor: pointer; }
+      .copy-button:hover { background: rgba(68, 217, 230, .15); }
+      .copy-button.copied { border-color: rgba(85, 230, 165, .45); color: var(--green); background: rgba(85, 230, 165, .1); }
+      .agent-code { min-height: 326px; margin: 0; padding: 14px; overflow: auto; color: #cde0e8; font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre; tab-size: 2; }
+
       .chart-panel { padding: 20px 22px 13px; margin-bottom: 14px; }
       .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
       .chart-title { font: 700 17px ui-sans-serif, system-ui, sans-serif; letter-spacing: -0.025em; }
@@ -97,8 +115,8 @@
       footer { display: flex; justify-content: space-between; gap: 16px; margin-top: 16px; color: #708895; font-size: 10px; }
       code { color: #b9d4df; font-family: inherit; }
 
-      @media (max-width: 920px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.bottom-grid, .hardware-panel { grid-template-columns: 1fr; }.topbar { flex-direction: column; }.top-meta { justify-content: start; }.hero-side { text-align: left; } }
-      @media (max-width: 560px) { .shell { width: min(100% - 20px, 1460px); padding-top: 16px; }.hero { grid-template-columns: 1fr; padding: 21px; }.metric-grid { grid-template-columns: 1fr 1fr; gap: 9px; }.card { min-height: 120px; padding: 14px; }.card .detail { left: 14px; bottom: 13px; }.hardware-panel { padding: 16px; }.hardware-grid { grid-template-columns: 1fr; }.chart-panel { padding: 16px; }.chart-wrap { height: 220px; }.big-rate strong { font-size: 62px; } }
+      @media (max-width: 920px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.bottom-grid, .hardware-panel, .agent-grid { grid-template-columns: 1fr; }.topbar { flex-direction: column; }.top-meta { justify-content: start; }.hero-side { text-align: left; }.agent-code { min-height: 0; max-height: 360px; } }
+      @media (max-width: 560px) { .shell { width: min(100% - 20px, 1460px); padding-top: 16px; }.hero { grid-template-columns: 1fr; padding: 21px; }.metric-grid { grid-template-columns: 1fr 1fr; gap: 9px; }.card { min-height: 120px; padding: 14px; }.card .detail { left: 14px; bottom: 13px; }.hardware-panel, .agent-panel { padding: 16px; }.hardware-grid, .agent-controls { grid-template-columns: 1fr; }.agent-head { align-items: start; flex-direction: column; }.agent-note { text-align: left; }.chart-panel { padding: 16px; }.chart-wrap { height: 220px; }.big-rate strong { font-size: 62px; } }
     </style>
   </head>
   <body>
@@ -157,6 +175,27 @@
         </div>
       </section>
 
+      <section class="agent-panel">
+        <div class="agent-head">
+          <div><div class="section-kicker">Use this server</div><div class="agent-title">Add DSpark to Pi or Droid</div></div>
+          <div class="agent-note">Edit the reachable LAN URL or model name if needed, then copy the matching JSON into your client configuration. Output is capped at <span id="agentOutputLimit">4,096</span> tokens for this <span id="agentContextWindow">16,384</span>-token server context.</div>
+        </div>
+        <div class="agent-controls">
+          <div class="agent-field"><label for="agentBaseUrl">OpenAI-compatible API base</label><input id="agentBaseUrl" type="url" inputmode="url" spellcheck="false" autocomplete="off" /></div>
+          <div class="agent-field"><label for="agentModel">Served model name</label><input id="agentModel" type="text" spellcheck="false" autocomplete="off" /></div>
+        </div>
+        <div class="agent-grid">
+          <article class="agent-card">
+            <div class="agent-card-head"><div><div class="agent-card-title">Pi</div><div class="agent-path">Merge provider into ~/.pi/agent/models.json</div></div><button class="copy-button" type="button" data-copy-target="piSnippet">Copy JSON</button></div>
+            <pre class="agent-code"><code id="piSnippet">Waiting for model metadata…</code></pre>
+          </article>
+          <article class="agent-card">
+            <div class="agent-card-head"><div><div class="agent-card-title">Factory Droid</div><div class="agent-path">Add entry under customModels in ~/.factory/settings.json</div></div><button class="copy-button" type="button" data-copy-target="droidSnippet">Copy JSON</button></div>
+            <pre class="agent-code"><code id="droidSnippet">Waiting for model metadata…</code></pre>
+          </article>
+        </div>
+      </section>
+
       <section class="bottom-grid">
         <section class="table-panel">
           <div class="table-title">Request latency · newly completed requests</div>
@@ -186,6 +225,9 @@
       const formatter = new Intl.NumberFormat(undefined, { maximumFractionDigits: 0 });
       const oneDecimal = new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
       let latest = null;
+      let agentSetupInitialized = false;
+      let agentContextWindow = 16384;
+      let agentMaxOutputTokens = 4096;
 
       const value = (number, suffix = "", fallback = "—") => number == null || !Number.isFinite(number) ? fallback : `${oneDecimal.format(number)}${suffix}`;
       const integer = (number) => number == null || !Number.isFinite(number) ? "—" : formatter.format(number);
@@ -199,8 +241,102 @@
         $("footerStatus").textContent = message;
       }
 
+      function browserApiBase() {
+        const url = new URL(window.location.href);
+        url.port = "8888";
+        url.pathname = "/v1";
+        url.search = "";
+        url.hash = "";
+        return url.toString().replace(/\/$/, "");
+      }
+
+      function updateAgentSnippets() {
+        const apiBase = $("agentBaseUrl").value.trim().replace(/\/$/, "");
+        const model = $("agentModel").value.trim();
+        if (!apiBase || !model) return;
+        const pi = {
+          providers: {
+            dspark: {
+              baseUrl: apiBase,
+              api: "openai-completions",
+              apiKey: "local",
+              compat: {
+                supportsDeveloperRole: false,
+                supportsReasoningEffort: false,
+                maxTokensField: "max_tokens"
+              },
+              models: [{
+                id: model,
+                name: "DeepSeek V4 Flash Vision · 2× Spark",
+                reasoning: false,
+                input: ["text", "image"],
+                contextWindow: agentContextWindow,
+                maxTokens: agentMaxOutputTokens,
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
+              }]
+            }
+          }
+        };
+        const droid = {
+          customModels: [{
+            model,
+            displayName: "DeepSeek V4 Flash Vision · 2× Spark",
+            baseUrl: apiBase,
+            provider: "generic-chat-completion-api",
+            maxOutputTokens: agentMaxOutputTokens
+          }]
+        };
+        $("piSnippet").textContent = JSON.stringify(pi, null, 2);
+        $("droidSnippet").textContent = JSON.stringify(droid, null, 2);
+      }
+
+      function initializeAgentSetup(data) {
+        if (agentSetupInitialized) return;
+        const setup = data.agentSetup || {};
+        const model = setup.model || data.model;
+        if (!model || model === "vLLM") return;
+        agentContextWindow = Math.max(1, Number(setup.contextWindow) || 16384);
+        agentMaxOutputTokens = Math.min(agentContextWindow, Math.max(1, Number(setup.maxOutputTokens) || 4096));
+        $("agentContextWindow").textContent = formatter.format(agentContextWindow);
+        $("agentOutputLimit").textContent = formatter.format(agentMaxOutputTokens);
+        $("agentBaseUrl").value = setup.apiBaseUrl || browserApiBase();
+        $("agentModel").value = model;
+        agentSetupInitialized = true;
+        updateAgentSnippets();
+      }
+
+      async function copySnippet(button) {
+        const target = $(button.dataset.copyTarget);
+        const content = target.textContent;
+        try {
+          if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(content);
+          else {
+            const textarea = document.createElement("textarea");
+            textarea.value = content;
+            textarea.style.position = "fixed";
+            textarea.style.opacity = "0";
+            document.body.appendChild(textarea);
+            textarea.select();
+            if (!document.execCommand("copy")) throw new Error("copy unavailable");
+            textarea.remove();
+          }
+          button.textContent = "Copied";
+          button.classList.add("copied");
+          window.setTimeout(() => { button.textContent = "Copy JSON"; button.classList.remove("copied"); }, 1600);
+        } catch (_) {
+          button.textContent = "Select JSON";
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(target);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          window.setTimeout(() => { button.textContent = "Copy JSON"; }, 2400);
+        }
+      }
+
       function render(data) {
         latest = data;
+        initializeAgentSetup(data);
         const rate = data.generationTps;
         $("modelName").textContent = data.model || "vLLM";
         $("vllmVersion").textContent = data.vllmVersion || "unavailable";
@@ -346,6 +482,9 @@
         } finally { window.setTimeout(poll, 1000); }
       }
       new ResizeObserver(() => latest && drawChart(latest.history || [])).observe($("throughputChart").parentElement);
+      $("agentBaseUrl").addEventListener("input", updateAgentSnippets);
+      $("agentModel").addEventListener("input", updateAgentSnippets);
+      document.querySelectorAll("[data-copy-target]").forEach((button) => button.addEventListener("click", () => copySnippet(button)));
       poll();
     </script>
   </body>
