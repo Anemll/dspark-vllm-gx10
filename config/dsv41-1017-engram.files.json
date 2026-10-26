@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "repo": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+  "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170",
+  "files": [
+    {
+      "path": "model-00047-of-00048.safetensors",
+      "size": 101535150936,
+      "hash_type": "sha256",
+      "hash": "76a05106ece259be83d1bfea0dcb54f23377864ee60fd321690f35e6698a2af5"
+    },
+    {
+      "path": "model-00048-of-00048.safetensors",
+      "size": 101537926640,
+      "hash_type": "sha256",
+      "hash": "9dc51433e195bc78b5ad846b68643cc0351d3b174e5e4309222d3b7402c83afd"
+    }
+  ],
+  "total_bytes": 203073077576
+}

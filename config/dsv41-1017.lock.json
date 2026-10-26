@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "status": "candidate-not-cluster-validated",
+  "model": {
+    "repo": "HeNryous/DeepSeek-V4.1-Flash-1017-EXL3-2.75bpw-DGX-Spark",
+    "revision": "f53132cb17e18a5a9ddd7f213965912a575f0dd5",
+    "manifest": "config/dsv41-1017-exl3.files.json",
+    "bytes": 198782567360,
+    "quantization": "EXL3; routed experts 2.75 bits per weight, dense 5 bits, head 6 bits",
+    "vision": "native DeepSeek-V4.1-Flash-1017 multimodal weights; no graft"
+  },
+  "engram": {
+    "repo": "deepseek-ai/DeepSeek-V4.1-Flash-1017",
+    "revision": "1bae0e1088993b9b82de08f59de5be5a34e42170",
+    "manifest": "config/dsv41-1017-engram.files.json",
+    "bytes": 203073077576,
+    "note": "Older releases use identical filenames and sizes with DIFFERENT CONTENT; validate hashes."
+  },
+  "runtime": {
+    "recipe_repo": "https://github.com/HeNryous/deepseek-v41-1017-dgx-spark",
+    "recipe_commit": "382071728ce69700b28e7a5ea197ab0a48b2232c",
+    "image": "ghcr.io/henryous/deepseek-v41-1017-dgx-spark@sha256:a796b0515cf6245f95cd97e2f5d12d000e7d99ad475d53d4dc21a0bc9a68cc81",
+    "source_tag": "v24",
+    "architecture": "linux/arm64",
+    "image_config_digest": "sha256:709f3991d0d3966608cfa1e59cd03bd8d9796467b1c307ecfcbc01adb9e7291e",
+    "launcher_repo": "https://github.com/sudoingX/dgx-spark-deepseek-v41",
+    "launcher_commit": "cc59c3609e8e671418f39eb92aa16b0e4f770b77",
+    "markov_file": "data/dspark/markov_top_tokens.json",
+    "markov_sha256": "0b6e71e638abd5abce2db433965bb5ff523cbbe92ed7ae54324a50ccaeffa19a",
+    "note": "Image registry identity verified; inherited image labels do not identify the patched runtime revision."
+  },
+  "initial_profile": {
+    "tensor_parallel_size": 2,
+    "max_model_len": 240000,
+    "max_num_seqs": 4,
+    "client_max_output_tokens": 32768,
+    "served_model_names": ["DeepSeek-v4.1-Flash-EXL3", "gemini-3-flash-preview"],
+    "speculative_method": "dspark",
+    "speculative_tokens": 5,
+    "note": "Context is a per-request admission limit; KV capacity is shared. Output limit belongs in client configuration."
+  }
+}
