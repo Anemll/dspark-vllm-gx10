@@ -70,6 +70,31 @@ def verify_file(path, entry):
     return {**entry, "mtime_ns": after.st_mtime_ns, "verified_at": time.time()}
 
 
+def load_verified_records(paths, manifest, destination):
+    """Read local hash proofs before replacing a resumable download receipt."""
+    records = {}
+    for receipt_path in paths:
+        previous = json.loads(Path(receipt_path).read_text())
+        for key, expected in (("repo", manifest["repo"]), ("revision", manifest["revision"]),
+                              ("destination", str(destination))):
+            if previous.get(key) != expected:
+                raise ValueError(f"verification receipt {key} mismatch: {receipt_path}")
+        for name, record in previous.get("verified", {}).items():
+            if (isinstance(record, dict) and isinstance(record.get("mtime_ns"), int)
+                    and isinstance(record.get("verified_at"), (int, float))):
+                records[name] = record
+    return records
+
+
+def reusable_verification(path, entry, record):
+    if not record or any(record.get(key) != value for key, value in entry.items()):
+        return False
+    if path.is_symlink() or not path.is_file():
+        return False
+    current = path.stat()
+    return (current.st_size, current.st_mtime_ns) == (entry["size"], record["mtime_ns"])
+
+
 def plan(args):
     from huggingface_hub import HfApi
     info = HfApi(token=False).model_info(args.repo, revision=args.revision, files_metadata=True)
@@ -138,6 +163,12 @@ def run(args):
                 raise ValueError("lock file must not be a symlink")
             file_lock = locks.enter_context(file_lock_path.open("a+"))
             fcntl.flock(file_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        prior_records = {}
+        if args.command == "download":
+            proof_paths = list(getattr(args, "verified_receipt", None) or [])
+            if receipt_path.exists():
+                proof_paths.append(receipt_path)
+            prior_records = load_verified_records(proof_paths, manifest, dest)
         save_json(receipt_path, receipt)
         started = time.monotonic()
 
@@ -175,8 +206,14 @@ def run(args):
                 emit("downloading", file=entry["path"], bytes=entry["size"])
                 hf_hub_download(manifest["repo"], filename=entry["path"], revision=manifest["revision"],
                                 local_dir=str(dest), token=False)
-            emit("verifying", file=entry["path"])
-            verified = verify_file(path, entry)
+            previous = prior_records.get(entry["path"])
+            if reusable_verification(path, entry, previous):
+                verified = previous
+                emit("reused_verification", file=entry["path"], bytes=entry["size"],
+                     verified_at=previous["verified_at"])
+            else:
+                emit("verifying", file=entry["path"])
+                verified = verify_file(path, entry)
             with state_lock:
                 receipt["verified"][entry["path"]] = verified
                 save_json(receipt_path, receipt)
@@ -228,6 +265,10 @@ def main():
         command.add_argument("--manifest", required=True)
         command.add_argument("--destination", required=True)
         command.add_argument("--receipt", required=True)
+        if name == "download":
+            command.add_argument("--verified-receipt", action="append",
+                                 help="Reuse local hash proofs for unchanged files; repeatable. "
+                                      "The existing output receipt is reused automatically.")
         command.add_argument("--require-mount")
         command.add_argument("--workers", type=int, choices=range(1, 5), default=2)
         command.add_argument("--reserve-gib", type=int, default=100)

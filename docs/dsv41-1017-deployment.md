@@ -89,10 +89,19 @@ wait "$candidate_download_pid"
 wait "$engram_download_pid"
 ```
 
-Each download performs a full hash check before completing its receipt. A
-successful receipt for one source does not cover the other source. To audit an
+New or changed files receive a full hash check before entering the receipt.
+Re-running `download` with the same receipt reuses existing hash proofs only
+when repository, pinned revision, destination, expected hash, size and file
+modification time still match. Original verification timestamps are retained.
+Use `--verified-receipt <saved-receipt.json>` to recover proofs from an earlier
+attempt; the option is repeatable. This avoids re-reading large verified shards
+on every resume. These local receipts must be trusted: this is a resume shortcut,
+not protection against modifications that deliberately preserve file metadata.
+
+A successful receipt for one source does not cover the other source. To audit an
 existing destination without downloading, run the same command with `verify`
-instead of `download` and use a new receipt filename. Keep the old-model archive
+instead of `download` and use a new receipt filename; `verify` always rehashes
+every file. Keep the old-model archive
 job in a separate destination so it can run alongside this staging job.
 
 For the existing 0909 deployment, generate separate manifests at the audited

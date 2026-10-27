@@ -173,6 +173,73 @@ class CheckpointStagingTests(unittest.TestCase):
                 self.run_stager()
         self.assertFalse(self.destination.exists())
 
+    def prepare_verified_download(self):
+        self.write_manifest()
+        self.destination.mkdir()
+        target = self.destination / "weights.safetensors"
+        target.write_bytes(b"small test weights")
+        self.run_stager()
+        proof = json.loads(self.receipt_path.read_text())
+        self.args.command = "download"
+        return target, proof
+
+    def test_download_reuses_existing_receipt_without_rehash(self):
+        _, proof = self.prepare_verified_download()
+        with patch.object(stager, "verify_file", side_effect=AssertionError("unnecessary rehash")):
+            self.run_stager()
+        result = json.loads(self.receipt_path.read_text())
+        self.assertEqual(result["state"], "verified")
+        self.assertEqual(result["verified"], proof["verified"])
+
+    def test_explicit_receipt_reuses_proof_when_output_receipt_absent(self):
+        _, proof = self.prepare_verified_download()
+        archived = self.root / "previous.json"
+        self.receipt_path.rename(archived)
+        self.args.verified_receipt = [str(archived)]
+        with patch.object(stager, "verify_file", side_effect=AssertionError("unnecessary rehash")):
+            self.run_stager()
+        self.assertEqual(json.loads(self.receipt_path.read_text())["verified"], proof["verified"])
+
+    def test_changed_mtime_requires_full_hash(self):
+        target, _ = self.prepare_verified_download()
+        stat = target.stat()
+        stager.os.utime(target, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+        with patch.object(stager, "verify_file", wraps=stager.verify_file) as verify:
+            self.run_stager()
+        verify.assert_called_once()
+
+    def test_changed_content_is_not_accepted_by_old_proof(self):
+        target, _ = self.prepare_verified_download()
+        target.write_bytes(b"wrong test weights")
+        with self.assertRaisesRegex(ValueError, "hash mismatch"):
+            self.run_stager()
+
+    def test_mismatched_receipt_identity_rejected_without_overwrite(self):
+        _, proof = self.prepare_verified_download()
+        for key in ("repo", "revision", "destination"):
+            with self.subTest(field=key):
+                wrong = dict(proof, **{key: "different"})
+                self.receipt_path.write_text(json.dumps(wrong))
+                with self.assertRaisesRegex(ValueError, "receipt .* mismatch"):
+                    self.run_stager()
+                self.assertEqual(json.loads(self.receipt_path.read_text()), wrong)
+
+    def test_wrong_expected_hash_in_receipt_does_not_skip_verification(self):
+        _, proof = self.prepare_verified_download()
+        proof["verified"]["weights.safetensors"]["hash"] = "b" * 64
+        self.receipt_path.write_text(json.dumps(proof))
+        with patch.object(stager, "verify_file", wraps=stager.verify_file) as verify:
+            self.run_stager()
+        verify.assert_called_once()
+
+    def test_verify_command_always_rehashes(self):
+        self.prepare_verified_download()
+        self.args.command = "verify"
+        self.args.verified_receipt = [str(self.receipt_path)]
+        with patch.object(stager, "verify_file", wraps=stager.verify_file) as verify:
+            self.run_stager()
+        verify.assert_called_once()
+
     def test_destination_outside_required_mount_rejected(self):
         self.write_manifest()
         self.args.require_mount = str(self.root / "volume")
