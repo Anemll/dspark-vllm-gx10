@@ -39,6 +39,7 @@ REQUIRED = {
     "MASTER_ADDR", "SELF_ADDR", "FABRIC_INTERFACE", "NCCL_IB_HCA",
     "NCCL_IB_GID_INDEX", "EXL3_RDMA_DEVICES",
 }
+OPTIONAL = {"DEPTH_POLICY_CACHE_FILE"}
 
 # sudoingX v1.1 baseline plus the overrides in HeNryous' v24 example.
 # The confidence cost table is borrowed, and must be measured on this cluster.
@@ -130,7 +131,7 @@ def read_env(path):
 
 
 def validate(values):
-    unknown = set(values) - REQUIRED - set(DEFAULTS)
+    unknown = set(values) - REQUIRED - OPTIONAL - set(DEFAULTS)
     if unknown:
         raise ValueError(f"unsupported settings: {', '.join(sorted(unknown))}")
     missing = REQUIRED - set(values)
@@ -181,6 +182,11 @@ def validate(values):
         config[key] = str(value)
     if config["SPECULATIVE_TOKENS"] not in ("0", "5"):
         raise ValueError("SPECULATIVE_TOKENS must be 0 (target-only) or 5 (DSpark)")
+    if "DEPTH_POLICY_CACHE_FILE" in config:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", config["DEPTH_POLICY_CACHE_FILE"]):
+            raise ValueError("DEPTH_POLICY_CACHE_FILE must be a single cache-relative filename")
+        if config["SPECULATIVE_TOKENS"] != "5":
+            raise ValueError("DEPTH_POLICY_CACHE_FILE requires DSpark K5")
     if config["NODE_RANK"] == "0" and config["SELF_ADDR"] != config["MASTER_ADDR"]:
         raise ValueError("head SELF_ADDR must equal MASTER_ADDR")
     if config["NODE_RANK"] == "1" and config["SELF_ADDR"] == config["MASTER_ADDR"]:
@@ -230,6 +236,8 @@ def render(values, stage="serve"):
             "VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS": "1800", "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1",
             "VLLM_DISABLED_KERNELS": "FlashInferCutlassMxfp8LinearKernel", "HF_HUB_OFFLINE": "1",
         }
+        if "DEPTH_POLICY_CACHE_FILE" in config:
+            env["VLLM_DSPARK_DEPTH_FILE"] = "/root/.cache/" + config["DEPTH_POLICY_CACHE_FILE"]
         args = ["serve", "/model", "--served-model-name", *ALIASES,
                 "--host", "0.0.0.0", "--port", config["PORT"],
                 "--tensor-parallel-size", "2", "--nnodes", "2", "--node-rank", rank,
@@ -266,6 +274,8 @@ def render(values, stage="serve"):
             argv += ["--env", f"{key}={value}"]
         argv += ["--entrypoint", "vllm", IMAGE_ID, *args]
         checks = [["test", "-d", config["CACHE_DIR"]]]
+        if "DEPTH_POLICY_CACHE_FILE" in config:
+            checks += [["test", "-s", str(Path(config["CACHE_DIR"]) / config["DEPTH_POLICY_CACHE_FILE"])]]
         checks += [["test", "-s", str(Path(config["MODEL_DIR"]) / name)] for name in
                    ("config.json", "model.safetensors.index.json", "tokenizer.json",
                     "model-00047-of-00048.safetensors", "model-00048-of-00048.safetensors")]

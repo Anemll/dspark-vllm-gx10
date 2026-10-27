@@ -112,6 +112,25 @@ class ProfileTests(unittest.TestCase):
         self.assertNotIn("serve", argv)
         self.assertFalse(any("/model" in part for part in argv))
 
+    def test_depth_file_is_opt_in_and_only_changes_native_policy_hook(self):
+        base = profile.render(config())
+        changed = profile.render(config() | {"DEPTH_POLICY_CACHE_FILE": "depth-policy.txt"})
+        self.assertNotIn("VLLM_DSPARK_DEPTH_FILE=/root/.cache/depth-policy.txt", base["docker_argv"])
+        argv = changed["docker_argv"].copy()
+        index = argv.index("VLLM_DSPARK_DEPTH_FILE=/root/.cache/depth-policy.txt")
+        self.assertEqual(argv[index - 1], "--env")
+        del argv[index - 1:index + 1]
+        self.assertEqual(argv, base["docker_argv"])
+        self.assertEqual(changed["client_contract"], base["client_contract"])
+        self.assertIn(["test", "-s", "/srv/cache/1017/depth-policy.txt"], changed["preflight_argv"])
+
+    def test_depth_file_rejects_paths_and_target_only(self):
+        for name in ("/tmp/policy", "../policy", "a/b", ".", "..", "a\npolicy", "a policy"):
+            with self.subTest(name=name), self.assertRaises(ValueError):
+                profile.render(config() | {"DEPTH_POLICY_CACHE_FILE": name})
+        with self.assertRaisesRegex(ValueError, "requires DSpark"):
+            profile.render(config() | {"DEPTH_POLICY_CACHE_FILE": "policy.txt", "SPECULATIVE_TOKENS": "0"})
+
     def test_missing_fabric_and_wrong_rank_addresses_are_rejected(self):
         data = config()
         del data["NCCL_IB_HCA"]

@@ -230,6 +230,19 @@ upstream author's hardware; measure it locally before claiming tuned performance
 Filesystem KV offload also needs a bounded storage/retention policy before long
 term operation. The renderer does not delete cache files.
 
+For a separately budgeted DSpark depth-calibration diagnostic, optionally set
+`DEPTH_POLICY_CACHE_FILE=dspark-depth-policy.txt`. Create that file inside the
+node's existing `CACHE_DIR` before launch; the renderer adds only the native
+`VLLM_DSPARK_DEPTH_FILE` hook and checks that the file exists. It does not change
+the default confidence policy or enable this hook by default. The pinned runtime
+lets rank 0 read a policy such as `fixed:3` or `conf:<six measured round costs>`
+and broadcasts it to both ranks every 64 verification steps. Preserve the
+working configuration, use atomic file replacement inside the mounted cache
+directory, warm at least 512 output tokens after each policy change, and confirm
+the applied policy in the logs before measuring. A shorter fixed depth changes
+how many drafts may be accepted, not which target-verified tokens are valid.
+Do not claim a locally tuned policy from the borrowed cost table alone.
+
 Both API names serve this same native-vision checkpoint:
 
 - Pi: `DeepSeek-v4.1-Flash-EXL3`, `input: ["text", "image"]`.
