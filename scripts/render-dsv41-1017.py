@@ -19,6 +19,7 @@ import sys
 
 IMAGE_REPOSITORY = "ghcr.io/henryous/deepseek-v41-1017-dgx-spark"
 IMAGE_DIGEST = "sha256:a796b0515cf6245f95cd97e2f5d12d000e7d99ad475d53d4dc21a0bc9a68cc81"
+IMAGE_ID = "sha256:709f3991d0d3966608cfa1e59cd03bd8d9796467b1c307ecfcbc01adb9e7291e"
 LAUNCHER_REVISION = "cc59c3609e8e671418f39eb92aa16b0e4f770b77"
 RECIPE_REVISION = "382071728ce69700b28e7a5ea197ab0a48b2232c"
 MARKOV_SHA256 = "0b6e71e638abd5abce2db433965bb5ff523cbbe92ed7ae54324a50ccaeffa19a"
@@ -212,7 +213,7 @@ def render(values, stage="serve"):
                 "--gpus", "all", *cache_bind]
         for key, value in sorted(env.items()):
             argv += ["--env", f"{key}={value}"]
-        argv += ["--entrypoint", "python3", config["IMAGE"], "-c",
+        argv += ["--entrypoint", "python3", IMAGE_ID, "-c",
                  "from vllm_exl3_moe import tf_experts as t, mrow, rdma, mhc, router, smoe, l2pf; "
                  "t._ext(); mrow.ext(); rdma.ext(); mhc.ext(); router.ext(); smoe.ext(); l2pf.ext()"]
         checks = [["test", "-d", config["CACHE_DIR"]]]
@@ -263,7 +264,7 @@ def render(values, stage="serve"):
                 *bind(config["MARKOV_FILE"], "/assets/markov_top_tokens.json", True)]
         for key, value in sorted(env.items()):
             argv += ["--env", f"{key}={value}"]
-        argv += ["--entrypoint", "vllm", config["IMAGE"], *args]
+        argv += ["--entrypoint", "vllm", IMAGE_ID, *args]
         checks = [["test", "-d", config["CACHE_DIR"]]]
         checks += [["test", "-s", str(Path(config["MODEL_DIR"]) / name)] for name in
                    ("config.json", "model.safetensors.index.json", "tokenizer.json",
@@ -274,10 +275,13 @@ def render(values, stage="serve"):
                     config["MARKOV_FILE"], MARKOV_SHA256]]
     else:
         raise ValueError("stage must be jit or serve")
-    checks += [["docker", "image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", config["IMAGE"]]]
+    # docker save/load retains the config ID, but need not retain RepoDigests.
+    # Use the independently pinned arm64 config ID on both disconnected ranks.
+    checks += [["docker", "image", "inspect", "--format", "{{.Id}} {{.Os}}/{{.Architecture}}", IMAGE_ID]]
     return {"status": STATUS, "stage": stage, "node_rank": int(rank),
             "source": {"recipe_revision": RECIPE_REVISION, "launcher_revision": LAUNCHER_REVISION,
-                       "image_family": "HeNryous v24", "markov_sha256": MARKOV_SHA256},
+                       "image_family": "HeNryous v24", "image_digest": IMAGE_DIGEST,
+                       "image_id": IMAGE_ID, "markov_sha256": MARKOV_SHA256},
             "client_contract": {"served_model_names": list(ALIASES), "context": int(config["MAX_MODEL_LEN"]),
                                 "max_output_tokens": 32768, "native_vision": True},
             "preflight_argv": checks, "docker_argv": argv}

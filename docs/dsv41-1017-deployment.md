@@ -187,6 +187,12 @@ nodes while inference is stopped. The compiler can exhaust memory if invoked
 beside an already loaded model. The same cache mount and
 `EXL3_SMOE_FLAGS=-DSMOE_RUNFLAGS=1` are used by JIT and serve.
 
+The environment file pins the registry manifest; the renderer runs its pinned
+arm64 image config ID on both ranks. `docker save`/`docker load` can preserve
+that exact ID without retaining a registry `RepoDigest`, so a digest-name
+lookup on the receiving rank is not required. Verify the ID after transfer;
+do not substitute a mutable tag or pull a different image on the worker.
+
 Before replacing an existing service, capture evidence and use the complete
 head-then-worker stop barrier. For the candidate and for rollback, start the
 **worker first**, wait for its distributed initialization, then start the head.

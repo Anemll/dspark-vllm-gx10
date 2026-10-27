@@ -75,6 +75,16 @@ class ProfileTests(unittest.TestCase):
             with self.subTest(image=image), self.assertRaisesRegex(ValueError, "IMAGE"):
                 profile.render(config() | {"IMAGE": image})
 
+    def test_transferred_image_runs_by_exact_id_without_registry_lookup(self):
+        for stage in ("jit", "serve"):
+            with self.subTest(stage=stage):
+                rendered = profile.render(config(1), stage)
+                self.assertIn(profile.IMAGE_ID, rendered["docker_argv"])
+                self.assertNotIn(config()["IMAGE"], rendered["docker_argv"])
+                self.assertEqual(rendered["preflight_argv"][-1][-1], profile.IMAGE_ID)
+                self.assertEqual(rendered["source"]["image_digest"], profile.IMAGE_DIGEST)
+                self.assertEqual(rendered["source"]["image_id"], profile.IMAGE_ID)
+
     def test_invalid_resource_and_vision_limits_rejected(self):
         cases = {"NODE_RANK": "2", "MAX_NUM_SEQS": "8", "MAX_MODEL_LEN": "32768",
                  "MAX_NUM_BATCHED_TOKENS": "-1", "IMAGE_LIMIT": "0", "SPECULATIVE_TOKENS": "3",
