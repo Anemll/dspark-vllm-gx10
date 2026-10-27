@@ -9,7 +9,9 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 import types
+import urllib.error
 import unittest
 from unittest.mock import patch
 
@@ -75,6 +77,89 @@ class CheckpointStagingTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     stager.validate_manifest(value)
         stager.validate_manifest(manifest())
+
+    def http_response(self, data, status=200, headers=None):
+        response = io.BytesIO(data)
+        response.status = status
+        response.headers = headers if headers is not None else {"Content-Length": str(len(data))}
+        return response
+
+    def test_direct_http_uses_pinned_revision_and_verifies_content(self):
+        data = b"model bytes"
+        self.destination.mkdir()
+        target = self.destination / "nested" / "weights.bin"
+        target.parent.mkdir()
+        expected = entry("nested/weights.bin", data)
+        with patch.object(stager.urllib.request, "urlopen", return_value=self.http_response(data)) as fetch:
+            with contextlib.redirect_stdout(io.StringIO()):
+                stager.download_http(manifest(expected), expected, target, time.time()+60)
+        self.assertIn('/resolve/'+REVISION+'/nested/weights.bin', fetch.call_args.args[0].full_url)
+        self.assertEqual(stager.verify_file(target, expected)["hash"], expected["hash"])
+
+    def test_direct_http_resumes_exact_range_after_short_body(self):
+        data = b"abcdef"
+        self.destination.mkdir()
+        target = self.destination / "weights.bin"
+        expected = entry("weights.bin", data)
+        first = self.http_response(b"abc", headers={"Content-Length": "6"})
+        second = self.http_response(b"def", status=206,
+                                    headers={"Content-Length": "3", "Content-Range": "bytes 3-5/6"})
+        with patch.object(stager.urllib.request, "urlopen", side_effect=[first, second]) as fetch, \
+                patch.object(stager.time, "sleep"), contextlib.redirect_stdout(io.StringIO()):
+            stager.download_http(manifest(expected), expected, target, time.time()+60)
+        self.assertEqual(fetch.call_args_list[1].args[0].get_header("Range"), "bytes=3-")
+        self.assertEqual(target.read_bytes(), data)
+
+    def test_direct_http_rejects_ignored_range_and_keeps_partial(self):
+        self.destination.mkdir()
+        expected = entry("weights.bin", b"abcdef")
+        target = self.destination / "weights.bin"
+        cache = self.destination / ".cache/hf-direct"
+        cache.mkdir(parents=True)
+        partial = cache/(hashlib.sha256(expected['path'].encode()).hexdigest()+'.part')
+        partial.write_bytes(b"abc")
+        with patch.object(stager.urllib.request, "urlopen", return_value=self.http_response(b"abcdef")):
+            with self.assertRaisesRegex(ValueError, "ignored resume range"):
+                stager.download_http(manifest(expected), expected, target, time.time()+60)
+        self.assertEqual(partial.read_bytes(), b"abc")
+        self.assertFalse(target.exists())
+
+    def test_direct_http_rejects_wrong_content_range(self):
+        self.destination.mkdir()
+        expected = entry("weights.bin", b"abcdef")
+        target = self.destination / "weights.bin"
+        response = self.http_response(b"abcdef", 206, {"Content-Range": "bytes 1-5/6"})
+        with patch.object(stager.urllib.request, "urlopen", return_value=response):
+            with self.assertRaisesRegex(ValueError, "mismatched byte range"):
+                stager.download_http(manifest(expected), expected, target, time.time()+60)
+        self.assertFalse(target.exists())
+
+    def test_direct_http_rejects_extra_bytes(self):
+        self.destination.mkdir()
+        expected = entry("weights.bin", b"abc")
+        target = self.destination / "weights.bin"
+        with patch.object(stager.urllib.request, "urlopen", return_value=self.http_response(b"abcdef", headers={})):
+            with self.assertRaisesRegex(ValueError, "exceeds pinned file size"):
+                stager.download_http(manifest(expected), expected, target, time.time()+60)
+        self.assertFalse(target.exists())
+
+    def test_direct_http_empty_file_and_expired_deadline(self):
+        self.destination.mkdir()
+        expected = entry("empty", b"")
+        with contextlib.redirect_stdout(io.StringIO()):
+            stager.download_http(manifest(expected), expected, self.destination/'empty', time.time()+60)
+        self.assertEqual((self.destination/'empty').read_bytes(), b"")
+        with self.assertRaises(TimeoutError):
+            stager.download_http(manifest(), entry(), self.destination/'weights.safetensors', time.time()-1)
+
+    def test_http_transport_runs_without_huggingface_dependency(self):
+        self.write_manifest(manifest(entry(data=b"weights")))
+        self.args.command = "download"
+        self.args.transport = "http"
+        with patch.object(stager.urllib.request, "urlopen", return_value=self.http_response(b"weights")), \
+                patch.dict('sys.modules', {'huggingface_hub': None}):
+            self.run_stager()
+        self.assertEqual(json.loads(self.receipt_path.read_text())['state'], 'verified')
 
     def test_rejects_unsafe_manifest_paths(self):
         for name in ("", ".", "/outside", "../outside", "a/../outside",

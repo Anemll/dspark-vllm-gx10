@@ -104,6 +104,15 @@ instead of `download` and use a new receipt filename; `verify` always rehashes
 every file. Keep the old-model archive
 job in a separate destination so it can run alongside this staging job.
 
+For ordinary EXL3 shards, `download --transport http` runs with Python's standard
+library alone. It resumes partial files with HTTP byte ranges, rejects an ignored
+or mismatched range, retries interrupted transfers within its deadline, and
+performs the same final hash check. Very large Engram shards still require the
+Xet path described above; the HTTP transport is not a replacement for that path.
+When the archive is a NAS, run staging and hashing on the storage host when
+possible. Check the actual connection used by an existing SMB mount: changing
+the Mac's default route does not prove an established share moved to Ethernet.
+
 For the existing 0909 deployment, generate separate manifests at the audited
 revisions, resume the old EXL3 archive, and verify the Engram files already in
 the official-model archive. These jobs can run in parallel with the candidate

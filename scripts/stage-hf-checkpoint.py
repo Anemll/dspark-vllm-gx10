@@ -5,6 +5,7 @@ import argparse
 import concurrent.futures
 from contextlib import ExitStack
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -13,6 +14,9 @@ import shutil
 import sys
 import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
 
 
 def emit(event, **fields):
@@ -95,6 +99,75 @@ def reusable_verification(path, entry, record):
     return (current.st_size, current.st_mtime_ns) == (entry["size"], record["mtime_ns"])
 
 
+def download_http(manifest, entry, path, deadline):
+    """Dependency-free, bounded HTTP transport for ordinary checkpoint shards."""
+    cache = path.parents[len(PurePosixPath(entry["path"]).parts) - 1] / ".cache" / "hf-direct"
+    if cache.is_symlink():
+        raise ValueError("HTTP cache must not be a symlink")
+    cache.mkdir(parents=True, exist_ok=True)
+    partial = cache / (hashlib.sha256(entry["path"].encode()).hexdigest() + ".part")
+    if partial.is_symlink():
+        raise ValueError("HTTP partial must not be a symlink")
+    if entry["size"] == 0:
+        partial.touch(exist_ok=True)
+    url = ("https://huggingface.co/" + manifest["repo"] + "/resolve/" + manifest["revision"]
+           + "/" + urllib.parse.quote(entry["path"], safe="/") + "?download=true")
+    for attempt in range(1, 4):
+        if time.time() >= deadline:
+            raise TimeoutError("HTTP download deadline exceeded")
+        offset = partial.stat().st_size if partial.exists() else 0
+        if offset > entry["size"]:
+            raise ValueError("HTTP partial exceeds expected file size")
+        if offset == entry["size"]:
+            break
+        headers = {"Accept-Encoding": "identity", "Cache-Control": "no-cache"}
+        if offset:
+            headers["Range"] = f"bytes={offset}-"
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=min(90, max(1, deadline-time.time()))) as response:
+                status = response.status
+                if status == 206:
+                    expected = rf"bytes {offset}-([0-9]+)/{entry['size']}"
+                    match = re.fullmatch(expected, response.headers.get("Content-Range", ""))
+                    if not match or int(match.group(1)) != entry["size"] - 1:
+                        raise ValueError("HTTP server returned a mismatched byte range")
+                elif status != 200 or offset:
+                    raise ValueError("HTTP server ignored resume range; partial preserved")
+                content_length = response.headers.get("Content-Length")
+                if content_length is not None and int(content_length) != entry["size"] - offset:
+                    raise ValueError("HTTP response length differs from pinned manifest")
+                last_report = 0
+                with partial.open("ab") as target:
+                    while True:
+                        if time.time() >= deadline:
+                            raise TimeoutError("HTTP download deadline exceeded")
+                        chunk = response.read(8 * 1024 * 1024)
+                        if not chunk:
+                            break
+                        if offset + len(chunk) > entry["size"]:
+                            raise ValueError("HTTP payload exceeds pinned file size")
+                        target.write(chunk)
+                        offset += len(chunk)
+                        if time.monotonic() - last_report >= 20:
+                            emit("download_progress", file=entry["path"], received=offset, total=entry["size"])
+                            last_report = time.monotonic()
+            if offset != entry["size"]:
+                raise http.client.IncompleteRead(b"", entry["size"] - offset)
+            break
+        except (urllib.error.URLError, http.client.IncompleteRead, TimeoutError, ConnectionError) as exc:
+            if isinstance(exc, urllib.error.HTTPError) and exc.code not in (408, 429, 500, 502, 503, 504):
+                raise
+            if attempt == 3 or time.time() + 5 >= deadline:
+                raise
+            emit("http_retry", file=entry["path"], attempt=attempt,
+                 error=type(exc).__name__, status=getattr(exc, "code", None))
+            time.sleep(min(5 * attempt, max(0, deadline-time.time())))
+    if path.exists() or path.is_symlink():
+        raise ValueError("HTTP destination appeared during download; partial preserved")
+    partial.replace(path)
+
+
 def plan(args):
     from huggingface_hub import HfApi
     info = HfApi(token=False).model_info(args.repo, revision=args.revision, files_metadata=True)
@@ -137,6 +210,7 @@ def run(args):
                "destination": str(dest), "state": "running", "started_at": time.time(), "verified": {}}
     state_lock = threading.Lock()
     done = threading.Event()
+    absolute_deadline = time.time() + args.timeout_hours * 3600
     # Independent per-source locks permit the disjoint EXL3 + Engram downloads.
     lock_path = receipt_path.with_suffix(".lock")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -202,10 +276,14 @@ def run(args):
             if not path.resolve().is_relative_to(dest.resolve()):
                 raise ValueError("snapshot path resolves outside destination")
             if not path.exists() and args.command == "download":
-                from huggingface_hub import hf_hub_download
                 emit("downloading", file=entry["path"], bytes=entry["size"])
-                hf_hub_download(manifest["repo"], filename=entry["path"], revision=manifest["revision"],
-                                local_dir=str(dest), token=False)
+                if getattr(args, "transport", "hub") == "http":
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    download_http(manifest, entry, path, absolute_deadline)
+                else:
+                    from huggingface_hub import hf_hub_download
+                    hf_hub_download(manifest["repo"], filename=entry["path"], revision=manifest["revision"],
+                                    local_dir=str(dest), token=False)
             previous = prior_records.get(entry["path"])
             if reusable_verification(path, entry, previous):
                 verified = previous
@@ -266,6 +344,8 @@ def main():
         command.add_argument("--destination", required=True)
         command.add_argument("--receipt", required=True)
         if name == "download":
+            command.add_argument("--transport", choices=("hub", "http"), default="hub",
+                                 help="http uses only Python's standard library; Hub transport is required for very large Xet-only files.")
             command.add_argument("--verified-receipt", action="append",
                                  help="Reuse local hash proofs for unchanged files; repeatable. "
                                       "The existing output receipt is reused automatically.")
